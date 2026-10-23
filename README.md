@@ -25,9 +25,9 @@ Click a task to open the detail panel and edit its dates, status, assignee, prog
 1. In **Settings → Task Gantt**, set the **target folder** (e.g. `Projects/Cleanup`).
 2. Open the view from the **"Open Gantt" ribbon icon** in the left column (or the command **"Open Gantt"**). The ribbon opens the Gantt for the folder of the currently open note — or the folder selected in the file explorer — and falls back to the default folder in settings (the **vault root** when none is set). You can also right-click any folder → **Open as Gantt**.
 3. Direct subfolders become **groups**, and the `.md` files inside them become **tasks**.
-4. **Drag a bar / resize its edges** to write the new dates back to that file's `start`/`end` frontmatter. **Every column the table can show is editable in place — just double-click the cell.** Start and Due open a calendar, Duration takes a number of workdays, Progress takes a percentage (0–100; blank or 0 clears it), Status opens a dropdown, Assignee is a text field that suggests names already used in the board (type `[[` to link a note instead), and Tags opens a small editor with a chip per tag (× to remove) and an add field that suggests the vault's existing tags. Enter or clicking away saves, Esc cancels.
+4. **Drag a bar / resize its edges** to write the new dates back to that file's `start`/`end` frontmatter. **Every column the table can show is editable in place — just double-click the cell.** Start and Due open a calendar, Duration takes a number of workdays, Progress takes a percentage (0–100; blank or 0 clears it), Status opens a dropdown, and Assignee and Tags open a small editor with a chip per value (× to remove) and an add field — assignees suggest the names already used on the board (type `[[` to link a note instead), tags suggest the vault's existing tags. Enter or clicking away saves, Esc cancels.
 5. Click a task in the table — or **double-click its bar** — to slide in a **detail panel** (dates, status, assignee, progress, body) from the right. Links in the body are clickable (internal links open the note, Ctrl/Cmd-click for a new tab, with Page preview on hover); click anywhere else in the body to edit it, and type `[[` to insert a link to a note.
-6. Use the **＋ New task** button to create a one-day task in the current folder and name it on the spot, and **Today** to scroll the timeline to the current date.
+6. Use the **＋ New task** button to create a one-day task in the current folder and name it on the spot — its **▾** creates a [Kanban board or a Canvas](#task-kinds-note-kanban-canvas) task instead — and **Today** to scroll the timeline to the current date.
 7. Use the **Day / Week / Month / Fit** buttons to change the timeline scale. **Fit** auto-scales to the pane width and re-fits when you resize.
 
 The UI follows Obsidian's display language. Supported: English, Japanese, Korean, Chinese (Simplified & Traditional), French, Spanish, and Russian; any other language falls back to English.
@@ -39,6 +39,8 @@ An options row above the table shapes how the board is displayed.
 **Group by** folder, status, or assignee, and **color by** status or assignee (with a legend):
 
 ![Grouping and color-by options with a legend](docs/images/grouping-en.png)
+
+Each group heading has an icon for its grouping — a folder, a person, a status dot or a tag. **Right-click a heading** to pick its color and to give it any icon from Obsidian's icon set (searchable), e.g. a person icon for a folder that holds one person's work. In the legend, **click a status** to rename it, recolor it, change its group or delete it, and **＋** adds a status; when coloring by assignee, click a person to pick their color.
 
 **Sort** by clicking a column header; click it again to flip ascending/descending (↑/↓):
 
@@ -100,9 +102,15 @@ Give a task a `parent` (a single wikilink to another task) and it nests under th
 
 Tasks use Obsidian's native `tags` (frontmatter `tags:` plus inline `#tag`), so they stay in sync with Obsidian's search and tag pane. **Group by Tag** to see a task under each of its tags — a multi-valued task appears in several groups — filter by tag, and show a **Tags** column of chips. When grouped by tag, **drag a task onto a tag group** to add that tag, distinct from a folder drop, which *moves* the task. Add or remove tags in the detail panel, or double-click the **Tags** cell to open the same editor there. Either way, tags are written to frontmatter `tags:` — a `#tag` written in the body is shown but can't be removed from here.
 
+## Shared tasks (several assignees)
+
+`assignee` can hold several people: write a list in the frontmatter, or add them one by one in the detail panel or the **Assignee** cell. A shared task shows a stacked avatar per person next to its bar and a people icon by its name, and **color by assignee** splits its bar into one band per person (click a person in the legend to pick their color if two automatic colors look alike). **Group by assignee** lists the task under each of its people; the copies are joined by a dotted line, and hovering one highlights them all. Drag a task onto a person's group to add them — the task keeps its other assignees. With one assignee the value stays a plain string, so existing notes keep their shape.
+
 ## Coloring tags and folders
 
 Every tag starts from a single **Default tag color** — Obsidian's own tag color unless you change it in **Settings → Task Gantt → Tag colors** — and you can override any individual tag on top of that. Folders get an automatic color from their name instead.
+
+Colors are picked from a palette of 17, plus a rainbow swatch that opens your system's color picker for any hue. A tag with a color of its own also shows as a thin band along the bottom of the bars it's on, so you can spot it on the timeline; tags that follow the default color add no band.
 
 **Right-click a folder heading, a tag heading, or a tag chip** to change or reset its color. Setting a color registers that tag under **Per-tag colors** in settings; resetting removes it again, so the list holds exactly the tags you have deliberately coloured — everything else follows the default. You can also add a tag there by picking it from your vault's tags, and removing one asks for confirmation, since the settings tab has no undo. Rows are listed alphabetically. Folder colors are right-click only.
 
@@ -113,6 +121,16 @@ Every tag starts from a single **Default tag color** — Obsidian's own tag colo
 ## Creating tasks
 
 Press **＋ New task** to create a dated note in the current folder and rename it immediately. You don't have to start there, though: every note inside the target folder already appears as a row — **including notes with no dates yet** — so you can also click an existing note and set **Start** / **Due** in the detail panel to turn it into a scheduled task. Empty cells are double-click editable too, so you can fill a blank value straight from the table.
+
+## Task kinds: note, Kanban, Canvas
+
+A task is always a note — its frontmatter keeps the dates, status and the rest — but its content can be one of three kinds. Pick one from the **▾** next to **＋ New task**:
+
+- **Note** (the default): the body is the task's description.
+- **Kanban board**: the note is created in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s format, with one lane per status. The detail panel shows its lanes and cards in miniature; click them to open the board (as a board with the Kanban plugin installed, as Markdown otherwise).
+- **Canvas**: a same-named `.canvas` is created next to the note, linked from its `canvas` key and embedded in the body, so the detail panel shows the canvas. Deleting the task deletes that canvas too, and undo brings both back.
+
+The table marks Kanban and Canvas tasks with an icon. Any note counts as a Kanban task when its frontmatter has `kanban-plugin: board`, and as a Canvas task when its `canvas` key links to a `.canvas` file.
 
 ## Task frontmatter
 
@@ -137,12 +155,13 @@ The body is the task description (shown in the detail panel).
 |-------------|---------|
 | `start` / `end` | Start / end date `YYYY-MM-DD` (bar position and length). A time of day can be added as `YYYY-MM-DDTHH:mm+09:00` (edit via the detail panel; the offset follows the **Timezone** setting). |
 | `status` | Status ID (defined in settings, reflected in bar color; its status group drives the Completed / Incomplete filters). |
-| `assignee` | Assignee (label shown next to the bar). Can be a note link such as `"[[John Doe]]"` — it's shown as a clickable link, and the note's name is used for the label, legend, filters and grouping. |
+| `assignee` | Assignee (avatar and label next to the bar) — one value, or a list for a [shared task](#shared-tasks-several-assignees). Each can be a note link such as `"[[John Doe]]"` — it's shown as a clickable link, and the note's name is used for the label, legend, filters and grouping. |
 | `progress` | Progress 0–100 (fill inside the bar; editable with the detail-panel slider, or by double-clicking the **Progress** column). |
 | `after` | Array of wikilinks to predecessors (dependency arrows; violations turn red). |
 | `milestone` | `true` for a diamond (zero duration). |
 | `gcal` | `true` opts the task into [Google Calendar sync](#google-calendar-sync-optional-desktop-only) (only used when **Sync flagged tasks only** is on). |
 | `gcalId` | Set automatically once the task is pushed to Google Calendar — the linked event's ID. Don't edit by hand. |
+| `canvas` | Link to a [Canvas task](#task-kinds-note-kanban-canvas)'s `.canvas` (set when the task is created). |
 
 **Milestones:** a task that has only an `end` date (no `start`) is automatically treated as a milestone and drawn as a diamond. Setting `milestone: true` does the same. To turn a milestone back into a ranged task, give it a `start` date.
 
@@ -180,13 +199,13 @@ The **Timezone** setting (system or a fixed GMT offset, listed with representati
 
 The **Progress line color** setting sets the color of the jagged line drawn by the **Progress line** view option, with a button to reset it to the default amber.
 
-**Statuses are fully customizable** — add, edit, or delete them. Each status has an **id** (matches the `status` frontmatter value), a **label**, a **group**, and a **color** reflected in the bar.
+**Statuses are fully customizable** — add, edit, or delete them, here or straight from the legend on the board. Each status has an **id** (matches the `status` frontmatter value), a **label**, a **group**, and a **color** reflected in the bar.
 
 The **group** is what tells the plugin whether a task is finished. There are four, borrowed from Wrike and not extensible: **Active** (being worked on), **Completed** (done), **Deferred** (paused — on hold, blocked, waiting), and **Cancelled** (dropped). Every status belongs to exactly one, and the *Completed* / *Incomplete* filter presets read only the group, never the status name — so a status called `Shipped` counts as finished as long as it sits in the Completed group. If no status is in the Completed group, settings say so and the *Completed* preset stays empty.
 
 > Upgrading from 2.8.x: existing statuses are assigned a group once, guessed from their id and label (`done`/`完了` → Completed, `cancelled`/`中止` → Cancelled, `on hold`/`blocked`/`保留` → Deferred, everything else → Active). Check the list after upgrading and correct anything the guess got wrong.
 
-You can also rename the **frontmatter keys** the plugin reads (start, end, status, assignee, after, progress, milestone) to match your own vault conventions.
+You can also rename the **frontmatter keys** the plugin reads (start, end, status, assignee, after, progress, milestone, canvas) to match your own vault conventions.
 
 ![Task Gantt settings: customizable statuses and frontmatter keys](docs/images/settings-en.png)
 
@@ -294,9 +313,9 @@ MIT — see [`LICENSE`](./LICENSE).
 1. **設定 → Task Gantt** で**対象フォルダ**を指定（例: `Projects/お掃除`）。
 2. 左列の **「Gantt を開く」リボンアイコン**（またはコマンド「Gantt を開く」）でビューを開く。リボンは、**現在開いているノートのフォルダ**（またはエクスプローラで選択中のフォルダ）を Gantt 表示し、どちらも無ければ設定の既定フォルダ（未設定なら **Vault ルート**）を開きます。フォルダを右クリック →**「Open as Gantt」**でも開けます。
 3. 直下のサブフォルダが**グループ**、その中の `.md` が**タスク**になります。
-4. バーを**ドラッグ／端をリサイズ**すると、そのファイルの `start`/`end` に書き戻します。**テーブルに表示できる列はすべて、セルをダブルクリックすればその場で編集できます。** 開始・期限はカレンダー、期間は稼働日数の入力、進捗は % の直接入力（0–100。空欄または 0 で未設定）、ステータスはドロップダウン、担当者はボード内で既に使われている名前を候補に出すテキスト欄、タグは詳細パネルと同じエディタ（タグごとのチップと × による削除＋Vault 内の既存タグを候補に出す追加欄）が開きます。Enter またはフォーカスを外すと保存、Esc で取消します。
+4. バーを**ドラッグ／端をリサイズ**すると、そのファイルの `start`/`end` に書き戻します。**テーブルに表示できる列はすべて、セルをダブルクリックすればその場で編集できます。** 開始・期限はカレンダー、期間は稼働日数の入力、進捗は % の直接入力（0–100。空欄または 0 で未設定）、ステータスはドロップダウン、担当者とタグは詳細パネルと同じエディタ（値ごとのチップと × による削除＋追加欄。担当者はボード内で既に使われている名前を、タグは Vault 内の既存タグを候補に出し、担当者は `[[` でノートへのリンクにもできます）が開きます。Enter またはフォーカスを外すと保存、Esc で取消します。
 5. 表のタスクをクリック、または**バーをダブルクリック**すると、右から**詳細パネル**（日付・ステータス・担当者・進捗・本文）がスライドインします。
-6. **＋ 新規タスク**ボタンで現在のフォルダに1日タスクを作ってその場で命名、**今日**ボタンでタイムラインを今日へスクロールできます。
+6. **＋ 新規タスク**ボタンで現在のフォルダに1日タスクを作ってその場で命名（横の **▾** から[カンバン・キャンバス](#タスクの種類ノートカンバンキャンバス)のタスクも作れます）、**今日**ボタンでタイムラインを今日へスクロールできます。
 7. **Day / Week / Month / Fit** ボタンで時間軸の拡大率を変更。**Fit** はペイン幅に自動で収め、リサイズにも追従します。
 
 UI 表示は Obsidian の表示言語に追従します。対応言語：英語・日本語・韓国語・中国語（簡体／繁体）・フランス語・スペイン語・ロシア語（その他は英語にフォールバック）。
@@ -308,6 +327,8 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 **グループ化**（フォルダ／ステータス／担当者）と**色分け**（ステータス／担当者・凡例付き）：
 
 ![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.png)
+
+グループの見出しには、グループ化の軸に合わせたアイコン（フォルダ・人・ステータスの丸・タグ）が付きます。**見出しを右クリック**すると色を選べるほか、Obsidian のアイコン一覧（検索可）から好きなアイコンを付けられます（例：ある人の作業をまとめたフォルダに人のアイコン）。凡例の**ステータスをクリック**すると名前・色・グループの変更や削除ができ、**＋** でステータスを追加できます。担当者で色分け中は、凡例の人をクリックしてその人の色を選べます。
 
 **ソート**は列ヘッダをクリック。もう一度クリックで昇順／降順を切替（↑/↓）：
 
@@ -369,9 +390,15 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 タスクは Obsidian ネイティブの `tags`（フロントマター `tags:` ＋本文 `#tag`）を使うので、Obsidian の検索・タグペインと同期します。**タグでグループ化**すると、各タグの下にそのタスクが表示され（多値のタスクは複数グループに登場）、タグでの絞り込みや、チップ表示の**タグ列**も使えます。タグでグループ化中は、**タスクをタグのグループへドラッグ**するとそのタグを付与できます（フォルダへのドロップ＝移動とは別動作）。タグの追加・削除は詳細パネル、または**タグ**セルのダブルクリックで同じエディタを開いて行えます。どちらもフロントマターの `tags:` に書き込むため、本文中に書いた `#tag` は表示されますがここからは削除できません。
 
+## 共有タスク（複数の担当者）
+
+`assignee` には複数の人を入れられます。フロントマターにリストで書くか、詳細パネルや**担当者**セルで 1 人ずつ追加します。共有タスクはバーの横に人数分のアバターが重なって並び、名前の前に人のアイコンが付きます。**担当者で色分け**すると、バーが一人ひとりの色の帯に分かれます（自動の色が似ていて見分けにくいときは、凡例の人をクリックして色を選べます）。**担当者でグループ化**すると、そのタスクは担当者それぞれのグループに並び、同じタスクどうしは点線でつながり、どれかにマウスを載せるとまとめて強調されます。タスクを人のグループへドラッグするとその人を追加します（ほかの担当者はそのまま）。担当者が 1 人のときは値は従来どおり文字列のままなので、既存のノートの書き方は変わりません。
+
 ## タグ・フォルダの色
 
 タグの色はすべて **タグの既定色** を土台にし、そこから個別に上書きします。既定色は **設定 → Task Gantt → タグの色** で指定でき、未設定なら Obsidian 本体のタグ色に従います。フォルダは従来どおり名前から自動で色が付きます。
+
+色は 17 色のパレットから選べ、虹色の見本を押すとシステムの色選択が開いて好きな色合いを選べます。自分で色を付けたタグは、そのタグを持つバーの下端にも細い帯で控えめに表示され、タイムライン上で見分けられます（既定色のままのタグは帯を出しません）。
 
 **フォルダの見出し・タグの見出し・タグのチップを右クリック**して、色の変更／リセットができます。色を指定すると、そのタグが設定の**個別のタグ**に登録され、リセットすると登録が外れます。つまり一覧には**自分で色を決めたタグだけ**が並び、それ以外は既定色に従います。設定側からは Vault のタグを選んで追加でき、削除には確認が入ります（設定画面には取り消しが無いため）。並びはタグ名順です（フォルダの色は右クリックのみ）。
 
@@ -382,6 +409,16 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 ## タスクの作成
 
 **＋ 新規タスク**で現在のフォルダに日付付きノートを作り、すぐ名前を付けられます。もちろんそこから始める必要はありません。対象フォルダ内のノートは、**まだ日付が無いものも含めて**そのまま行として表示されるので、既存ノートをクリックして詳細パネルで **開始 / 期限** を入力すれば、そのままスケジュール付きタスクになります。各セルは**値が空のままでもダブルクリックで編集できる**ので、表から直接入力しても構いません。
+
+## タスクの種類：ノート・カンバン・キャンバス
+
+タスクは常に 1 つのノートで、日付やステータスなどはフロントマターが持ちます。そのうえで中身を 3 種類から選べます。**＋ 新規タスク**の横の **▾** から選んでください：
+
+- **ノート**（既定）：本文がタスクの説明です。
+- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。
+- **キャンバス**：ノートと同じ名前の `.canvas` を隣に作り、`canvas` キーでリンクして本文に埋め込むので、詳細パネルにキャンバスが表示されます。タスクを削除するとそのキャンバスも削除され、取り消せば両方が戻ります。
+
+表では、カンバンとキャンバスのタスクにアイコンが付きます。フロントマターに `kanban-plugin: board` があるノートはカンバン、`canvas` キーが `.canvas` にリンクしているノートはキャンバスとして扱います。
 
 ## タスクの書き方
 
@@ -406,12 +443,13 @@ after:
 |----------------|------|
 | `start` / `end` | 開始 / 終了日 `YYYY-MM-DD`（バーの位置と長さ）。`YYYY-MM-DDTHH:mm+09:00` 形式で時刻も設定可（詳細パネルで編集。オフセットは**タイムゾーン**設定に従う） |
 | `status` | ステータス ID（設定で定義、バー色に反映。所属する**ステータスグループ**が完了済み／未完了フィルタの根拠） |
-| `assignee` | 担当者（バー脇にラベル表示） |
+| `assignee` | 担当者（バー脇にアバターとラベルを表示）。1 人なら値、複数ならリスト（[共有タスク](#共有タスク複数の担当者)） |
 | `progress` | 進捗 0–100（バー内の塗り。詳細パネルのスライダー、または**進捗**列のダブルクリックで編集） |
 | `after` | 先行タスクへの wikilink 配列（依存＝矢印、違反は赤） |
 | `milestone` | `true` で菱形（期間ゼロ） |
 | `gcal` | `true` で **Google カレンダー同期**（後述）の対象にする（**フラグ付きタスクのみ同期**がオンのときだけ判定に使用） |
 | `gcalId` | タスクを Google カレンダーへ Push すると自動で入る、紐付け先イベントの ID。手動編集不可 |
+| `canvas` | [キャンバス](#タスクの種類ノートカンバンキャンバス)型タスクの `.canvas` へのリンク（作成時に自動で入る） |
 
 **マイルストーン：** `end`（終了日）だけがあり `start`（開始日）が無いタスクは、自動的にマイルストーンと判定され菱形で描画されます。`milestone: true` でも同じです。通常タスクに戻すには `start`（開始日）を与えてください。
 
@@ -449,13 +487,13 @@ after:
 
 **稲妻線の色**設定で、表示オプションの**稲妻線**で描かれる折れ線の色を変更できます（既定の橙に戻すボタン付き）。
 
-**ステータスは自由に追加・編集・削除**できます。各ステータスは **id**（フロントマターの `status` 値と対応）・**ラベル**・**グループ**・**色**（バー色に反映）を持ちます。
+**ステータスは自由に追加・編集・削除**できます（ここでも、ボードの凡例からでも）。各ステータスは **id**（フロントマターの `status` 値と対応）・**ラベル**・**グループ**・**色**（バー色に反映）を持ちます。
 
 **グループ**は「そのタスクが終わっているか」をプラグインが判断する唯一の根拠です。Wrike に倣った 4 種**固定**で、増やすことはできません：**アクティブ**（作業中）・**完了**（終了）・**延期**（保留・ブロック・待ち）・**キャンセル**（中止）。各ステータスはちょうど 1 つに属し、フィルタプリセットの**完了済み／未完了**はグループだけを見ます（ステータス名は見ません）。そのため `リリース済み` という名前でも、完了グループに入れておけば完了として扱われます。完了グループのステータスが 1 つも無い場合は設定画面に注意が出て、**完了済み**プリセットは常に 0 件になります。
 
 > 2.8.x からの更新時：既存のステータスには、id とラベルからグループを一度だけ推測して設定します（`done`／`完了` → 完了、`cancelled`／`中止` → キャンセル、`on hold`／`blocked`／`保留` → 延期、それ以外 → アクティブ）。更新後に一覧を確認し、外れているものは直してください。
 
-プラグインが読む**フロントマターのキー名**（start / end / status / assignee / after / progress / milestone）も、各自の Vault の慣習に合わせて変更できます。
+プラグインが読む**フロントマターのキー名**（start / end / status / assignee / after / progress / milestone / canvas）も、各自の Vault の慣習に合わせて変更できます。
 
 ![Task Gantt の設定：カスタマイズ可能なステータスとフロントマターキー](docs/images/settings-ja.png)
 

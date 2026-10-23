@@ -41,8 +41,12 @@ _Avoid_: Child, Sub-item, Nested task
 _Avoid_: Summary, Aggregate, Parent bar
 
 **Assignee**:
-Task の担当者。
+Task の担当者。**多値**で、フロントマター `assignee` は単一値でもリストでもよい（1 人のときは単一値のまま書く）。担当者が 2 人以上の Task が**共有タスク**で、担当者でグループ化すると各担当者のグループへ重複表示する（Tag と同じ追加的な複数所属。担当者グループへの D&D は担当者の追加）。
 _Avoid_: Owner, Member, Person
+
+**Task kind**:
+Task の中身の種類。**ノート**（既定）・**カンバン**（Kanban プラグイン形式の本文。フロントマター `kanban-plugin: board`）・**キャンバス**（フロントマター `canvas` がリンクする `.canvas` が中身）の 3 種。どの種類でも Task は 1 つのノートで、スケジュール情報はそのフロントマターが源泉（`.canvas` 自体は Task にならない）。
+_Avoid_: Type, Format, Template
 
 **Status**:
 Task の進行状態（例: To do / In progress / Done）。設定で定義し、バー色に反映する。
