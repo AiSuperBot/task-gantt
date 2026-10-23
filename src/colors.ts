@@ -49,6 +49,17 @@ export function toHex(css: string): string {
   return OBSIDIAN_TAG_FALLBACK; // hsl() など変換できない表現 / expressions we can't convert, e.g. hsl()
 }
 
+// その色の上に載せる文字色（黒か白のうちコントラストの高い方。WCAG の相対輝度で比べる）
+// the text colour to put on a fill: black or white, whichever contrasts more (WCAG relative luminance)
+export function inkOn(fill: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(toHex(fill).slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return (lum + 0.05) / 0.05 > 1.05 / (lum + 0.05) ? "#000" : "#fff";
+}
+
 // タグの実効色を決める。優先順位は 個別の色 > タグの既定色 > Obsidian 本体のタグ色。
 // 一覧に名前だけ残して色を空にした行は「既定色に従う」を意味する。
 // resolve a tag's effective color: per-tag override > configured default > Obsidian's own tag color.

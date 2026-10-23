@@ -39,7 +39,7 @@ import {
   buildProgressLine,
   ProgressLineRow,
 } from "./timeline";
-import { PALETTE, hashColor, resolveTagColor } from "./colors";
+import { PALETTE, hashColor, inkOn, resolveTagColor } from "./colors";
 import { openPopover, paletteInto, pickColor, pickIcon } from "./popover";
 import { ConfirmModal } from "./modals";
 import { linkLabel } from "./links";
@@ -1553,10 +1553,11 @@ export class GanttView extends ItemView {
                 this.rerender();
               });
             }
-            // 種類（カンバン・キャンバス）と共有（担当者が複数）のアイコン / icons for the kind (kanban, canvas) and for shared tasks (2+ assignees)
+            const nameText = nameTd.createSpan({ cls: "ogantt-name-text", text: t.name });
+            // 種類（カンバン・キャンバス）と共有（担当者が複数）の印は名前の後ろに置き、名前の左端を揃えたままにする
+            // markers for the kind (kanban, canvas) and for shared tasks (2+ assignees) trail the name, so names stay left-aligned
             if (t.kind !== "note") setIcon(nameTd.createSpan({ cls: "ogantt-name-icon", attr: { "aria-label": t.kind === "kanban" ? strings.kindKanban : strings.kindCanvas } }), KIND_ICON[t.kind]);
             if (t.assignees.length > 1) setIcon(nameTd.createSpan({ cls: "ogantt-name-icon", attr: { "aria-label": t.assignees.map(linkLabel).join(", ") } }), "users");
-            const nameText = nameTd.createSpan({ cls: "ogantt-name-text", text: t.name });
             // 詳細パネルがこのタスクで開いている状態でのダブルクリック＝その場でリネーム。
             // 閉じている状態では 1 回目のクリックでパネルが開くだけにする（誤ってリネームに入らない）。
             // ダブルクリックの 1 回目でもパネルは開き直されるので、判定は 1 回目を押した瞬間の状態で行う
@@ -1819,9 +1820,10 @@ export class GanttView extends ItemView {
   private drawLabel(g: SVGElement, t: Task, x: number, cy: number): void {
     const shown = t.assignees.slice(0, MAX_AVATARS);
     shown.forEach((a, k) => {
+      const c = this.assigneeColor(a);
       const av = g.appendChild(this.svgEl("g", { class: "ogantt-bar-avatar" }));
-      av.appendChild(this.svgEl("circle", { cx: x + 7 + k * 10, cy, r: 7, fill: this.assigneeColor(a) }));
-      av.appendChild(this.svgEl("text", { x: x + 7 + k * 10, y: cy + 3 })).textContent = initials(linkLabel(a));
+      av.appendChild(this.svgEl("circle", { cx: x + 7 + k * 10, cy, r: 7, fill: c }));
+      av.appendChild(this.svgEl("text", { x: x + 7 + k * 10, y: cy + 3, fill: inkOn(c) })).textContent = initials(linkLabel(a));
     });
     if (shown.length) x += 18 + (shown.length - 1) * 10;
     const label = g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label" }));
@@ -2295,8 +2297,10 @@ export class GanttView extends ItemView {
 
   // 担当者のアバター（頭文字の丸）/ an assignee avatar (initials in a circle)
   private avatar(parent: HTMLElement, who: string): void {
+    const c = this.assigneeColor(who);
     const av = parent.createSpan({ cls: "ogantt-avatar", text: initials(linkLabel(who)) });
-    av.style.background = this.assigneeColor(who);
+    av.style.background = c;
+    av.style.color = inkOn(c);
   }
 
   // ----- 詳細パネル（編集モード）/ editable detail slide-over -----
