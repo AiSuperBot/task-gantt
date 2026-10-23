@@ -567,18 +567,21 @@ export async function createTask(app: App, settings: GanttSettings, folderPath: 
   while (taken(name)) name = `${baseName} ${++i}`;
   const md = `${prefix}${name}.md`;
   // 開始/終了は呼び出し側（view）が今日で埋める / caller fills start/end
-  let text = "---\n---\n";
-  const made = [md];
-  if (kind === "kanban") text = `---\nkanban-plugin: board\n---\n\n${settings.statuses.map((s) => `## ${s.label}\n\n`).join("\n")}`;
-  if (kind === "canvas") {
-    const cv = await app.vault.create(`${prefix}${name}.canvas`, JSON.stringify({ nodes: [], edges: [] }));
-    // フロントマターのリンクは wikilink（Obsidian がリネームに追従できる形）/ a wikilink, so Obsidian keeps it updated on rename
-    const link = `[[${app.metadataCache.fileToLinktext(cv, md, false)}]]`;
-    text = `---\n${settings.keys.canvas}: "${link}"\n---\n\n!${link}\n`;
-    made.push(cv.path);
+  if (kind === "kanban") {
+    await app.vault.create(md, `---\nkanban-plugin: board\n---\n\n${settings.statuses.map((s) => `## ${s.label}\n\n`).join("\n")}`);
+    return [md];
   }
-  await app.vault.create(md, text);
-  return made;
+  if (kind !== "canvas") {
+    await app.vault.create(md, "---\n---\n");
+    return [md];
+  }
+  const cv = await app.vault.create(`${prefix}${name}.canvas`, JSON.stringify({ nodes: [], edges: [] }));
+  // フロントマターのリンクは wikilink（Obsidian がリネームに追従できる形）。キー名は設定で変えられるので YAML は API に書かせる
+  // the frontmatter link is a wikilink (Obsidian keeps those updated on rename); the key is configurable, so the API writes the YAML
+  const link = `[[${app.metadataCache.fileToLinktext(cv, md, false)}]]`;
+  const note = await app.vault.create(md, `!${link}\n`);
+  await app.fileManager.processFrontMatter(note, (fm: Record<string, unknown>) => { fm[settings.keys.canvas] = link; });
+  return [md, cv.path];
 }
 
 export interface KanbanLane {

@@ -1,6 +1,7 @@
 import { ZoomMode, Task, DateFormat, DateValue, DateOp } from "./types";
 
 const MS_PER_DAY = 86400000;
+const MIN_TICK_GAP = 36; // 日付軸のラベル同士の最小間隔(px) / the narrowest gap between two axis labels (px)
 
 // 'YYYY-MM-DD' を UTC の通日番号へ / parse to a UTC day index
 export function dayIndex(dateStr: string): number {
@@ -171,7 +172,7 @@ export interface Tick {
 // 月初（major）と重なる通常の目盛りは月初を残す
 // generate header ticks; weekdays = labels, Sunday first. A tick too close to the previous one is dropped,
 // except that a month start (major) replaces the regular tick it would collide with
-export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, weekdays: string[], minGap = 36): Tick[] {
+export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, weekdays: string[]): Tick[] {
   const ticks: Tick[] = [];
   for (let day = range.min; day <= range.max; day++) {
     const d = new Date(day * MS_PER_DAY);
@@ -183,7 +184,7 @@ export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, weekda
     else if (zoom === "Month" && major) label = `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}`;
     if (!label) continue;
     const prev = ticks[ticks.length - 1];
-    if (prev && x - prev.x < minGap) {
+    if (prev && x - prev.x < MIN_TICK_GAP) {
       if (major && !prev.major) ticks[ticks.length - 1] = { x, label, major };
       continue;
     }
