@@ -35,7 +35,7 @@ export function matchFilter(t: Task, f: Filter, statuses: StatusDef[], today: nu
   const group = f.field === "statusGroup" ? statusGroupOf(statuses, t.status) : undefined;
   const vals = f.field === "status" ? (t.status ? [t.status] : [])
     : f.field === "statusGroup" ? (group ? [group] : [])
-      : f.field === "assignee" ? (t.assignee ? [t.assignee] : [])
+      : f.field === "assignee" ? t.assignees
         : t.tags;
   if (f.op === "empty") return vals.length === 0;
   if (f.op === "notEmpty") return vals.length > 0;
@@ -58,22 +58,14 @@ export function applyFilters(tasks: Task[], filters: Filter[], match: FilterMatc
 export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses: StatusDef[], noneLabel: string): Task[] {
   // フラットはグループを無視＝再マッピング不要（タグ複製で重複行が出るのも防ぐ）/ flat ignores groups: skip remap (also avoids tag-duplicated rows)
   if (groupBy === "folder" || flat) return tasks;
-  // タグは多値＝1タスクを各タグのグループへ複製（タグ無しは (なし)）/ tags are multi-valued: duplicate a task into each tag's group
-  if (groupBy === "tag") {
-    const out: Task[] = [];
-    for (const t of tasks) {
-      if (t.tags.length === 0) out.push({ ...t, groups: [noneLabel] });
-      else for (const tag of t.tags) out.push({ ...t, groups: [tag] });
-    }
-    return out;
-  }
-  // groups を単一の合成グループへ差し替えて既存の buildRows を再利用 / remap groups to reuse buildRows
+  // groups を合成グループへ差し替えて既存の buildRows を再利用。タグと担当者は多値なので、各グループへ複製する（無ければ (なし)）
+  // remap groups to synthetic ones to reuse buildRows; tags and assignees are multi-valued, so a task is copied into each one's group
   const statusLabel = new Map(statuses.map((s) => [s.id, s.label]));
-  return tasks.map((t) => {
-    const key =
-      groupBy === "status"
-        ? t.status ? statusLabel.get(t.status) ?? t.status : noneLabel
-        : t.assignee ? linkLabel(t.assignee) : noneLabel;
-    return { ...t, groups: [key] };
+  return tasks.flatMap((t) => {
+    const keys =
+      groupBy === "status" ? (t.status ? [statusLabel.get(t.status) ?? t.status] : [])
+        : groupBy === "tag" ? t.tags
+          : [...new Set(t.assignees.map(linkLabel))];
+    return (keys.length ? keys : [noneLabel]).map((key) => ({ ...t, groups: [key] }));
   });
 }

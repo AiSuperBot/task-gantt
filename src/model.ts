@@ -1,7 +1,7 @@
 import { App, TFile, TFolder, getAllTags, normalizePath } from "obsidian";
 import { GanttSettings } from "./settings";
-import { fmText } from "./links";
-import { Task, Row, Dep, DepType, StatusDef, StatusGroup, CustomField, CustomFieldType, CustomValue } from "./types";
+import { fmList, fmText, isBareLink } from "./links";
+import { Task, TaskKind, Row, Dep, DepType, StatusDef, StatusGroup, CustomField, CustomFieldType, CustomValue } from "./types";
 
 // ── ステータスグループ / status groups ──
 // 移行用の推測に使うキーワード（id・ラベルを小文字化して部分一致）。上から順に評価し、
@@ -289,6 +289,10 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
       const v = readCustomValue(fm[f.key.trim()], f.type, settings.tz);
       if (v !== undefined) custom[f.id] = v;
     }
+    // 種類：Kanban プラグインの印があればカンバン、.canvas へのリンクがあればキャンバス / kind: the Kanban plugin's marker, or a link to a .canvas
+    const cv = fmText(fm[k.canvas]);
+    const canvas = cv ? resolveLink(app, cv, file.path) : null;
+    const kind: TaskKind = fm["kanban-plugin"] ? "kanban" : canvas?.extension === "canvas" ? "canvas" : "note";
     return {
       path: file.path,
       name: file.basename,
@@ -298,7 +302,9 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
       startTime: ps?.time,
       endTime: pe?.time,
       status: fm[k.status] != null ? String(fm[k.status]) : undefined,
-      assignee: fmText(fm[k.assignee]),
+      assignees: fmList(fm[k.assignee]),
+      kind,
+      canvas: kind === "canvas" ? canvas?.path : undefined,
       deps: [] as Dep[],
       progress: fm[k.progress] != null ? Number(fm[k.progress]) : undefined,
       milestone,
@@ -412,23 +418,28 @@ export function buildRows(
 
   const rows: Row[] = [];
   const walk = (node: TreeNode, depth: number, prefix: string) => {
-    // フォルダを名前順に / folders first, sorted by name
+    // 直下タスクが先、サブフォルダは後（名前順）。逆だとフォルダ直下のタスクが直前のサブフォルダの中に見える
+    // direct tasks first, then subfolders by name; the other way round a folder's own tasks read as part of the subfolder above them
+    placeTasks(node, depth);
     for (const name of [...node.folders.keys()].sort((a, b) => a.localeCompare(b))) {
       const child = node.folders.get(name)!;
       const key = prefix ? `${prefix}/${name}` : name;
       rows.push({ kind: "group", group: name, depth, key, span: spanOf(descendantTasks(child)) });
       if (!collapsed.has(key)) walk(child, depth + 1, key);
     }
-    // 直下タスクを並べる（nest 時は parent でツリー化）/ place direct tasks (a parent forest when nesting)
+  };
+  // 直下タスクを並べる（nest 時は parent でツリー化）/ place direct tasks (a parent forest when nesting)
+  const placeTasks = (node: TreeNode, depth: number) => {
     if (!nest) {
-      const list = node.tasks.slice().sort(taskCompare);
-      for (const task of list) rows.push({ kind: "task", group: node.name, depth, task });
+      for (const task of node.tasks.slice().sort(taskCompare)) rows.push({ kind: "task", group: node.name, depth, task });
       return;
     }
     // ── 親子ネスト：同一フォルダ内のタスクを parent でフォレスト化 / nest by parent within this folder ──
     const paths = new Set(node.tasks.map((t) => t.path));
-    const childrenOf = (p: string): Task[] =>
-      node.tasks.filter((t) => t.parent === p).sort(taskCompare);
+    const kids = new Map<string, Task[]>();
+    for (const t of node.tasks) if (t.parent && paths.has(t.parent)) kids.set(t.parent, [...(kids.get(t.parent) ?? []), t]);
+    for (const list of kids.values()) list.sort(taskCompare);
+    const childrenOf = (p: string): Task[] => kids.get(p) ?? [];
     // 自分＋子孫の集約（ロールアップ用）/ self + descendants span (for rollup)
     const subtree = (t: Task, seen: Set<string>): Task[] => {
       if (seen.has(t.path)) return [];
@@ -452,12 +463,12 @@ export function buildRows(
     const emit = (task: Task, d: number) => {
       if (emitted.has(task.path)) return; // 重複ガード / dup guard
       emitted.add(task.path);
-      const kids = childrenOf(task.path);
-      const has = kids.length > 0;
+      const children = childrenOf(task.path);
+      const has = children.length > 0;
       const span = has ? spanOf(subtree(task, new Set())) : undefined;
       rows.push({ kind: "task", group: node.name, depth: d, task, key: has ? task.path : undefined, span, hasChildren: has });
       // 折りたたみ中は子を出さない / hide children while collapsed
-      if (has && !collapsed.has(task.path)) for (const c of kids) emit(c, d + 1);
+      if (has && !collapsed.has(task.path)) for (const c of children) emit(c, d + 1);
     };
     for (const r of roots) emit(r, depth);
     // フォレストに到達できない＝循環で孤立したタスクだけトップレベルで出す / surface only cycle-orphaned tasks
@@ -510,6 +521,18 @@ export async function writeField(
   });
 }
 
+// 多値フィールド（担当者）を書く。0 件は削除、1 件は元がリストでなければ単一値のまま（既存の書き方を崩さない）
+// write a multi-valued field (assignees): none deletes it; a single value stays a plain value unless it was a list already
+export async function writeList(app: App, path: string, key: string, values: string[]): Promise<void> {
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof TFile)) return;
+  await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+    const wasList = Array.isArray(fm[key]) && !isBareLink(fm[key]);
+    if (values.length === 0) delete fm[key];
+    else fm[key] = values.length > 1 || wasList ? values : values[0];
+  });
+}
+
 // 本文（フロントマターを除く）を取得 / read the body (without frontmatter)
 export async function readBody(app: App, path: string): Promise<string> {
   const file = app.vault.getAbstractFileByPath(path);
@@ -531,17 +554,50 @@ export async function writeBody(app: App, path: string, body: string): Promise<v
   });
 }
 
-// 新規タスク（空フロントマター .md）をフォルダ直下に作成。名前が衝突したら連番を付ける
-// create a new task (.md with empty frontmatter) in the folder; de-duplicate the name with a counter
-export async function createTask(app: App, folderPath: string, baseName: string): Promise<TFile | null> {
+// 新規タスクをフォルダ直下に作り、作ったパスを返す（ノートが先頭）。名前が衝突したら連番を付ける。
+// カンバンはステータスを列にした Kanban プラグイン形式、キャンバスは同名の .canvas を作ってリンクし本文に埋め込む
+// create a new task in the folder and return the paths made (the note first); a clashing name gets a counter.
+// A kanban gets one lane per status in the Kanban plugin's format; a canvas gets a same-named .canvas, linked and embedded
+export async function createTask(app: App, settings: GanttSettings, folderPath: string, baseName: string, kind: TaskKind = "note"): Promise<string[]> {
   const dir = normalizePath(folderPath || "/");
   const prefix = dir === "/" ? "" : dir + "/";
+  const taken = (n: string) => !!app.vault.getAbstractFileByPath(`${prefix}${n}.md`) || (kind === "canvas" && !!app.vault.getAbstractFileByPath(`${prefix}${n}.canvas`));
   let name = baseName;
   let i = 1;
-  while (app.vault.getAbstractFileByPath(`${prefix}${name}.md`)) name = `${baseName} ${++i}`;
+  while (taken(name)) name = `${baseName} ${++i}`;
+  const md = `${prefix}${name}.md`;
   // 開始/終了は呼び出し側（view）が今日で埋める / caller fills start/end
-  const file = await app.vault.create(`${prefix}${name}.md`, "---\n---\n");
-  return file instanceof TFile ? file : null;
+  let text = "---\n---\n";
+  const made = [md];
+  if (kind === "kanban") text = `---\nkanban-plugin: board\n---\n\n${settings.statuses.map((s) => `## ${s.label}\n\n`).join("\n")}`;
+  if (kind === "canvas") {
+    const cv = await app.vault.create(`${prefix}${name}.canvas`, JSON.stringify({ nodes: [], edges: [] }));
+    // フロントマターのリンクは wikilink（Obsidian がリネームに追従できる形）/ a wikilink, so Obsidian keeps it updated on rename
+    const link = `[[${app.metadataCache.fileToLinktext(cv, md, false)}]]`;
+    text = `---\n${settings.keys.canvas}: "${link}"\n---\n\n!${link}\n`;
+    made.push(cv.path);
+  }
+  await app.vault.create(md, text);
+  return made;
+}
+
+export interface KanbanLane {
+  title: string;
+  cards: { text: string; done: boolean }[];
+}
+
+// カンバン本文の列とカード（"## 列" の下の "- [ ] カード"。設定ブロック以降は読まない）
+// the lanes and cards of a kanban body ("- [ ] card" under "## lane"; stops at the settings block)
+export function parseKanban(body: string): KanbanLane[] {
+  const lanes: KanbanLane[] = [];
+  for (const line of body.split(/\r?\n/)) {
+    if (line.startsWith("%% kanban:settings")) break;
+    const h = line.match(/^##\s+(.+)$/);
+    const c = line.match(/^[-*] (?:\[(.)\] )?(.+)$/);
+    if (h) lanes.push({ title: h[1].trim(), cards: [] });
+    else if (c && lanes.length) lanes[lanes.length - 1].cards.push({ text: c[2].trim(), done: c[1] != null && c[1] !== " " });
+  }
+  return lanes;
 }
 
 // タスク（ファイル）をリネーム。リンクも更新される / rename the task file (updates links)

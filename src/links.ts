@@ -46,10 +46,20 @@ export function wikilinkQuery(before: string): { start: number; query: string } 
 // a frontmatter value as text. An unquoted `key: [[x]]` parses as the YAML array [["x"]], so turn it back into a wikilink
 export function fmText(v: unknown): string | undefined {
   if (v == null) return undefined;
-  if (Array.isArray(v) && v.length === 1 && Array.isArray(v[0]) && v[0].length === 1 && typeof v[0][0] === "string") {
-    return `[[${v[0][0]}]]`;
-  }
+  if (isBareLink(v)) return `[[${v[0][0]}]]`;
   if (typeof v === "string") return v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   return JSON.stringify(v); // 想定外の型（配列・オブジェクト）はそのまま見える形に / show unexpected shapes verbatim
+}
+
+// 多値のフロントマター値（担当者など）を文字列の配列に。単一値・リストのどちらも受け、各要素は fmText と同じく読む
+// a multi-valued frontmatter value (e.g. assignees) as a string list: a single value or a list, each item read like fmText
+export function fmList(v: unknown): string[] {
+  const items = Array.isArray(v) && !isBareLink(v) ? v.map(fmText) : [fmText(v)];
+  return [...new Set(items.map((x) => x?.trim()).filter((x): x is string => !!x))];
+}
+
+// 引用符なしの [[x]] を YAML が読んだ形（[["x"]]）か / whether YAML parsed an unquoted [[x]] into [["x"]]
+export function isBareLink(v: unknown): v is [[string]] {
+  return Array.isArray(v) && v.length === 1 && Array.isArray(v[0]) && v[0].length === 1 && typeof v[0][0] === "string";
 }

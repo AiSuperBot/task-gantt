@@ -1,6 +1,6 @@
 // wikilink 解析（parseWikilink / linkLabel / wikilinkQuery / fmText）の検証
 // Tests for wikilink parsing (parseWikilink / linkLabel / wikilinkQuery / fmText)
-import { parseWikilink, linkLabel, linkTarget, wikilinkQuery, fmText } from "./links.mjs";
+import { parseWikilink, linkLabel, linkTarget, wikilinkQuery, fmText, fmList } from "./links.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -45,6 +45,15 @@ check("undefined stays undefined", fmText(undefined) === undefined);
 check("string passes through", fmText("[[a]]") === "[[a]]");
 check("unquoted YAML wikilink is restored", fmText([["田中"]]) === "[[田中]]");
 check("numbers become text", fmText(3) === "3");
+
+// ── fmList（担当者など多値）/ fmList (multi-valued fields such as assignees) ──
+const list = (v) => JSON.stringify(fmList(v));
+check("unset is an empty list", list(undefined) === "[]" && list("") === "[]");
+check("a single value is a one-item list", list("kei") === '["kei"]');
+check("a list stays a list, trimmed and deduplicated", list([" kei", "ana", "kei"]) === '["kei","ana"]');
+check("an unquoted wikilink is one item", list([["田中"]]) === '["[[田中]]"]');
+check("a list of unquoted wikilinks", list([[["a"]], [["b"]]]) === '["[[a]]","[[b]]"]');
+check("a list holding one unquoted wikilink", list([[["a"]]]) === '["[[a]]"]');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -24,6 +24,12 @@ export interface Dep {
   type: DepType;
 }
 
+// タスクの種類。どれも 1 つのノート（フロントマターが源泉）で、カンバンは Kanban プラグイン形式の本文、
+// キャンバスはフロントマターのリンク先 .canvas を中身として持つ
+// a task's kind. Each is still one note (frontmatter stays the source of truth): a kanban's body is in the
+// Kanban plugin's format, and a canvas task's content is the .canvas its frontmatter links to
+export type TaskKind = "note" | "kanban" | "canvas";
+
 // 1 ファイル = 1 タスク / one file = one task
 export interface Task {
   path: string; // ファイルパス（一意キー）/ file path (unique key)
@@ -36,7 +42,10 @@ export interface Task {
   startTime?: string; // HH:mm
   endTime?: string; // HH:mm
   status?: string; // StatusDef.id を参照
-  assignee?: string;
+  // 担当者（多値・フロントマターは単一値でもリストでも可）/ assignees (multi-valued; frontmatter may hold one value or a list)
+  assignees: string[];
+  kind: TaskKind; // ノート / カンバン / キャンバス / note, kanban or canvas
+  canvas?: string; // キャンバス型の実体（.canvas のパス）/ a canvas task's .canvas file path
   deps: Dep[]; // 先行タスクへの依存（解決済み）/ resolved dependencies on predecessors
   progress?: number; // 0-100
   milestone: boolean;
@@ -50,7 +59,6 @@ export interface Task {
 // ── Custom field（設定で宣言する任意のフロントマターキー。テーブルの列になる）──
 // ── custom fields: user-declared frontmatter keys, shown as table columns ──
 export type CustomFieldType = "text" | "number" | "date";
-export const CUSTOM_FIELD_TYPES: CustomFieldType[] = ["text", "number", "date"];
 export interface CustomField {
   // 追加時に発番する不変の id。列 id（cf:<id>）に使うので、キー名を変えても列の表示・幅・並べ替えが外れない
   // a stable id minted on creation; column ids (cf:<id>) use it, so renaming the key keeps visibility, width and sort

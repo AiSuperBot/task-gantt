@@ -36,8 +36,6 @@ export interface BoardContext {
     commit: (v: string) => Promise<void>,
     configure?: (inp: HTMLInputElement) => void
   ): void;
-  // anchor の直下にポップオーバーを開く / open a popover under the anchor
-  openPopover(anchor: HTMLElement, cls: string, build: (menu: HTMLElement, close: () => void) => void): void;
   // 範囲カレンダー / the range calendar
   openRangePicker(
     anchor: HTMLElement,
@@ -47,12 +45,13 @@ export interface BoardContext {
     save: () => void | Promise<void>,
     single?: string // 単一日付モード（見出しに出す名前）/ single-date mode (the field name shown)
   ): void;
-  // 入力欄に datalist の候補を付ける / attach datalist suggestions to an input
-  attachSuggestions(inp: HTMLInputElement, fill: (list: HTMLDataListElement) => void): HTMLDataListElement;
-  // Vault のタグを候補に出す / suggest the vault's tags
-  attachSingleTagSuggestions(inp: HTMLInputElement, exclude?: string[]): void;
+  // タグ・担当者（多値）のチップと追加欄。値が変わったら changed を呼び、追加欄を返す
+  // chips + an add field for tags or assignees (multi-valued); calls `changed` after an edit and returns the field
+  chipList(host: HTMLElement, path: string, field: "tags" | "assignees", changed: () => void): HTMLInputElement;
   // タグチップに色を塗る / colour a tag chip
   paintTagChip(chip: HTMLElement, tag: string): void;
-  // タグ・フォルダの色メニュー / the tag / folder colour menu
-  openColorMenu(e: MouseEvent, kind: "tag" | "folder", name: string): void;
+  // タグの右クリックメニュー（色）/ a tag's right-click menu (colour)
+  openTagMenu(e: MouseEvent, tag: string): void;
+  // 担当者のアバター（頭文字の丸）/ an assignee avatar (initials in a circle)
+  avatar(parent: HTMLElement, who: string): void;
 }

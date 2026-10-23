@@ -13,8 +13,10 @@ export function dayToStr(day: number): string {
   return new Date(day * MS_PER_DAY).toISOString().slice(0, 10);
 }
 
-export function todayIndex(): number {
-  return Math.floor(Date.now() / MS_PER_DAY);
+// 端末の暦で今日（UTC で数えると、日本では朝 9 時まで前日になる）/ today on the device's calendar (counting in UTC would
+// give yesterday until 9 am in Japan, and tomorrow on a US evening)
+export function todayIndex(now = new Date()): number {
+  return Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / MS_PER_DAY);
 }
 
 // ISO（YYYY-MM-DD）を表示用フォーマットへ整形 / format an ISO date for display
@@ -31,26 +33,6 @@ export function formatDate(iso: string | undefined, fmt: DateFormat): string {
     default:
       return `${y}/${mo}/${d}`;
   }
-}
-
-// 表示フォーマットの入力を ISO へ。"" = クリア、null = 不正 / parse a formatted input into ISO. "" = clear, null = invalid
-export function parseDate(text: string, fmt: DateFormat): string | null {
-  const t = text.trim();
-  if (t === "") return "";
-  const n = t.split(/[^0-9]+/).filter(Boolean);
-  if (n.length !== 3) return null;
-  let y: string, mo: string, d: string;
-  if (fmt === "DD/MM/YYYY") [d, mo, y] = n;
-  else if (fmt === "MM/DD/YYYY") [mo, d, y] = n;
-  else [y, mo, d] = n;
-  if (y.length !== 4) return null; // 年は4桁必須 / require a 4-digit year
-  const mi = +mo, di = +d;
-  if (mi < 1 || mi > 12 || di < 1 || di > 31) return null;
-  const iso = `${y}-${String(mi).padStart(2, "0")}-${String(di).padStart(2, "0")}`;
-  // 実在日チェック（例 2026-02-30 を弾く）/ reject impossible dates
-  const dt = new Date(`${iso}T00:00:00Z`);
-  if (isNaN(dt.getTime()) || dt.getUTCMonth() + 1 !== mi || dt.getUTCDate() !== di) return null;
-  return iso;
 }
 
 // ── 日付フィルタの解決・判定 / date-filter resolution & matching ──
@@ -185,22 +167,27 @@ export interface Tick {
   major: boolean; // 月境界など / month boundary
 }
 
-// 上部の日付軸の目盛りを生成。weekdays は日曜始まりの曜日ラベル / generate header ticks; weekdays = labels, Sunday first
-export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, weekdays: string[]): Tick[] {
+// 上部の日付軸の目盛りを生成。weekdays は日曜始まりの曜日ラベル。ラベル同士が詰まりすぎる目盛りは間引き、
+// 月初（major）と重なる通常の目盛りは月初を残す
+// generate header ticks; weekdays = labels, Sunday first. A tick too close to the previous one is dropped,
+// except that a month start (major) replaces the regular tick it would collide with
+export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, weekdays: string[], minGap = 36): Tick[] {
   const ticks: Tick[] = [];
   for (let day = range.min; day <= range.max; day++) {
     const d = new Date(day * MS_PER_DAY);
     const x = (day - range.min) * ppd;
-    const isMonthStart = d.getUTCDate() === 1;
-    if (zoom === "Day") {
-      ticks.push({ x, label: `${d.getUTCDate()} ${weekdays[d.getUTCDay()]}`, major: isMonthStart });
-    } else if (zoom === "Week") {
-      if (d.getUTCDay() === 1 || isMonthStart) {
-        ticks.push({ x, label: `${d.getUTCMonth() + 1}/${d.getUTCDate()}`, major: isMonthStart });
-      }
-    } else {
-      if (isMonthStart) ticks.push({ x, label: `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}`, major: true });
+    const major = d.getUTCDate() === 1;
+    let label = "";
+    if (zoom === "Day") label = `${d.getUTCDate()} ${weekdays[d.getUTCDay()]}`;
+    else if (zoom === "Week" && (d.getUTCDay() === 1 || major)) label = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+    else if (zoom === "Month" && major) label = `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}`;
+    if (!label) continue;
+    const prev = ticks[ticks.length - 1];
+    if (prev && x - prev.x < minGap) {
+      if (major && !prev.major) ticks[ticks.length - 1] = { x, label, major };
+      continue;
     }
+    ticks.push({ x, label, major });
   }
   return ticks;
 }

@@ -35,7 +35,7 @@ check("default width", columnWidth(byId("start"), {}) === 84);
 check("user override wins", columnWidth(byId("start"), { start: 120 }) === 120);
 
 // ── taskComparator ──
-const task = (o) => ({ path: `${o.name}.md`, groups: [], deps: [], milestone: false, tags: [], ...o });
+const task = (o) => ({ path: `${o.name}.md`, groups: [], deps: [], milestone: false, tags: [], assignees: [], ...o });
 const STATUSES = [
   { id: "todo", label: "To do", color: "#888", group: "active" },
   { id: "doing", label: "Doing", color: "#08f", group: "active" },
@@ -44,8 +44,8 @@ const STATUSES = [
 const settings = (sortBy, sortDir = "asc") => ({ sortBy, sortDir, statuses: STATUSES });
 const sorted = (list, s) => list.slice().sort(taskComparator(BUILTIN_COLUMNS, s)).map((t) => t.name).join(",");
 
-const A = task({ name: "b-task", start: "2024-03-02", end: "2024-03-09", progress: 50, assignee: "Zed", status: "done", tags: ["x"] });
-const B = task({ name: "A-task", start: "2024-03-01", end: "2024-03-20", progress: 0, assignee: "amy", status: "todo", tags: ["b", "a"] });
+const A = task({ name: "b-task", start: "2024-03-02", end: "2024-03-09", progress: 50, assignees: ["Zed"], status: "done", tags: ["x"] });
+const B = task({ name: "A-task", start: "2024-03-01", end: "2024-03-20", progress: 0, assignees: ["amy"], status: "todo", tags: ["b", "a"] });
 const C = task({ name: "c-task", status: "ghost" }); // 日付・進捗なし、未知ステータス / no dates or progress, unknown status
 const M = task({ name: "mile", milestone: true, end: "2024-03-05" }); // マイルストーンは期限日で並ぶ / milestone anchors on its due date
 const ALL = [A, B, C, M];

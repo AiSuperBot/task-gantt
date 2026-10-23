@@ -15,7 +15,7 @@ function check(name, cond) {
 }
 
 // テスト用のタスクとステータス定義 / fixtures
-const task = (o) => ({ path: `${o.name}.md`, groups: ["Proj"], deps: [], milestone: false, tags: [], ...o });
+const task = (o) => ({ path: `${o.name}.md`, groups: ["Proj"], deps: [], milestone: false, tags: [], assignees: [], ...o });
 const STATUSES = [
   { id: "todo", label: "To do", color: "#888", group: "active" },
   { id: "done", label: "Done", color: "#0a0", group: "completed" },
@@ -24,7 +24,7 @@ const STATUSES = [
 const TODAY = 20000; // 任意の通日番号 / an arbitrary day index
 const names = (list) => list.map((t) => t.name).join(",");
 
-const A = task({ name: "Alpha Plan", status: "todo", assignee: "kei", tags: ["work", "urgent"] });
+const A = task({ name: "Alpha Plan", status: "todo", assignees: ["kei"], tags: ["work", "urgent"] });
 const B = task({ name: "Beta", status: "done", tags: ["work"] });
 const C = task({ name: "gamma", status: "ghost" }); // 設定に無い id / unknown id
 const D = task({ name: "Delta" }); // 何も未設定 / nothing set
@@ -84,6 +84,15 @@ check("tag grouping duplicates multi-tag tasks",
 check("status grouping uses labels, raw id for unknown, none for unset",
   groupsOf(regroup(ALL, "status", false, STATUSES, "(none)")) === "Alpha Plan:To do,Beta:Done,gamma:ghost,Delta:(none)");
 check("assignee grouping", groupsOf(regroup(ALL, "assignee", false, STATUSES, "(none)")) === "Alpha Plan:kei,Beta:(none),gamma:(none),Delta:(none)");
+
+// ── 担当者（多値）/ assignees (multi-valued) ──
+const S = task({ name: "Shared", assignees: ["kei", "[[Ana Lee]]"] });
+check("a shared task is copied into each assignee's group, wikilinks by their label",
+  groupsOf(regroup([S], "assignee", false, STATUSES, "(none)")) === "Shared:kei,Shared:Ana Lee");
+check("assignee is matches any of the task's assignees",
+  names(applyFilters([A, S, B], [cat("assignee", "is", ["[[Ana Lee]]"])], "all", STATUSES, TODAY)) === "Shared");
+check("assignee isNot drops a task that has the person among others",
+  names(applyFilters([A, S, B], [cat("assignee", "isNot", ["kei"])], "all", STATUSES, TODAY)) === "Beta");
 check("regroup doesn't mutate the input", A.groups[0] === "Proj");
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -147,6 +147,8 @@ export default class GanttPlugin extends Plugin {
     // 既定の空配列/オブジェクトを共有参照しないよう複製（変更でモジュール既定を汚さない）/ clone so we don't mutate the shared DEFAULT containers
     this.settings.tagColors = (this.settings.tagColors ?? []).map((c) => ({ ...c }));
     this.settings.folderColors = (this.settings.folderColors ?? []).map((c) => ({ ...c }));
+    this.settings.assigneeColors = (this.settings.assigneeColors ?? []).map((c) => ({ ...c }));
+    this.settings.icons = { ...(this.settings.icons ?? {}) };
     this.settings.columnWidths = { ...(this.settings.columnWidths ?? {}) };
     this.settings.customFields = (this.settings.customFields ?? []).map((f) => ({ ...f }));
     this.settings.nonWorkingDays = [...(this.settings.nonWorkingDays ?? DEFAULT_SETTINGS.nonWorkingDays)];

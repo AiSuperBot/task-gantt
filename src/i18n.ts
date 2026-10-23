@@ -51,7 +51,6 @@ interface Strings {
   optFlat: string;
   optRollup: string;
   optProgressLine: string;
-  filterAll: string;
   noneLabel: string;
   // 日付フィルタ（開始日/期限日）/ date filter (start/due). 対象名は fieldStart/fieldDue、today は today を流用
   dfLabel: string; // フィルタ行の見出し / filter-row label
@@ -77,7 +76,6 @@ interface Strings {
   dfFromNow: string;
   dfRangeTo: string; // 期間の区切り / range separator
   dfOpIsNot: string; // カテゴリの「以外」/ category "is not"
-  dfFilterBy: string; // 追加メニューの見出し / add-filter menu heading
   dfMatchLabel: string; // 一致条件の見出し / "show items matching"
   dfMatchAll: string; // すべてに一致（AND）/ match all
   dfMatchAny: string; // いずれかに一致（OR）/ match any
@@ -85,7 +83,6 @@ interface Strings {
   presetLabel: string; // プリセットボタン / presets button
   presetBuiltinHeading: string; // 組み込み見出し / built-in heading
   presetUserHeading: string; // マイプリセット見出し / saved heading
-  presetSaveCurrent: string; // 現在のフィルタを保存 / save current filter
   presetNamePlaceholder: string; // プリセット名 / preset name
   presetSave: string; // 保存 / save
   presetClear: string; // フィルタをクリア / clear filters
@@ -110,11 +107,23 @@ interface Strings {
   setNoCompletedStatus: string; // 完了グループが空のときの注意書き / warning when Completed is empty
   presetCompleted: string; // 完了済み / Completed
   presetIncomplete: string; // 未完了 / Incomplete
+  // 種類・アイコン・色・担当者（多値）/ task kinds, icons, colours, assignees (multi-valued)
+  newTaskKindAria: string; // 種類を選んで新規作成 / new task of a chosen kind
+  kindNote: string;
+  kindKanban: string;
+  kindCanvas: string;
+  menuChangeIcon: string;
+  menuResetIcon: string;
+  searchIcons: string;
+  customColor: string;
+  addAssigneePlaceholder: string;
+  removeAssigneeAria: string;
+  confirmDeleteCanvas: (file: string) => string; // キャンバスも削除 / its canvas goes too
+  confirmDeleteStatus: (label: string, used: number) => string;
   // 取り消し / undo
   nothingToUndo: string;
   undone: (label: string) => string;
   undoReschedule: (name: string) => string;
-  undoMove: (name: string) => string;
   undoSubtask: (name: string) => string;
   undoDetach: (name: string) => string;
   undoAddTag: (name: string, tag: string) => string;
@@ -134,7 +143,6 @@ interface Strings {
   sfUnsupported: string;
   depTooltip: (type: string) => string;
   // 日付入力 / date entry
-  invalidDate: string;
   pickDate: string;
   editProgress: string;
   editAssignee: string;
@@ -285,8 +293,6 @@ interface Strings {
   confirmDropTagColorBody: (tag: string) => string;
   confirmDropTagColorSub: string;
   confirmDropTagColorOk: string;
-  setColorName: string;
-  setNoColorsYet: string;
   setKeysHeading: string;
 }
 
@@ -310,12 +316,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "フラット表示",
     optRollup: "ロールアップ",
     optProgressLine: "稲妻線",
-    filterAll: "すべて",
     noneLabel: "（なし）",
     nothingToUndo: "取り消す操作がありません",
     undone: (label) => `取り消しました: ${label}`,
     undoReschedule: (name) => `「${name}」の日程変更`,
-    undoMove: (name) => `「${name}」の移動`,
     undoSubtask: (name) => `「${name}」をサブタスク化`,
     undoDetach: (name) => `「${name}」の親を解除`,
     undoAddTag: (name, tag) => `「${name}」にタグ #${tag} を追加`,
@@ -331,7 +335,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "やり直す操作がありません",
     redone: (label) => `やり直しました: ${label}`,
     sfUnsupported: "SF（開始→終了）は未対応です。",
-    invalidDate: "日付の形式が正しくありません。",
     pickDate: "日付を選択",
     editProgress: "ダブルクリックで進捗を編集",
     editAssignee: "ダブルクリックで担当者を編集",
@@ -474,8 +477,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `「${tag}」の色指定を解除します。`,
     confirmDropTagColorSub: "このタグは既定色に戻ります。取り消しはできません。",
     confirmDropTagColorOk: "色指定を解除",
-    setColorName: "名前",
-    setNoColorsYet: "まだ登録がありません（表で右クリックして色を設定）",
     setKeysHeading: "フロントマターのキー名",
     dfLabel: "フィルタ",
     dfAdd: "フィルタを追加",
@@ -500,14 +501,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "後",
     dfRangeTo: "〜",
     dfOpIsNot: "以外",
-    dfFilterBy: "フィルタ項目",
     dfMatchLabel: "表示するタスク",
     dfMatchAll: "すべてに一致",
     dfMatchAny: "いずれかに一致",
     presetLabel: "プリセット",
     presetBuiltinHeading: "既定",
     presetUserHeading: "マイプリセット",
-    presetSaveCurrent: "現在のフィルタを保存",
     presetNamePlaceholder: "プリセット名",
     presetSave: "保存",
     presetClear: "フィルタをクリア",
@@ -530,6 +529,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "「完了」グループのステータスがありません。プリセットの「完了済み」は常に 0 件になります。",
     presetCompleted: "完了済み",
     presetIncomplete: "未完了",
+    newTaskKindAria: "種類を選んで新規作成",
+    kindNote: "ノート",
+    kindKanban: "カンバン",
+    kindCanvas: "キャンバス",
+    menuChangeIcon: "アイコンを変更…",
+    menuResetIcon: "アイコンを元に戻す",
+    searchIcons: "アイコンを検索…",
+    customColor: "カスタム色…",
+    addAssigneePlaceholder: "担当者を追加…",
+    removeAssigneeAria: "担当者を外す",
+    confirmDeleteCanvas: (file) => `キャンバス「${file}」も一緒に削除します。`,
+    confirmDeleteStatus: (label, used) => `ステータス「${label}」を削除しますか？` + (used ? `${used} 件のタスクが使っており、ステータスなしの表示になります。` : ""),
   },
   en: {
     colTask: "Task",
@@ -550,12 +561,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "Flat",
     optRollup: "Roll up",
     optProgressLine: "Progress line",
-    filterAll: "All",
     noneLabel: "(none)",
     nothingToUndo: "Nothing to undo",
     undone: (label) => `Undone: ${label}`,
     undoReschedule: (name) => `Reschedule "${name}"`,
-    undoMove: (name) => `Move "${name}"`,
     undoSubtask: (name) => `Make "${name}" a subtask`,
     undoDetach: (name) => `Detach "${name}"`,
     undoAddTag: (name, tag) => `Tag "${name}" with #${tag}`,
@@ -571,7 +580,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "Nothing to redo",
     redone: (label) => `Redone: ${label}`,
     sfUnsupported: "SF (start-to-finish) dependency is not supported.",
-    invalidDate: "Invalid date format.",
     pickDate: "Pick a date",
     editProgress: "Double-click to edit progress",
     editAssignee: "Double-click to edit the assignee",
@@ -714,8 +722,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `Remove the colour set for “${tag}”.`,
     confirmDropTagColorSub: "The tag goes back to the default colour. This can't be undone.",
     confirmDropTagColorOk: "Remove colour",
-    setColorName: "Name",
-    setNoColorsYet: "None yet (right-click in the table to set a color)",
     setKeysHeading: "Frontmatter keys",
     dfLabel: "Filters",
     dfAdd: "Add filter",
@@ -740,14 +746,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "from now",
     dfRangeTo: "to",
     dfOpIsNot: "is not",
-    dfFilterBy: "Filter by",
     dfMatchLabel: "Show items matching",
     dfMatchAll: "Match all",
     dfMatchAny: "Match any",
     presetLabel: "Presets",
     presetBuiltinHeading: "Built-in",
     presetUserHeading: "Saved",
-    presetSaveCurrent: "Save current filter",
     presetNamePlaceholder: "Preset name",
     presetSave: "Save",
     presetClear: "Clear filters",
@@ -770,6 +774,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "No status belongs to the Completed group, so the Completed preset always comes back empty.",
     presetCompleted: "Completed",
     presetIncomplete: "Incomplete",
+    newTaskKindAria: "New task as…",
+    kindNote: "Note",
+    kindKanban: "Kanban board",
+    kindCanvas: "Canvas",
+    menuChangeIcon: "Change icon…",
+    menuResetIcon: "Reset icon",
+    searchIcons: "Search icons…",
+    customColor: "Custom color…",
+    addAssigneePlaceholder: "Add an assignee…",
+    removeAssigneeAria: "Remove assignee",
+    confirmDeleteCanvas: (file) => `Its canvas "${file}" will be deleted too.`,
+    confirmDeleteStatus: (label, used) => `Delete the status "${label}"?` + (used ? ` ${used} tasks use it and will show no status.` : ""),
   },
   zh: {
     colTask: "任务",
@@ -790,12 +806,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "平铺",
     optRollup: "汇总",
     optProgressLine: "进度线",
-    filterAll: "全部",
     noneLabel: "（无）",
     nothingToUndo: "没有可撤销的操作",
     undone: (label) => `已撤销：${label}`,
     undoReschedule: (name) => `重新安排“${name}”`,
-    undoMove: (name) => `移动“${name}”`,
     undoSubtask: (name) => `将“${name}”设为子任务`,
     undoDetach: (name) => `分离“${name}”`,
     undoAddTag: (name, tag) => `为“${name}”添加标签 #${tag}`,
@@ -811,7 +825,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "没有可重做的操作",
     redone: (label) => `已重做：${label}`,
     sfUnsupported: "不支持 SF（开始到完成）依赖。",
-    invalidDate: "日期格式无效。",
     pickDate: "选择日期",
     editProgress: "双击编辑进度",
     editAssignee: "双击编辑负责人",
@@ -954,8 +967,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `将移除为“${tag}”指定的颜色。`,
     confirmDropTagColorSub: "该标签将恢复为默认颜色，且无法撤销。",
     confirmDropTagColorOk: "移除颜色",
-    setColorName: "名称",
-    setNoColorsYet: "暂无（在表格中右键设置颜色）",
     setKeysHeading: "Frontmatter 键名",
     dfLabel: "筛选",
     dfAdd: "添加筛选",
@@ -980,14 +991,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "后",
     dfRangeTo: "至",
     dfOpIsNot: "不是",
-    dfFilterBy: "筛选条件",
     dfMatchLabel: "显示匹配以下条件的项目",
     dfMatchAll: "匹配全部",
     dfMatchAny: "匹配任一",
     presetLabel: "预设",
     presetBuiltinHeading: "内置",
     presetUserHeading: "已保存",
-    presetSaveCurrent: "保存当前筛选",
     presetNamePlaceholder: "预设名称",
     presetSave: "保存",
     presetClear: "清除筛选",
@@ -1010,6 +1019,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "没有状态属于「已完成」组，因此「已完成」预设始终为空。",
     presetCompleted: "已完成",
     presetIncomplete: "未完成",
+    newTaskKindAria: "按类型新建任务",
+    kindNote: "笔记",
+    kindKanban: "看板",
+    kindCanvas: "白板",
+    menuChangeIcon: "更改图标…",
+    menuResetIcon: "重置图标",
+    searchIcons: "搜索图标…",
+    customColor: "自定义颜色…",
+    addAssigneePlaceholder: "添加负责人…",
+    removeAssigneeAria: "移除负责人",
+    confirmDeleteCanvas: (file) => `其白板“${file}”也会一并删除。`,
+    confirmDeleteStatus: (label, used) => `删除状态“${label}”？` + (used ? `有 ${used} 个任务正在使用它，这些任务将显示为无状态。` : ""),
   },
   "zh-tw": {
     colTask: "任務",
@@ -1030,12 +1051,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "平面",
     optRollup: "彙總",
     optProgressLine: "進度線",
-    filterAll: "全部",
     noneLabel: "（無）",
     nothingToUndo: "沒有可復原的操作",
     undone: (label) => `已復原：${label}`,
     undoReschedule: (name) => `重新排程「${name}」`,
-    undoMove: (name) => `移動「${name}」`,
     undoSubtask: (name) => `將「${name}」設為子任務`,
     undoDetach: (name) => `分離「${name}」`,
     undoAddTag: (name, tag) => `為「${name}」加上標籤 #${tag}`,
@@ -1051,7 +1070,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "沒有可重做的操作",
     redone: (label) => `已重做：${label}`,
     sfUnsupported: "不支援 SF（開始到完成）相依。",
-    invalidDate: "日期格式無效。",
     pickDate: "選擇日期",
     editProgress: "雙擊編輯進度",
     editAssignee: "雙擊編輯負責人",
@@ -1194,8 +1212,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `將移除為「${tag}」指定的顏色。`,
     confirmDropTagColorSub: "該標籤會恢復為預設顏色，且無法復原。",
     confirmDropTagColorOk: "移除顏色",
-    setColorName: "名稱",
-    setNoColorsYet: "尚無（在表格中右鍵設定顏色）",
     setKeysHeading: "Frontmatter 鍵名",
     dfLabel: "篩選",
     dfAdd: "新增篩選",
@@ -1220,14 +1236,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "後",
     dfRangeTo: "至",
     dfOpIsNot: "不是",
-    dfFilterBy: "篩選條件",
     dfMatchLabel: "顯示符合以下條件的項目",
     dfMatchAll: "符合全部",
     dfMatchAny: "符合任一",
     presetLabel: "預設",
     presetBuiltinHeading: "內建",
     presetUserHeading: "已儲存",
-    presetSaveCurrent: "儲存目前篩選",
     presetNamePlaceholder: "預設名稱",
     presetSave: "儲存",
     presetClear: "清除篩選",
@@ -1250,6 +1264,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "沒有狀態屬於「已完成」群組，因此「已完成」預設一律為空。",
     presetCompleted: "已完成",
     presetIncomplete: "未完成",
+    newTaskKindAria: "依類型新增任務",
+    kindNote: "筆記",
+    kindKanban: "看板",
+    kindCanvas: "白板",
+    menuChangeIcon: "變更圖示…",
+    menuResetIcon: "重設圖示",
+    searchIcons: "搜尋圖示…",
+    customColor: "自訂顏色…",
+    addAssigneePlaceholder: "新增負責人…",
+    removeAssigneeAria: "移除負責人",
+    confirmDeleteCanvas: (file) => `其白板「${file}」也會一併刪除。`,
+    confirmDeleteStatus: (label, used) => `刪除狀態「${label}」？` + (used ? `有 ${used} 個任務正在使用，這些任務將顯示為無狀態。` : ""),
   },
   ko: {
     colTask: "작업",
@@ -1270,12 +1296,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "평면",
     optRollup: "롤업",
     optProgressLine: "진척선",
-    filterAll: "전체",
     noneLabel: "(없음)",
     nothingToUndo: "취소할 작업이 없습니다",
     undone: (label) => `취소됨: ${label}`,
     undoReschedule: (name) => `"${name}" 일정 변경`,
-    undoMove: (name) => `"${name}" 이동`,
     undoSubtask: (name) => `"${name}"을(를) 하위 작업으로`,
     undoDetach: (name) => `"${name}" 분리`,
     undoAddTag: (name, tag) => `"${name}"에 #${tag} 태그 추가`,
@@ -1291,7 +1315,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "다시 실행할 작업이 없습니다",
     redone: (label) => `다시 실행됨: ${label}`,
     sfUnsupported: "SF(시작-완료) 종속성은 지원되지 않습니다.",
-    invalidDate: "날짜 형식이 올바르지 않습니다.",
     pickDate: "날짜 선택",
     editProgress: "두 번 클릭하여 진척 편집",
     editAssignee: "두 번 클릭하여 담당자 편집",
@@ -1434,8 +1457,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `“${tag}”에 지정한 색상을 해제합니다.`,
     confirmDropTagColorSub: "이 태그는 기본 색상으로 돌아가며 되돌릴 수 없습니다.",
     confirmDropTagColorOk: "색상 해제",
-    setColorName: "이름",
-    setNoColorsYet: "아직 없음(표에서 우클릭하여 색상 설정)",
     setKeysHeading: "Frontmatter 키 이름",
     dfLabel: "필터",
     dfAdd: "필터 추가",
@@ -1460,14 +1481,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "후",
     dfRangeTo: "~",
     dfOpIsNot: "아님",
-    dfFilterBy: "필터 기준",
     dfMatchLabel: "표시할 항목",
     dfMatchAll: "모두 일치",
     dfMatchAny: "하나라도 일치",
     presetLabel: "프리셋",
     presetBuiltinHeading: "기본",
     presetUserHeading: "저장됨",
-    presetSaveCurrent: "현재 필터 저장",
     presetNamePlaceholder: "프리셋 이름",
     presetSave: "저장",
     presetClear: "필터 지우기",
@@ -1490,6 +1509,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "「완료」 그룹에 속한 상태가 없어 「완료됨」 프리셋은 항상 비어 있습니다.",
     presetCompleted: "완료됨",
     presetIncomplete: "미완료",
+    newTaskKindAria: "유형을 골라 새 작업",
+    kindNote: "노트",
+    kindKanban: "칸반 보드",
+    kindCanvas: "캔버스",
+    menuChangeIcon: "아이콘 변경…",
+    menuResetIcon: "아이콘 초기화",
+    searchIcons: "아이콘 검색…",
+    customColor: "사용자 지정 색…",
+    addAssigneePlaceholder: "담당자 추가…",
+    removeAssigneeAria: "담당자 제거",
+    confirmDeleteCanvas: (file) => `캔버스 "${file}"도 함께 삭제됩니다.`,
+    confirmDeleteStatus: (label, used) => `상태 "${label}"을(를) 삭제할까요?` + (used ? ` 이 상태를 쓰는 작업 ${used}개는 상태 없음으로 표시됩니다.` : ""),
   },
   fr: {
     colTask: "Tâche",
@@ -1510,12 +1541,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "À plat",
     optRollup: "Synthèse",
     optProgressLine: "Ligne d'avancement",
-    filterAll: "Tous",
     noneLabel: "(aucun)",
     nothingToUndo: "Rien à annuler",
     undone: (label) => `Annulé : ${label}`,
     undoReschedule: (name) => `Replanifier « ${name} »`,
-    undoMove: (name) => `Déplacer « ${name} »`,
     undoSubtask: (name) => `Faire de « ${name} » une sous-tâche`,
     undoDetach: (name) => `Détacher « ${name} »`,
     undoAddTag: (name, tag) => `Étiqueter « ${name} » avec #${tag}`,
@@ -1531,7 +1560,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "Rien à rétablir",
     redone: (label) => `Rétabli : ${label}`,
     sfUnsupported: "La dépendance SF (début-fin) n'est pas prise en charge.",
-    invalidDate: "Format de date invalide.",
     pickDate: "Choisir une date",
     editProgress: "Double-cliquer pour modifier l'avancement",
     editAssignee: "Double-cliquer pour modifier le responsable",
@@ -1674,8 +1702,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `Retirer la couleur définie pour « ${tag} ».`,
     confirmDropTagColorSub: "L'étiquette revient à la couleur par défaut. Action irréversible.",
     confirmDropTagColorOk: "Retirer la couleur",
-    setColorName: "Nom",
-    setNoColorsYet: "Aucune (clic droit dans le tableau pour définir une couleur)",
     setKeysHeading: "Clés du frontmatter",
     dfLabel: "Filtres",
     dfAdd: "Ajouter un filtre",
@@ -1700,14 +1726,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "à partir d'aujourd'hui",
     dfRangeTo: "à",
     dfOpIsNot: "n'est pas",
-    dfFilterBy: "Filtrer par",
     dfMatchLabel: "Afficher les éléments correspondant à",
     dfMatchAll: "Tous les filtres",
     dfMatchAny: "Au moins un filtre",
     presetLabel: "Préréglages",
     presetBuiltinHeading: "Intégrés",
     presetUserHeading: "Enregistrés",
-    presetSaveCurrent: "Enregistrer le filtre actuel",
     presetNamePlaceholder: "Nom du préréglage",
     presetSave: "Enregistrer",
     presetClear: "Effacer les filtres",
@@ -1730,6 +1754,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "Aucun statut n'appartient au groupe Terminé : le préréglage « Terminées » restera toujours vide.",
     presetCompleted: "Terminées",
     presetIncomplete: "Non terminées",
+    newTaskKindAria: "Nouvelle tâche de type…",
+    kindNote: "Note",
+    kindKanban: "Tableau Kanban",
+    kindCanvas: "Canvas",
+    menuChangeIcon: "Changer l'icône…",
+    menuResetIcon: "Réinitialiser l'icône",
+    searchIcons: "Rechercher une icône…",
+    customColor: "Couleur personnalisée…",
+    addAssigneePlaceholder: "Ajouter un responsable…",
+    removeAssigneeAria: "Retirer le responsable",
+    confirmDeleteCanvas: (file) => `Son canvas « ${file} » sera aussi supprimé.`,
+    confirmDeleteStatus: (label, used) => `Supprimer le statut « ${label} » ?` + (used ? ` ${used} tâches l'utilisent et n'auront plus de statut.` : ""),
   },
   es: {
     colTask: "Tarea",
@@ -1750,12 +1786,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "Plano",
     optRollup: "Resumen",
     optProgressLine: "Línea de avance",
-    filterAll: "Todos",
     noneLabel: "(ninguno)",
     nothingToUndo: "Nada que deshacer",
     undone: (label) => `Deshecho: ${label}`,
     undoReschedule: (name) => `Reprogramar «${name}»`,
-    undoMove: (name) => `Mover «${name}»`,
     undoSubtask: (name) => `Convertir «${name}» en subtarea`,
     undoDetach: (name) => `Separar «${name}»`,
     undoAddTag: (name, tag) => `Etiquetar «${name}» con #${tag}`,
@@ -1771,7 +1805,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "Nada que rehacer",
     redone: (label) => `Rehecho: ${label}`,
     sfUnsupported: "La dependencia SF (inicio-fin) no es compatible.",
-    invalidDate: "Formato de fecha no válido.",
     pickDate: "Elegir fecha",
     editProgress: "Doble clic para editar el avance",
     editAssignee: "Doble clic para editar el responsable",
@@ -1914,8 +1947,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `Se quitará el color definido para «${tag}».`,
     confirmDropTagColorSub: "La etiqueta vuelve al color por defecto. No se puede deshacer.",
     confirmDropTagColorOk: "Quitar color",
-    setColorName: "Nombre",
-    setNoColorsYet: "Ninguno aún (clic derecho en la tabla para definir un color)",
     setKeysHeading: "Claves del frontmatter",
     dfLabel: "Filtros",
     dfAdd: "Añadir filtro",
@@ -1940,14 +1971,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "a partir de ahora",
     dfRangeTo: "a",
     dfOpIsNot: "no es",
-    dfFilterBy: "Filtrar por",
     dfMatchLabel: "Mostrar elementos que coincidan con",
     dfMatchAll: "Todos los filtros",
     dfMatchAny: "Cualquier filtro",
     presetLabel: "Ajustes",
     presetBuiltinHeading: "Integrados",
     presetUserHeading: "Guardados",
-    presetSaveCurrent: "Guardar filtro actual",
     presetNamePlaceholder: "Nombre del ajuste",
     presetSave: "Guardar",
     presetClear: "Borrar filtros",
@@ -1970,6 +1999,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "Ningún estado pertenece al grupo Completado, por lo que el preajuste «Completadas» siempre estará vacío.",
     presetCompleted: "Completadas",
     presetIncomplete: "Sin completar",
+    newTaskKindAria: "Nueva tarea de tipo…",
+    kindNote: "Nota",
+    kindKanban: "Tablero Kanban",
+    kindCanvas: "Lienzo",
+    menuChangeIcon: "Cambiar icono…",
+    menuResetIcon: "Restablecer icono",
+    searchIcons: "Buscar icono…",
+    customColor: "Color personalizado…",
+    addAssigneePlaceholder: "Añadir responsable…",
+    removeAssigneeAria: "Quitar responsable",
+    confirmDeleteCanvas: (file) => `Su lienzo "${file}" también se eliminará.`,
+    confirmDeleteStatus: (label, used) => `¿Eliminar el estado "${label}"?` + (used ? ` ${used} tareas lo usan y se mostrarán sin estado.` : ""),
   },
   ru: {
     colTask: "Задача",
@@ -1990,12 +2031,10 @@ const STRINGS: Record<Lang, Strings> = {
     optFlat: "Плоский список",
     optRollup: "Сводка",
     optProgressLine: "Линия прогресса",
-    filterAll: "Все",
     noneLabel: "(нет)",
     nothingToUndo: "Нечего отменять",
     undone: (label) => `Отменено: ${label}`,
     undoReschedule: (name) => `Перенести «${name}»`,
-    undoMove: (name) => `Переместить «${name}»`,
     undoSubtask: (name) => `Сделать «${name}» подзадачей`,
     undoDetach: (name) => `Открепить «${name}»`,
     undoAddTag: (name, tag) => `Добавить тег #${tag} к «${name}»`,
@@ -2011,7 +2050,6 @@ const STRINGS: Record<Lang, Strings> = {
     nothingToRedo: "Нечего повторять",
     redone: (label) => `Повторено: ${label}`,
     sfUnsupported: "Зависимость SF (начало-конец) не поддерживается.",
-    invalidDate: "Неверный формат даты.",
     pickDate: "Выбрать дату",
     editProgress: "Двойной щелчок — изменить прогресс",
     editAssignee: "Двойной щелчок — изменить исполнителя",
@@ -2154,8 +2192,6 @@ const STRINGS: Record<Lang, Strings> = {
     confirmDropTagColorBody: (tag) => `Цвет, заданный для «${tag}», будет убран.`,
     confirmDropTagColorSub: "Тег вернётся к цвету по умолчанию. Отменить нельзя.",
     confirmDropTagColorOk: "Убрать цвет",
-    setColorName: "Имя",
-    setNoColorsYet: "Пока нет (правый клик в таблице, чтобы задать цвет)",
     setKeysHeading: "Ключи frontmatter",
     dfLabel: "Фильтры",
     dfAdd: "Добавить фильтр",
@@ -2180,14 +2216,12 @@ const STRINGS: Record<Lang, Strings> = {
     dfFromNow: "от сегодня",
     dfRangeTo: "по",
     dfOpIsNot: "не равно",
-    dfFilterBy: "Фильтровать по",
     dfMatchLabel: "Показывать задачи, соответствующие",
     dfMatchAll: "Всем фильтрам",
     dfMatchAny: "Любому фильтру",
     presetLabel: "Пресеты",
     presetBuiltinHeading: "Встроенные",
     presetUserHeading: "Сохранённые",
-    presetSaveCurrent: "Сохранить текущий фильтр",
     presetNamePlaceholder: "Название пресета",
     presetSave: "Сохранить",
     presetClear: "Очистить фильтры",
@@ -2210,6 +2244,18 @@ const STRINGS: Record<Lang, Strings> = {
     setNoCompletedStatus: "Ни один статус не входит в группу «Завершено», поэтому пресет «Завершённые» всегда будет пустым.",
     presetCompleted: "Завершённые",
     presetIncomplete: "Незавершённые",
+    newTaskKindAria: "Новая задача типа…",
+    kindNote: "Заметка",
+    kindKanban: "Канбан-доска",
+    kindCanvas: "Холст",
+    menuChangeIcon: "Изменить значок…",
+    menuResetIcon: "Сбросить значок",
+    searchIcons: "Поиск значка…",
+    customColor: "Свой цвет…",
+    addAssigneePlaceholder: "Добавить исполнителя…",
+    removeAssigneeAria: "Убрать исполнителя",
+    confirmDeleteCanvas: (file) => `Её холст «${file}» тоже будет удалён.`,
+    confirmDeleteStatus: (label, used) => `Удалить статус «${label}»?` + (used ? ` Его используют задач: ${used}; они останутся без статуса.` : ""),
   },
 };
 

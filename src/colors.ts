@@ -3,6 +3,13 @@
 // shared name → color helpers, used by the view (tag/folder/assignee bar colors) and by
 // settings (importing tag colors); kept in its own module so neither side forms an import cycle.
 
+// 色のパレット（ライト/ダークどちらのテーマでも見分けやすい 17 色。既定のステータス色と稲妻線の色を含む）
+// the colour palette: 17 hues that stay distinct on light and dark themes, including the default status and progress-line colours
+export const PALETTE = [
+  "#ef4444", "#f97316", "#f59e0b", "#84cc16", "#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9",
+  "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#9aa0a6", "#64748b",
+];
+
 // HSL → #rrggbb（カラーピッカーの初期値に hex が要るため）/ HSL → hex (color inputs need hex)
 export function hslToHex(h: number, s: number, l: number): string {
   s /= 100;

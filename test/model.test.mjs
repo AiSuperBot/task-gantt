@@ -1,6 +1,6 @@
 // buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
-import { buildRows, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput } from "./model.mjs";
+import { buildRows, parseKanban, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -81,6 +81,23 @@ check("お掃除を畳むと行は1つ（お掃除のみ）", collapsedRows.leng
 const c2 = buildRows(tasks, new Set(["お掃除/床掃除"]));
 check("床掃除を畳むと掃き掃除/拭き掃除が消える", !c2.some((r) => r.task?.name === "掃き掃除"));
 check("床掃除を畳んでもお風呂掃除のタスクは残る", c2.some((r) => r.task?.name === "排水溝清掃"));
+
+// フォルダ直下のタスクはサブフォルダより先（後だと直前のサブフォルダの中に見える）
+// a folder's own tasks come before its subfolders (after them they'd read as part of the subfolder above)
+const mixed = buildRows([
+  { path: "p/Root task.md", name: "Root task", groups: [], start: "2026-02-01", end: "2026-02-01", milestone: false },
+  { path: "p/A/In A.md", name: "In A", groups: ["A"], start: "2026-02-02", end: "2026-02-02", milestone: false },
+]);
+check("ルート直下のタスクがフォルダより先", mixed[0].kind === "task" && mixed[0].task.name === "Root task" && mixed[1].group === "A");
+
+// ----- カンバン本文 / kanban bodies -----
+const lanes = parseKanban(["## To do", "", "- [ ] Header", "- [ ] Footer", "", "## Done", "", "**Complete**", "- [x] Setup", "",
+  "%% kanban:settings", "```", "{}", "```", "%%", "- [ ] not a card"].join("\n"));
+check("カンバン: 列は 2 つ", lanes.length === 2 && lanes[0].title === "To do" && lanes[1].title === "Done");
+check("カンバン: カードと完了", lanes[0].cards.length === 2 && !lanes[0].cards[0].done && lanes[1].cards[0].text === "Setup" && lanes[1].cards[0].done);
+check("カンバン: 設定ブロック以降は読まない", lanes[1].cards.length === 1);
+const stray = parseKanban("- [ ] stray\n## L\n- card");
+check("カンバン: 列より前のリストは無視", stray.length === 1 && stray[0].cards.length === 1 && stray[0].cards[0].text === "card");
 
 // ----- サブタスク（parent ネスト）/ subtask nesting -----
 const sub = [

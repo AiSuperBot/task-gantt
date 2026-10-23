@@ -1,6 +1,6 @@
-import { ItemView, Menu, MarkdownRenderer, WorkspaceLeaf, setIcon, Notice, TFile, ViewStateResult, moment } from "obsidian";
+import { ItemView, Keymap, Menu, MarkdownRenderer, WorkspaceLeaf, setIcon, Notice, TFile, ViewStateResult, moment } from "obsidian";
 import type GanttPlugin from "./main";
-import { Task, Row, ZoomMode, DepType, GanttViewState, VIEW_TYPE_GANTT, Filter, FilterMatch, FilterPreset, DateFilterItem, CategoryFilter, CategoryField, CategoryOp, TextFilter, TextOp, DateValue, DateOp, DateField, DateUnit, DateDir, StatusGroup, STATUS_GROUPS } from "./types";
+import { Task, TaskKind, Row, ZoomMode, DepType, GanttViewState, VIEW_TYPE_GANTT, Filter, FilterMatch, FilterPreset, DateFilterItem, CategoryFilter, CategoryField, CategoryOp, TextFilter, TextOp, DateValue, DateOp, DateField, DateUnit, DateDir, StatusDef, StatusGroup, STATUS_GROUPS } from "./types";
 import {
   collectTasks,
   collectFolders,
@@ -12,6 +12,7 @@ import {
   writeDates,
   combineDateTime,
   writeField,
+  writeList,
   writeBody,
   renameTask,
   deleteTask,
@@ -21,6 +22,7 @@ import {
   addDependency,
   removeDependency,
   readBody,
+  parseKanban,
   anchorStart,
   anchorEnd,
 } from "./model";
@@ -37,7 +39,8 @@ import {
   buildProgressLine,
   ProgressLineRow,
 } from "./timeline";
-import { hashColor, resolveTagColor } from "./colors";
+import { PALETTE, hashColor, resolveTagColor } from "./colors";
+import { openPopover, paletteInto, pickColor, pickIcon } from "./popover";
 import { ConfirmModal } from "./modals";
 import { linkLabel } from "./links";
 import { attachLinkSuggest, handleLinkClick, renderLinkValue, wireLinkHover } from "./linkui";
@@ -57,6 +60,18 @@ const FIT_SCROLLBAR_PAD = 16; // 縦スクロールバー分の余白 / room for
 const FALLBACK_BAR = "#7c8db5"; // ステータス/担当者が未設定のときのバー色 / bar color when status/assignee is unset
 
 const MAX_INDENT_DEPTH = 8; // インデントの段数上限（論理ツリーは無制限）/ visual indent cap (the tree itself is unlimited)
+const MAX_AVATARS = 3; // バーの横に並べるアバターの数（名前はラベルに全員）/ avatars beside a bar (the label names everyone)
+// バー端からラベルまで。依存の矢印が折れる位置（12px）と端のハンドル（11px）の先に置く
+// from the bar end to the label: past the turn of a dependency arrow (12px) and the end handle (11px)
+const LABEL_GAP = 18;
+
+// タスクの種類のアイコン（ノートは付けない）/ task-kind icons (plain notes get none)
+const KIND_ICON: Record<TaskKind, string> = { note: "file-text", kanban: "square-kanban", canvas: "layout-dashboard" };
+
+// 名前の頭文字（アバター用・最大 2 文字）/ initials of a name for an avatar (up to two letters)
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => [...w][0]).join("").toUpperCase();
+}
 
 // 履歴 1 件：操作前パス→内容（null＝存在しなかった）と、操作中の移動（実行順）
 // one history entry: pre-op path → contents (null = didn't exist) and the op's moves, in order
@@ -148,6 +163,9 @@ export class GanttView extends ItemView {
   async setState(state: GanttViewState, result: ViewStateResult): Promise<void> {
     if (state && typeof state.folder === "string") this.folder = state.folder;
     await super.setState(state, result);
+    // ビューの見出しは開いた時点（フォルダが決まる前）の表示名のままなので書き直す（titleEl は型に無い）
+    // the view header keeps the name from when it opened, before the folder was known, so rewrite it (titleEl isn't in the typings)
+    (this as unknown as { titleEl?: HTMLElement }).titleEl?.setText(this.getDisplayText());
     if (this.gridHost) await this.refresh();
   }
 
@@ -238,7 +256,7 @@ export class GanttView extends ItemView {
       window.clearTimeout(this.fitTimer);
       this.fitTimer = null;
     }
-    activeDocument.querySelectorAll(".ogantt-cal, .ogantt-colmenu, .ogantt-timepick, .ogantt-datemenu").forEach((e) => e.remove()); // 開いたままのポップオーバーを掃除 / drop any open popover
+    activeDocument.querySelectorAll(".ogantt-popover").forEach((e) => e.remove()); // 開いたままのポップオーバーを掃除 / drop any open popover
   }
 
   // ディスクから集計し直して再描画 / re-collect from disk, then render
@@ -364,41 +382,9 @@ export class GanttView extends ItemView {
     this.rerender();
   }
 
-  // 汎用ポップオーバー：anchor の直下に開き、外側クリック/Esc で閉じる。中身は build が構築する。
-  // 同じ cls の既存ポップオーバーは開く前に閉じる（同時に1つ）。リスナは close で必ず解除。
-  // generic popover under `anchor`, closed on outside-click/Esc; `build` fills it and receives `close`.
-  // any existing popover with the same cls is removed first (one at a time); listeners are always released in close.
-  private openPopover(anchor: HTMLElement, cls: string, build: (menu: HTMLElement, close: () => void) => void): void {
-    activeDocument.querySelectorAll(`.${cls}`).forEach((e) => e.remove());
-    const menu = activeDocument.body.createDiv({ cls });
-    const close = () => {
-      menu.remove();
-      activeDocument.removeEventListener("pointerdown", onOutside, true);
-      activeDocument.removeEventListener("keydown", onKey, true);
-    };
-    const onOutside = (e: PointerEvent) => {
-      const tg = e.target as Node;
-      if (!menu.contains(tg) && !anchor.contains(tg)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); close(); }
-    };
-    build(menu, close);
-    // 中身を作ってから寸法を測って位置決め。anchor の下に置き、画面外に出るなら上へ反転する
-    // （表の行から開くとき、下の行では下に収まらない）/ measure after building, then place below the
-    // anchor, flipping above when it would overflow (lower table rows have no room below)
-    const r = anchor.getBoundingClientRect();
-    let top = r.bottom + 4;
-    if (top + menu.offsetHeight > window.innerHeight) top = Math.max(4, r.top - menu.offsetHeight - 4);
-    menu.style.top = `${top}px`;
-    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8))}px`;
-    activeDocument.addEventListener("pointerdown", onOutside, true);
-    activeDocument.addEventListener("keydown", onKey, true);
-  }
-
   // 列の出し分けポップオーバー（チェックボックス）/ column-visibility popover (checkboxes)
   private openColumnMenu(anchor: HTMLElement): void {
-    this.openPopover(anchor, "ogantt-colmenu", (menu) => {
+    openPopover(anchor, "ogantt-colmenu", (menu) => {
       for (const col of this.columns().filter((c) => c.optional)) {
         const item = menu.createEl("label", { cls: "ogantt-colmenu-item" });
         const cb = item.createEl("input", { type: "checkbox" });
@@ -492,7 +478,7 @@ export class GanttView extends ItemView {
     // グループは 4 固定なので、そのグループを使っているステータスが 1 つも無くても全部出す
     // the four groups are fixed, so list them all even when no status currently uses one
     else if (field === "statusGroup") base = STATUS_GROUPS.map((g) => [g, statusGroupLabel(g)] as [string, string]);
-    else if (field === "assignee") base = [...new Set(this.tasks.map((t) => t.assignee).filter((a): a is string => !!a))].sort().map((a) => [a, linkLabel(a)] as [string, string]);
+    else if (field === "assignee") base = this.assigneeList().map((a) => [a, linkLabel(a)] as [string, string]);
     else base = [...new Set(this.tasks.flatMap((t) => t.tags))].sort().map((tg) => [tg, tg] as [string, string]);
     return [...base, ["", tr().noneLabel]]; // 「未設定」を選べるように / allow filtering by "unset"
   }
@@ -662,7 +648,7 @@ export class GanttView extends ItemView {
   // プリセットのポップオーバー（組み込み＋マイプリセット＋保存/クリア）/ presets popover
   private openPresetMenu(anchor: HTMLElement): void {
     const s = this.plugin.settings;
-    this.openPopover(anchor, "ogantt-datemenu", (menu, close) => {
+    openPopover(anchor, "ogantt-datemenu", (menu, close) => {
       menu.addClass("ogantt-presetmenu");
       const renderBody = () => {
         menu.empty();
@@ -710,7 +696,7 @@ export class GanttView extends ItemView {
   private openFilterEditor(anchor: HTMLElement, index: number): void {
     const f = this.plugin.settings.filters[index];
     if (!f) return;
-    this.openPopover(anchor, "ogantt-datemenu", (menu, close) => {
+    openPopover(anchor, "ogantt-datemenu", (menu, close) => {
       const commit = () => this.commitFilters();
       const renderBody = () => {
         menu.empty();
@@ -861,6 +847,17 @@ export class GanttView extends ItemView {
     add.createSpan({ cls: "ogantt-add-label", text: tr().newTaskName });
     add.setAttr("aria-label", tr().newTaskAria);
     add.onclick = () => void this.createNewTask();
+    // 種類（ノート / カンバン / キャンバス）を選んで作る / pick the kind (note / kanban / canvas) to create
+    const kinds = bar.createEl("button", { cls: "ogantt-add-kind", attr: { "aria-label": tr().newTaskKindAria } });
+    setIcon(kinds, "chevron-down");
+    kinds.onclick = (e) => {
+      const m = new Menu();
+      const label: Record<TaskKind, string> = { note: tr().kindNote, kanban: tr().kindKanban, canvas: tr().kindCanvas };
+      for (const kind of ["note", "kanban", "canvas"] as TaskKind[]) {
+        m.addItem((i) => i.setTitle(label[kind]).setIcon(KIND_ICON[kind]).onClick(() => void this.createNewTask(kind)));
+      }
+      m.showAtMouseEvent(e);
+    };
     // 以降のコントロールは「＋」の右に左詰めで並べる（詳細パネルで隠れないように）
     // keep the following controls left-packed next to "+" (so the detail panel can't hide them)
     // 今日へスクロール / scroll to today
@@ -873,7 +870,7 @@ export class GanttView extends ItemView {
         this.zoom = z; // ppd は rerender 内の computePpd() が決める / ppd is set by computePpd() in rerender
         bar.querySelectorAll("button.is-active").forEach((b) => b.removeClass("is-active"));
         btn.addClass("is-active");
-        void this.refresh();
+        this.rerender(); // 縮尺だけの変更なのでディスクは読み直さない / only the scale changed, so no disk read
       };
     });
     // 取り消しボタン / undo button
@@ -906,8 +903,6 @@ export class GanttView extends ItemView {
     host.empty();
     const statuses = this.plugin.settings.statuses;
     const none = tr().noneLabel;
-    // 現在のフォルダ内に実在する担当者一覧（凡例で使用）/ assignees present in the folder (used by the legend)
-    const assignees = [...new Set(this.tasks.map((t) => t.assignee).filter((a): a is string => !!a))].sort();
 
     const makeSelect = (icon: string, label: string, value: string, opts: [string, string][], on: (v: string) => void): void => {
       const wrap = host.createDiv({ cls: "ogantt-opt" });
@@ -985,21 +980,106 @@ export class GanttView extends ItemView {
       this.rerender();
     });
 
-    // 凡例（色分けの基準を説明）/ legend explaining the current color basis
+    // 凡例（色分けの基準を説明）。ステータスはクリックでその場で編集でき、＋ で追加できる
+    // legend explaining the current color basis; a status chip opens its editor on click, and + adds one
     const legend = host.createDiv({ cls: "ogantt-legend" });
     if (this.colorBy === "status") {
-      for (const s of statuses) this.legendChip(legend, s.color, s.label);
+      for (const s of statuses) {
+        const chip = this.legendChip(legend, s.color, s.label);
+        chip.addClass("is-clickable");
+        chip.onclick = () => this.openStatusEditor(chip, s);
+      }
+      const add = legend.createEl("button", { cls: "ogantt-legend-chip ogantt-legend-add clickable-icon", attr: { "aria-label": tr().setAddStatus } });
+      setIcon(add, "plus");
+      add.onclick = () => this.openStatusEditor(add);
     } else {
-      for (const a of assignees) this.legendChip(legend, hashColor(a), linkLabel(a));
-      if (this.tasks.some((t) => !t.assignee)) this.legendChip(legend, FALLBACK_BAR, none);
+      for (const a of this.assigneeList()) {
+        const chip = this.legendChip(legend, this.assigneeColor(a), linkLabel(a));
+        chip.addClass("is-clickable");
+        chip.onclick = () => pickColor(chip, this.assigneeColor(a), (c) => this.setColorOverride("assignee", linkLabel(a), c));
+      }
+      if (this.tasks.some((t) => !t.assignees.length)) this.legendChip(legend, FALLBACK_BAR, none);
     }
   }
 
-  private legendChip(parent: HTMLElement, color: string, label: string): void {
+  private legendChip(parent: HTMLElement, color: string, label: string): HTMLElement {
     const chip = parent.createDiv({ cls: "ogantt-legend-chip" });
     const sw = chip.createSpan({ cls: "ogantt-legend-swatch" });
     sw.style.background = color;
     chip.createSpan({ text: label });
+    return chip;
+  }
+
+  // ボードの担当者（重複なし・並べ替え済み）/ the board's assignees, deduplicated and sorted
+  private assigneeList(): string[] {
+    return [...new Set(this.tasks.flatMap((t) => t.assignees))].sort();
+  }
+
+  // ステータスの編集ポップオーバー（名前・色・グループ・削除）。st が無ければ新規作成（名前を入れた時点で追加）
+  // the status editor popover (name, colour, group, delete); without `st` it drafts a new one, added once it has a name
+  private openStatusEditor(anchor: HTMLElement, st?: StatusDef): void {
+    const s = this.plugin.settings;
+    const used = new Set(s.statuses.map((x) => x.color));
+    const draft: StatusDef = st ?? { id: "", label: "", color: PALETTE.find((c) => !used.has(c)) ?? PALETTE[0], group: "active" };
+    const persist = () => {
+      void this.plugin.saveSettings();
+      this.plugin.settingTab?.refreshIfOpen();
+    };
+    // 名前が付くまでは下書きなので保存しない / a draft without a name isn't saved yet
+    const save = () => { if (s.statuses.includes(draft)) persist(); };
+    openPopover(anchor, "ogantt-statusmenu", (menu, close) => {
+      const head = menu.createDiv({ cls: "ogantt-statusmenu-head" });
+      const dot = head.createSpan({ cls: "ogantt-status-dot" });
+      dot.style.background = draft.color;
+      const name = head.createEl("input", { type: "text", attr: { placeholder: tr().setStatusLabel, "aria-label": tr().setStatusLabel } });
+      name.value = draft.label;
+      name.onkeydown = (e) => { if (e.key === "Enter") name.blur(); };
+      name.onchange = () => {
+        const v = name.value.trim();
+        if (!v) { name.value = draft.label; return; }
+        draft.label = v;
+        if (!draft.id) {
+          // 新規の id は名前から（既存と重ならないよう連番）/ a new id comes from the name, numbered to stay unique
+          const base = v.toLowerCase().replace(/\s+/g, "-");
+          let id = base;
+          for (let i = 2; s.statuses.some((x) => x.id === id); i++) id = `${base}-${i}`;
+          draft.id = id;
+          s.statuses.push(draft);
+        }
+        save();
+      };
+      paletteInto(menu, draft.color, (c) => {
+        draft.color = c;
+        dot.style.background = c;
+        menu.querySelectorAll(".ogantt-swatch.is-active").forEach((el) => el.removeClass("is-active"));
+        menu.querySelector(`.ogantt-swatch[aria-label="${c}"]`)?.addClass("is-active");
+        save();
+      });
+      const foot = menu.createDiv({ cls: "ogantt-statusmenu-foot" });
+      const group = foot.createEl("select", { cls: "dropdown", attr: { "aria-label": tr().setStatusGroup } });
+      for (const g of STATUS_GROUPS) group.createEl("option", { value: g, text: statusGroupLabel(g) });
+      group.value = draft.group;
+      group.onchange = () => { draft.group = group.value as StatusGroup; save(); };
+      if (st) {
+        const del = foot.createEl("button", { cls: "clickable-icon", attr: { "aria-label": tr().setDeleteTooltip } });
+        setIcon(del, "trash-2");
+        del.onclick = () => {
+          close();
+          new ConfirmModal(this.app, {
+            title: tr().setStatusesHeading,
+            body: tr().confirmDeleteStatus(st.label, this.tasks.filter((t) => t.status === st.id).length),
+            confirmText: tr().menuDelete,
+            cancelText: tr().cancel,
+            onConfirm: () => {
+              const at = s.statuses.indexOf(st);
+              if (at >= 0) s.statuses.splice(at, 1);
+              persist();
+            },
+          }).open();
+        };
+      }
+      if (!st) window.setTimeout(() => name.focus(), 0);
+    });
   }
 
   // タグ/フォルダの色（手動上書きがあればそれ、無ければ名前ハッシュで自動生成）/ tag/folder color (manual override, else auto from name)
@@ -1009,6 +1089,11 @@ export class GanttView extends ItemView {
   private folderColor(name: string): string {
     return this.plugin.settings.folderColors.find((c) => c.name === name)?.color || hashColor(name);
   }
+  // 担当者の色（表示名ごとの上書き > 名前ハッシュ）。自動の色は似ることがあるので、共有タスクの帯を見分けられるよう選べる
+  // an assignee's colour (override by display name > name hash); the automatic hues can collide, so it can be picked to tell shared-task bands apart
+  private assigneeColor(who: string): string {
+    return this.plugin.settings.assigneeColors.find((c) => c.name === linkLabel(who))?.color || hashColor(who);
+  }
   // タグチップに色を塗る（枠＋淡い背景＋文字色。テーブル列/詳細パネル共通）/ paint a tag chip (border + faint bg + text)
   private paintTagChip(chip: HTMLElement, tag: string): void {
     const c = this.tagColor(tag);
@@ -1017,9 +1102,10 @@ export class GanttView extends ItemView {
     chip.style.background = `color-mix(in srgb, ${c} 14%, transparent)`;
   }
 
-  // タグ/フォルダ色の上書きを設定（color=null でリセット＝自動へ）/ set or clear a tag/folder color override (null = reset to auto)
-  private setColorOverride(kind: "tag" | "folder", name: string, color: string | null): void {
-    const arr = kind === "tag" ? this.plugin.settings.tagColors : this.plugin.settings.folderColors;
+  // タグ/フォルダ/担当者の色の上書きを設定（color=null でリセット＝自動へ）/ set or clear a tag/folder/assignee color override (null = reset to auto)
+  private setColorOverride(kind: "tag" | "folder" | "assignee", name: string, color: string | null): void {
+    const s = this.plugin.settings;
+    const arr = kind === "tag" ? s.tagColors : kind === "folder" ? s.folderColors : s.assigneeColors;
     const i = arr.findIndex((c) => c.name === name);
     // 「一覧に載っている ⇔ 色を指定している」を不変条件にする。リセットは色指定の解除なので
     // 行ごと消す（色が空の行は、行が無い状態と見分けがつかず情報を持たないため）。
@@ -1037,25 +1123,61 @@ export class GanttView extends ItemView {
     this.rerender();
   }
 
-  // 右クリックの色メニュー（変更＝ネイティブピッカー／リセット＝自動）/ right-click color menu (change → native picker; reset → auto)
-  private openColorMenu(e: MouseEvent, kind: "tag" | "folder", name: string): void {
-    const current = kind === "tag" ? this.tagColor(name) : this.folderColor(name);
+  // 見出し・タグチップの右クリックメニュー。色（フォルダ・タグ・担当者・ステータス）はパレットで、アイコンは見出しだけ変えられる
+  // the right-click menu of a heading or tag chip: colour (folders, tags, assignees, statuses) from the palette, and the icon (headings only)
+  private openStyleMenu(e: MouseEvent, axis: GroupBy, name: string, heading = false): void {
+    e.preventDefault();
+    e.stopPropagation();
+    const anchor = e.currentTarget as HTMLElement; // メニューを選ぶ頃には currentTarget が消えるので先に控える / gone by the time an item is picked
+    const s = this.plugin.settings;
+    const status = axis === "status" ? s.statuses.find((x) => x.label === name) : undefined;
     const m = new Menu();
-    m.addItem((i) => i.setTitle(tr().menuChangeColor).setIcon("palette").onClick(() => {
-      // 隠し input[type=color] を生成してネイティブピッカーを開く / spawn a hidden color input to open the native picker
-      const picker = activeDocument.body.createEl("input", { type: "color", cls: "ogantt-hidden-color-input" });
-      picker.value = /^#[0-9a-fA-F]{6}$/.test(current) ? current : "#888888";
-      picker.addEventListener("change", () => {
-        this.setColorOverride(kind, name, picker.value);
-        picker.remove();
-      });
-      picker.click();
-    }));
-    // タグは既定色へ、フォルダは名前から自動生成へ戻る。行き先が違うのでラベルも分ける
-    // tags fall back to the default colour, folders to their name-derived one, so the labels differ
-    const resetLabel = kind === "tag" ? tr().menuResetTagColor : tr().menuResetColor;
-    m.addItem((i) => i.setTitle(resetLabel).setIcon("rotate-ccw").onClick(() => this.setColorOverride(kind, name, null)));
+    if (axis !== "status" || status) {
+      m.addItem((i) => i.setTitle(tr().menuChangeColor).setIcon("palette").onClick(() =>
+        pickColor(anchor, this.groupColor(axis, name) ?? "", (c) => {
+          if (axis !== "status") return this.setColorOverride(axis, name, c);
+          status!.color = c;
+          void this.plugin.saveSettings();
+          this.plugin.settingTab?.refreshIfOpen();
+        })
+      ));
+      // タグは既定色へ、フォルダ・担当者は名前から自動生成へ戻る。行き先が違うのでラベルも分ける（ステータスは設定の色そのもの）
+      // tags fall back to the default colour, folders and assignees to their name-derived one, so the labels differ (a status colour has no fallback)
+      if (axis !== "status") {
+        const reset = axis === "tag" ? tr().menuResetTagColor : tr().menuResetColor;
+        m.addItem((i) => i.setTitle(reset).setIcon("rotate-ccw").onClick(() => this.setColorOverride(axis, name, null)));
+      }
+    }
+    if (heading) {
+      const key = `${axis}:${name}`;
+      const setGroupIcon = (icon: string | null) => {
+        if (icon) s.icons[key] = icon;
+        else delete s.icons[key];
+        void this.plugin.saveData(s);
+        this.rerender();
+      };
+      m.addItem((i) => i.setTitle(tr().menuChangeIcon).setIcon("shapes").onClick(() => pickIcon(anchor, setGroupIcon)));
+      if (s.icons[key]) m.addItem((i) => i.setTitle(tr().menuResetIcon).setIcon("rotate-ccw").onClick(() => setGroupIcon(null)));
+    }
     m.showAtMouseEvent(e);
+  }
+
+  // 見出しの色（(なし) は色なし）/ a heading's colour (none for the "(none)" group)
+  private groupColor(axis: GroupBy, name: string): string | undefined {
+    if (axis !== "folder" && name === tr().noneLabel) return undefined;
+    if (axis === "folder") return this.folderColor(name);
+    if (axis === "tag") return this.tagColor(name);
+    if (axis === "status") return this.plugin.settings.statuses.find((x) => x.label === name)?.color;
+    const raw = this.assigneeList().find((a) => linkLabel(a) === name);
+    return raw ? this.assigneeColor(raw) : undefined;
+  }
+
+  // 見出しのアイコン（ユーザーの指定 > 軸ごとの既定）/ a heading's icon (the user's pick > the axis default)
+  private groupIcon(name: string, collapsed: boolean): string {
+    const custom = this.plugin.settings.icons[`${this.groupBy}:${name}`];
+    if (custom) return custom;
+    if (this.groupBy === "folder") return collapsed ? "folder" : "folder-open";
+    return this.groupBy === "tag" ? "tag" : this.groupBy === "assignee" ? "user" : "circle-dot";
   }
 
   // フィルタ→グループ再マッピングを適用したタスク列を返す（判定本体は filter.ts）/ tasks after filter + group remap (logic lives in filter.ts)
@@ -1293,6 +1415,8 @@ export class GanttView extends ItemView {
     const bodyH = this.rows.length * ROW_H;
 
     const cols = this.visibleColumns();
+    // 列幅は描画ごとに 1 回だけ求める（セルごとに引くと行数×列数ぶん定義を探し直す）/ column widths, worked out once per render
+    const colWidth = new Map(cols.map((c) => [c.id, this.colW(c.id)]));
     const grid = main.createDiv({ cls: "ogantt-grid" });
     grid.style.gridTemplateColumns = `${this.tableWidth()}px ${width}px`;
     grid.style.gridTemplateRows = `${HEAD_H}px ${bodyH}px`;
@@ -1306,7 +1430,7 @@ export class GanttView extends ItemView {
     for (const col of cols) {
       const id = col.id;
       const th = corner.createDiv({ cls: "ogantt-th ogantt-th-sortable" + (id === "name" ? " ogantt-th-name" : "") });
-      if (id !== "name") th.style.width = `${this.colW(id)}px`;
+      if (id !== "name") th.style.width = `${colWidth.get(id)}px`;
       th.createSpan({ text: col.label() });
       // アクティブなソート列に ↑/↓ を表示 / show ↑/↓ on the active sort column
       if (this.plugin.settings.sortBy === id) {
@@ -1384,34 +1508,31 @@ export class GanttView extends ItemView {
         const chev = g.createSpan({ cls: "ogantt-chevron" });
         setIcon(chev, isCollapsed ? "chevron-right" : "chevron-down");
         const ic = g.createSpan({ cls: "ogantt-folder-icon" });
-        // タググループはタグアイコン、それ以外はフォルダ / a tag icon for tag groups, folder otherwise
-        setIcon(ic, this.groupBy === "tag" ? "tag" : isCollapsed ? "folder" : "folder-open");
-        // 見出しアイコンに色（フォルダ＝フォルダ色、タグ＝タグ色。(なし) は既定色のまま）
-        // tint the heading icon (folder color / tag color; leave the (none) group default)
-        if (this.groupBy === "folder" && row.key != null) ic.style.color = this.folderColor(row.group);
-        else if (this.groupBy === "tag" && row.group !== strings.noneLabel) ic.style.color = this.tagColor(row.group);
+        // 軸ごとのアイコン（フォルダ・タグ・人・ステータス）か、ユーザーが選んだアイコン。色は見出しの色（(なし) は既定色のまま）
+        // the axis icon (folder, tag, person, status) or the user's pick, tinted with the heading's colour ("(none)" stays plain)
+        const none = this.groupBy !== "folder" && row.group === strings.noneLabel;
+        setIcon(ic, none ? "circle-dashed" : this.groupIcon(row.group, isCollapsed));
+        const color = this.groupColor(this.groupBy, row.group);
+        if (color) ic.style.color = color;
         g.createSpan({ text: row.group });
-        // 見出しを右クリック＝色を変更（フォルダ／タグ。(なし) は除く）/ right-click a heading to change its color
-        if (this.groupBy === "folder" && row.key != null) {
-          g.addEventListener("contextmenu", (e) => { e.preventDefault(); this.openColorMenu(e, "folder", row.group); });
-        } else if (this.groupBy === "tag" && row.group !== strings.noneLabel) {
-          g.addEventListener("contextmenu", (e) => { e.preventDefault(); this.openColorMenu(e, "tag", row.group); });
-        }
+        // 見出しを右クリック＝色・アイコンを変更（(なし) は除く）/ right-click a heading to change its colour or icon (not "(none)")
+        if (!none) g.addEventListener("contextmenu", (e) => this.openStyleMenu(e, this.groupBy, row.group, true));
         tr.onclick = () => {
           if (row.key == null) return;
           if (this.collapsed.has(row.key)) this.collapsed.delete(row.key);
           else this.collapsed.add(row.key);
-          void this.refresh();
+          this.rerender(); // 折りたたみは表示だけの変更 / collapsing only changes the display
         };
         // フォルダグループへドロップ＝親を解除してそのフォルダのトップレベルへ / drop onto a folder = detach + move to its top level
         if (this.groupBy === "folder" && row.key != null) {
           const dest = this.folder ? `${this.folder}/${row.key}` : row.key;
           this.makeDropTarget(tr, (src) => void this.reparentTo(src, dest, null));
         }
-        // タググループへドロップ＝そのタグを付与（(なし) グループは対象外）/ drop onto a tag group = add that tag (skip the (none) group)
-        if (this.groupBy === "tag" && row.key != null && row.group !== strings.noneLabel) {
-          const tag = row.key;
-          this.makeDropTarget(tr, (src) => void this.addTagTo(src, tag));
+        // タグ・担当者のグループへドロップ＝そのタグ・担当者を足す（(なし) は対象外）/ drop onto a tag or assignee group = add it (not "(none)")
+        if ((this.groupBy === "tag" || this.groupBy === "assignee") && !none) {
+          const field = this.groupBy === "tag" ? "tags" : "assignees";
+          const value = field === "tags" ? row.group : this.assigneeList().find((a) => linkLabel(a) === row.group) ?? row.group;
+          this.makeDropTarget(tr, (src) => void this.editList(src, field, value, true));
         }
       } else {
         const t = row.task!;
@@ -1433,10 +1554,13 @@ export class GanttView extends ItemView {
                 e.stopPropagation(); // 行クリック（詳細を開く）を抑止 / don't open the detail panel
                 if (this.collapsed.has(key)) this.collapsed.delete(key);
                 else this.collapsed.add(key);
-                void this.refresh();
+                this.rerender();
               });
             }
-            const nameText = nameTd.createSpan({ text: t.name });
+            // 種類（カンバン・キャンバス）と共有（担当者が複数）のアイコン / icons for the kind (kanban, canvas) and for shared tasks (2+ assignees)
+            if (t.kind !== "note") setIcon(nameTd.createSpan({ cls: "ogantt-name-icon", attr: { "aria-label": t.kind === "kanban" ? strings.kindKanban : strings.kindCanvas } }), KIND_ICON[t.kind]);
+            if (t.assignees.length > 1) setIcon(nameTd.createSpan({ cls: "ogantt-name-icon", attr: { "aria-label": t.assignees.map(linkLabel).join(", ") } }), "users");
+            const nameText = nameTd.createSpan({ cls: "ogantt-name-text", text: t.name });
             // 詳細パネルがこのタスクで開いている状態でのダブルクリック＝その場でリネーム。
             // 閉じている状態では 1 回目のクリックでパネルが開くだけにする（誤ってリネームに入らない）。
             // ダブルクリックの 1 回目でもパネルは開き直されるので、判定は 1 回目を押した瞬間の状態で行う
@@ -1465,7 +1589,7 @@ export class GanttView extends ItemView {
             });
           } else {
             const td = tr.createDiv({ cls: "ogantt-td" });
-            td.style.width = `${this.colW(col.id)}px`;
+            td.style.width = `${colWidth.get(col.id)}px`;
             this.renderCell(td, row, col);
           }
         }
@@ -1474,9 +1598,9 @@ export class GanttView extends ItemView {
           this.makeDraggableTask(tr, t.path);
           // タスク行へドロップ＝そのタスクのサブタスクにする（親フォルダへ同居）/ drop onto a task = make it that task's subtask
           this.makeDropTarget(tr, (src) => void this.reparentTo(src, this.taskFolder(t.path), t.path));
-        } else if (this.groupBy === "tag") {
-          // タグ表示ではタググループへドラッグしてタグ付け（タスクへのドロップ＝サブタスク化はしない）
-          // when grouping by tag, drag onto a tag group to tag (no subtask drop)
+        } else if (this.groupBy === "tag" || this.groupBy === "assignee") {
+          // タグ・担当者の表示ではグループへドラッグして足す（タスクへのドロップ＝サブタスク化はしない）
+          // when grouping by tag or assignee, drag onto a group to add it (no subtask drop)
           this.makeDraggableTask(tr, t.path);
         }
       }
@@ -1488,6 +1612,19 @@ export class GanttView extends ItemView {
     svg.setAttribute("width", String(width));
     svg.setAttribute("height", String(bodyH));
     this.drawGrid(svg, width, bodyH);
+    this.drawCopyLinks(svg);
+
+    // 行かバーにマウスを載せると、同じタスクの行・バー・複製（担当者やタグごとの重複表示）をまとめて強調する
+    // hovering a row or bar highlights every row, bar and copy of that task (copies come from grouping by assignee or tag)
+    let hl: string | null = null;
+    const highlight = (path: string | null) => {
+      if (path === hl) return;
+      grid.querySelectorAll(".is-hl").forEach((el) => el.removeClass("is-hl"));
+      hl = path;
+      if (path) grid.querySelectorAll(`[data-path="${CSS.escape(path)}"]`).forEach((el) => el.addClass("is-hl"));
+    };
+    grid.addEventListener("mouseover", (e) => highlight((e.target as Element).closest("[data-path]")?.getAttribute("data-path") ?? null));
+    grid.addEventListener("mouseleave", () => highlight(null));
     // 依存作成ハンドルは専用レイヤーに集め、依存矢印より後に追加＝最前面で掴みやすい
     // collect connector handles in their own layer, appended after the arrows so they stay topmost and grabbable
     const handlesLayer = this.svgEl("g", { class: "ogantt-handles-layer" });
@@ -1500,6 +1637,20 @@ export class GanttView extends ItemView {
 
   private xOf(dateStr: string): number {
     return (dayIndex(dateStr) - this.range.min) * this.ppd;
+  }
+
+  // 同じタスクが複数の行に出ているとき（複数の担当者・タグでグループ化）、バーの左端を点線でつなぐ
+  // when one task shows on several rows (grouped by its assignees or tags), join its copies with a dotted line at the bar's start
+  private drawCopyLinks(svg: SVGElement): void {
+    const rowsOf = new Map<string, number[]>();
+    this.rows.forEach((r, i) => { if (r.task) rowsOf.set(r.task.path, [...(rowsOf.get(r.task.path) ?? []), i]); });
+    for (const [path, idx] of rowsOf) {
+      const start = idx.length > 1 ? anchorStart(this.rows[idx[0]].task!) : undefined;
+      if (!start) continue;
+      const x = this.xOf(start);
+      const y = (i: number) => i * ROW_H + ROW_H / 2;
+      svg.appendChild(this.svgEl("line", { x1: x, y1: y(idx[0]), x2: x, y2: y(idx[idx.length - 1]), class: "ogantt-copy-link", "data-path": path }));
+    }
   }
 
   private drawGrid(svg: SVGElement, width: number, height: number): void {
@@ -1554,7 +1705,15 @@ export class GanttView extends ItemView {
   }
 
   private drawBars(svg: SVGElement, handlesLayer: SVGElement): void {
-    const statusColor = new Map(this.plugin.settings.statuses.map((s) => [s.id, s.color]));
+    const s = this.plugin.settings;
+    const statusColor = new Map(s.statuses.map((x) => [x.id, x.color]));
+    const tagColor = new Map(s.tagColors.map((c) => [c.name, c.color]));
+    // バーの塗り：ステータス色か担当者色。担当者が複数なら各人の色の横縞 / the bar fill: status or assignee colour, one band per person when shared
+    const fill = (t: Task): string => {
+      if (this.colorBy !== "assignee") return (t.status && statusColor.get(t.status)) || FALLBACK_BAR;
+      if (t.assignees.length < 2) return t.assignees.length ? this.assigneeColor(t.assignees[0]) : FALLBACK_BAR;
+      return this.bands(svg, t.assignees.map((a) => this.assigneeColor(a)), false);
+    };
     this.rows.forEach((row, i) => {
       // グループ行のまとめバー / group summary bar
       if (row.kind === "group") {
@@ -1569,68 +1728,59 @@ export class GanttView extends ItemView {
         return;
       }
       const t = row.task!;
+      const cyMid = i * ROW_H + ROW_H / 2;
+      const y = i * ROW_H + BAR_PAD;
+      const h = ROW_H - BAR_PAD * 2;
       // ロールアップ ON：子を持つ親は「子孫を含む範囲」のフルバーで描く（自分のバーは描かない）
       // rollup on: draw a parent as a full bar spanning its whole subtree (not its own bar)
       if (this.rollup && row.span) {
         const sx = this.xOf(row.span.start);
         const sw = Math.max((dayIndex(row.span.end) - dayIndex(row.span.start) + 1) * this.ppd, 6);
-        const yy = i * ROW_H + BAR_PAD;
-        const hh = ROW_H - BAR_PAD * 2;
-        const c =
-          this.colorBy === "assignee"
-            ? t.assignee ? hashColor(t.assignee) : FALLBACK_BAR
-            : (t.status && statusColor.get(t.status)) || FALLBACK_BAR;
         const rg = this.svgEl("g", { class: "ogantt-bar-g ogantt-rollup-g", "data-path": t.path });
-        rg.appendChild(this.svgEl("rect", { x: sx, y: yy, width: sw, height: hh, rx: 4, class: "ogantt-bar ogantt-rollup-bar", fill: c }));
-        const lbl = this.svgEl("text", { x: sx + sw + 6, y: i * ROW_H + ROW_H / 2 + 4, class: "ogantt-bar-label" });
-        lbl.textContent = t.name;
-        rg.appendChild(lbl);
+        rg.appendChild(this.svgEl("rect", { x: sx, y, width: sw, height: h, rx: 4, class: "ogantt-bar ogantt-rollup-bar", fill: fill(t) }));
+        this.drawLabel(rg, t, sx + sw + LABEL_GAP, cyMid);
         rg.addEventListener("dblclick", (ev) => { ev.stopPropagation(); void this.openDetail(t.path); });
         svg.appendChild(rg);
         return;
       }
       const aStart = anchorStart(t);
       if (!aStart) return;
-      const y = i * ROW_H + BAR_PAD;
-      const h = ROW_H - BAR_PAD * 2;
       const x = this.xOf(aStart);
-      const color =
-        this.colorBy === "assignee"
-          ? t.assignee ? hashColor(t.assignee) : FALLBACK_BAR
-          : (t.status && statusColor.get(t.status)) || FALLBACK_BAR;
-
       const g = this.svgEl("g", { class: "ogantt-bar-g", "data-path": t.path });
-      const cyMid = i * ROW_H + ROW_H / 2;
       let lx = x; // 左端ハンドル位置 / left handle x
       let rx = x; // 右端ハンドル位置 / right handle x
 
       if (t.milestone) {
-        const cx = x;
-        const cy = cyMid;
         const r = h / 2;
         const dia = this.svgEl("path", {
-          d: `M ${cx} ${cy - r} L ${cx + r} ${cy} L ${cx} ${cy + r} L ${cx - r} ${cy} Z`,
+          d: `M ${x} ${cyMid - r} L ${x + r} ${cyMid} L ${x} ${cyMid + r} L ${x - r} ${cyMid} Z`,
           class: "ogantt-milestone",
-          fill: color,
+          fill: fill(t),
         });
         g.appendChild(dia);
         this.attachDrag(g, dia, t);
-        lx = cx - r;
-        rx = cx + r;
+        lx = x - r;
+        rx = x + r;
       } else {
-        const endStr = anchorEnd(t) ?? aStart;
-        const w = Math.max((dayIndex(endStr) - dayIndex(aStart) + 1) * this.ppd, 6);
-        const rect = this.svgEl("rect", { x, y, width: w, height: h, rx: 4, class: "ogantt-bar", fill: color });
-        g.appendChild(rect);
-        if (t.progress != null && t.progress > 0) {
-          const pw = (w * Math.min(100, t.progress)) / 100;
-          g.appendChild(this.svgEl("rect", { x, y, width: pw, height: h, rx: 4, class: "ogantt-bar-progress" }));
-        }
-        // ラベル（タスク名＋担当）/ label
-        const label = this.svgEl("text", { x: x + w + 6, y: cyText(i), class: "ogantt-bar-label" });
-        label.textContent = t.assignee ? `${t.name} · @${linkLabel(t.assignee)}` : t.name;
-        g.appendChild(label);
-        this.attachDrag(g, rect, t);
+        const w = Math.max((dayIndex(anchorEnd(t) ?? aStart) - dayIndex(aStart) + 1) * this.ppd, 6);
+        const rect = g.appendChild(this.svgEl("rect", { x, y, width: w, height: h, rx: 4, class: "ogantt-bar", fill: fill(t) }));
+        const p = Math.min(100, t.progress ?? 0);
+        const prog = p > 0 ? g.appendChild(this.svgEl("rect", { x, y, width: (w * p) / 100, height: h, rx: 4, class: "ogantt-bar-progress" })) : null;
+        // 色を付けたタグは、バーの下端の細い帯で控えめに示す / tags given a colour show as a thin band along the bar's bottom edge
+        const tags = t.tags.map((tag) => tagColor.get(tag)).filter((c): c is string => !!c);
+        const band = tags.length
+          ? g.appendChild(this.svgEl("rect", { x: x + 2, y: y + h - 4, width: Math.max(0, w - 4), height: 3, rx: 1.5, class: "ogantt-tag-band", fill: tags.length > 1 ? this.bands(svg, tags, true) : tags[0] }))
+          : null;
+        // 端の伸縮中は、進捗とタグの帯もバーに合わせる / while an edge is dragged, the progress fill and tag band follow the bar
+        const place = (nx: number, nw: number) => {
+          rect.setAttribute("x", String(nx));
+          rect.setAttribute("width", String(nw));
+          prog?.setAttribute("x", String(nx));
+          prog?.setAttribute("width", String((nw * p) / 100));
+          band?.setAttribute("x", String(nx + 2));
+          band?.setAttribute("width", String(Math.max(0, nw - 4)));
+        };
+        this.attachDrag(g, rect, t, place);
         // 端ホバーで ↔ カーソル、中央は掴むカーソル / ew-resize near edges, grab in the middle
         rect.addEventListener("mousemove", (e: MouseEvent) => {
           const box = rect.getBoundingClientRect();
@@ -1639,6 +1789,7 @@ export class GanttView extends ItemView {
         });
         rx = x + w;
       }
+      this.drawLabel(g, t, rx + LABEL_GAP, cyMid);
 
       // 依存作成用の丸ハンドル（バーから少し離して配置。左=start, 右=finish）/ connector handles, detached from the bar
       // 別レイヤー（最前面）に置くので、表示はバー/ハンドルのホバーで JS 切替（CSS の子孫セレクタが効かないため）
@@ -1665,10 +1816,34 @@ export class GanttView extends ItemView {
       });
       svg.appendChild(g);
     });
+  }
 
-    function cyText(i: number): number {
-      return i * ROW_H + ROW_H / 2 + 4;
+  // バーの右に、担当者のアバター（頭文字の丸・共有タスクは重ねて並べる）とラベル（タスク名・担当者）を描く
+  // to the right of a bar: assignee avatars (initials; overlapping for a shared task) and the label (task name, assignees)
+  private drawLabel(g: SVGElement, t: Task, x: number, cy: number): void {
+    const shown = t.assignees.slice(0, MAX_AVATARS);
+    shown.forEach((a, k) => {
+      const av = g.appendChild(this.svgEl("g", { class: "ogantt-bar-avatar" }));
+      av.appendChild(this.svgEl("circle", { cx: x + 7 + k * 10, cy, r: 7, fill: this.assigneeColor(a) }));
+      av.appendChild(this.svgEl("text", { x: x + 7 + k * 10, y: cy + 3 })).textContent = initials(linkLabel(a));
+    });
+    if (shown.length) x += 18 + (shown.length - 1) * 10;
+    const label = g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label" }));
+    label.textContent = t.assignees.length ? `${t.name} · ${t.assignees.map(linkLabel).join(", ")}` : t.name;
+  }
+
+  // 色を等分した帯のグラデーションを用意して fill の url を返す（縦に積む＝担当者の横縞、横に並べる＝タグの帯）
+  // set up a gradient of equal colour bands and return its fill url (stacked = assignee stripes, side by side = the tag band)
+  private bands(svg: SVGElement, colors: string[], sideBySide: boolean): string {
+    const id = `ogantt-bands-${sideBySide ? "x" : "y"}-${colors.join("-").replace(/[^\w-]/g, "")}`;
+    if (!svg.querySelector(`#${CSS.escape(id)}`)) {
+      const defs = svg.querySelector("defs") ?? svg.insertBefore(this.svgEl("defs", {}), svg.firstChild);
+      const grad = defs.appendChild(this.svgEl("linearGradient", { id, x2: sideBySide ? 1 : 0, y2: sideBySide ? 0 : 1 }));
+      colors.forEach((c, k) => {
+        for (const at of [k, k + 1]) grad.appendChild(this.svgEl("stop", { offset: at / colors.length, "stop-color": c }));
+      });
     }
+    return `url(#${id})`;
   }
 
   // ハンドルから線を引いて他タスクへドロップ＝依存作成 / drag from a handle to another task = create dependency
@@ -1788,6 +1963,7 @@ export class GanttView extends ItemView {
     this.rows.forEach((r, i) => {
       if (r.kind === "task") rowOf.set(r.task!.path, i);
     });
+    const byPath = new Map(this.tasks.map((x) => [x.path, x]));
     const GAP = 12;
     for (const t of this.tasks) {
       const si = rowOf.get(t.path);
@@ -1801,7 +1977,7 @@ export class GanttView extends ItemView {
 
       for (const dep of t.deps) {
         const pi = rowOf.get(dep.path);
-        const pred = this.tasks.find((x) => x.path === dep.path);
+        const pred = byPath.get(dep.path);
         if (pi == null || !pred) continue;
         const pStartD = anchorStart(pred);
         const pEndD = anchorEnd(pred);
@@ -1899,8 +2075,9 @@ export class GanttView extends ItemView {
     }
   }
 
-  // バー/菱形のドラッグで日付を書き戻す / drag a bar or diamond to reschedule
-  private attachDrag(g: SVGGElement, handle: SVGElement, task: Task): void {
+  // バー/菱形のドラッグで日付を書き戻す。place はバーの端を伸縮するときの描き直し（菱形には無い）
+  // drag a bar or diamond to reschedule; `place` redraws a bar while an edge is dragged (diamonds have none)
+  private attachDrag(g: SVGGElement, handle: SVGElement, task: Task, place?: (x: number, w: number) => void): void {
     const EDGE = RESIZE_EDGE;
     const milestone = task.milestone;
     handle.addEventListener("pointerdown", (ev: PointerEvent) => {
@@ -1916,7 +2093,7 @@ export class GanttView extends ItemView {
       let mode: "move" | "l" | "r" = "move";
       let x0 = 0;
       let w0 = 0;
-      if (!milestone) {
+      if (place) {
         x0 = parseFloat(handle.getAttribute("x")!);
         w0 = parseFloat(handle.getAttribute("width")!);
         // rect 実画面座標から相対オフセットを求める（SVG の offsetX は不正確）
@@ -1929,16 +2106,11 @@ export class GanttView extends ItemView {
       const onMove = (e: PointerEvent) => {
         const dx = e.clientX - startX;
         if (Math.abs(dx) > 3) this.dragged.set(g, true);
-        if (milestone) {
-          g.setAttribute("transform", `translate(${dx},0)`);
-          return;
-        }
-        if (mode === "move") handle.setAttribute("x", String(x0 + dx));
-        else if (mode === "r") handle.setAttribute("width", String(Math.max(this.ppd, w0 + dx)));
-        else {
-          handle.setAttribute("x", String(x0 + dx));
-          handle.setAttribute("width", String(Math.max(this.ppd, w0 - dx)));
-        }
+        // 移動はバー一式（進捗・タグの帯・ラベル）を平行移動、端は伸縮（最短 1 日）
+        // a move slides the whole bar (progress, tag band, label); an edge resizes it (one day at least)
+        if (mode === "move") g.setAttribute("transform", `translate(${dx},0)`);
+        else if (mode === "r") place!(x0, Math.max(this.ppd, w0 + dx));
+        else place!(x0 + Math.min(dx, w0 - this.ppd), Math.max(this.ppd, w0 - dx));
       };
       const onUp = (e: PointerEvent) => void (async () => {
         handle.releasePointerCapture(ev.pointerId);
@@ -1980,12 +2152,8 @@ export class GanttView extends ItemView {
           // これで要素が残り click/dblclick が発火し、詳細パネルを開ける。
           // No day change = a click: reset any sub-threshold movement without re-rendering,
           // so the element survives and click/dblclick fire to open the detail panel.
-          if (milestone) {
-            g.removeAttribute("transform");
-          } else {
-            handle.setAttribute("x", String(x0));
-            handle.setAttribute("width", String(w0));
-          }
+          g.removeAttribute("transform");
+          place?.(x0, w0);
         }
       })();
       handle.addEventListener("pointermove", onMove);
@@ -1994,23 +2162,19 @@ export class GanttView extends ItemView {
   }
 
   // ----- 新規タスク作成 / create a new task -----
-  // 今のフォルダに 1 日タスク（開始=終了=今日）を作り、詳細パネルを開いて命名を促す
-  // create a 1-day task (start = end = today) in the current folder, then open the panel to name it
-  private async createNewTask(): Promise<void> {
-    let created: string | null = null;
+  // 今のフォルダに 1 日タスク（開始=終了=今日）を作り、詳細パネルを開いて命名を促す（キャンバスは .canvas も作る）
+  // create a 1-day task (start = end = today) in the current folder, then open the panel to name it (a canvas also gets its .canvas)
+  private async createNewTask(kind: TaskKind = "note"): Promise<void> {
+    let created: string[] = [];
     await this.mutate(tr().undoCreate(tr().newTaskName), [], async () => {
-      const file = await createTask(this.app, this.folder, tr().newTaskName);
-      if (!file) return false;
-      const k = this.plugin.settings.keys;
+      created = await createTask(this.app, this.plugin.settings, this.folder, tr().newTaskName, kind);
       const today = dayToStr(todayIndex());
-      await writeField(this.app, file.path, k.start, today);
-      await writeField(this.app, file.path, k.end, today);
-      created = file.path;
-      return { created: [file.path] };
+      await writeDates(this.app, this.plugin.settings, created[0], today, today, false);
+      return { created };
     });
-    if (!created) return;
+    if (!created.length) return;
     await this.refresh();
-    await this.openDetail(created, true);
+    await this.openDetail(created[0], true);
   }
 
   // ----- ドラッグ＆ドロップ（フォルダへ＝親解除して移動／タスクへ＝サブタスク化）-----
@@ -2073,15 +2237,66 @@ export class GanttView extends ItemView {
     await this.refresh();
   }
 
-  // タググループへのドロップでタグを付与（取り消し可・既に付いていれば何もしない）/ add a tag via drop (undoable; no-op if already tagged)
-  private async addTagTo(srcPath: string, tag: string): Promise<void> {
-    const pre = this.tasks.find((x) => x.path === srcPath);
-    if (!pre || pre.tags.includes(tag)) return;
-    await this.mutate(tr().undoAddTag(pre.name, tag), [srcPath], async () => (await addTag(this.app, srcPath, tag)) || false);
+  // タグ・担当者（多値）を 1 つ足す/外す（取り消し可・変化が無ければ何もしない）。メモリ上のタスクも直して即再描画する。
+  // 本文の #tag は外せないので、書き込みで変化しなかったときはメモリも触らない
+  // add or remove one tag / assignee (undoable; a no-op change does nothing) and mirror it in memory for an instant redraw.
+  // An inline #tag can't be removed from here, so when the write changed nothing the in-memory task is left alone too
+  private async editList(path: string, field: "tags" | "assignees", value: string, add: boolean): Promise<void> {
+    const t = this.tasks.find((x) => x.path === path);
+    if (!t || !value || add === t[field].includes(value)) return;
+    const next = add ? [...t[field], value] : t[field].filter((v) => v !== value);
+    const label = field === "assignees" ? tr().undoEdit(t.name) : add ? tr().undoAddTag(t.name, value) : tr().undoRemoveTag(t.name, value);
+    const ok = await this.mutate(label, [path], async () => {
+      if (field === "assignees") return writeList(this.app, path, this.plugin.settings.keys.assignee, next);
+      return add ? (await addTag(this.app, path, value)) || false : removeTag(this.app, path, value);
+    });
     // 背景 refresh で this.tasks が作り替わる場合に備え、最新を引き直して更新 / look up the live task (survives a background refresh)
-    const live = this.tasks.find((x) => x.path === srcPath);
-    if (live && !live.tags.includes(tag)) live.tags.push(tag);
+    const live = this.tasks.find((x) => x.path === path);
+    if (ok && live) live[field] = next;
     this.rerender();
+  }
+
+  // タグ・担当者のチップ（× で外す）と追加欄（Enter で足す）。詳細パネルと表のポップオーバーで共用し、追加欄を返す
+  // chips for tags / assignees (× removes) plus an add field (Enter adds); shared by the detail panel and the table popover. Returns the field
+  private chipList(host: HTMLElement, path: string, field: "tags" | "assignees", changed: () => void): HTMLInputElement {
+    const t = this.tasks.find((x) => x.path === path);
+    const values = t?.[field] ?? [];
+    const tags = field === "tags";
+    for (const v of values) {
+      const chip = host.createSpan({ cls: "ogantt-tag-chip" });
+      if (tags) {
+        this.paintTagChip(chip, v);
+        chip.createSpan({ text: v });
+        chip.addEventListener("contextmenu", (e) => this.openStyleMenu(e, "tag", v));
+      } else {
+        chip.addClass("ogantt-person-chip");
+        this.avatar(chip, v);
+        renderLinkValue(chip, v, "").addEventListener("click", (e) => handleLinkClick(this.app, e, path));
+      }
+      const x = chip.createEl("button", { cls: "ogantt-date-x clickable-icon", attr: { "aria-label": tags ? tr().removeTagAria : tr().removeAssigneeAria } });
+      setIcon(x, "x");
+      x.onclick = () => void this.editList(path, field, v, false).then(changed);
+    }
+    const add = host.createEl("input", { cls: "ogantt-tag-add", type: "text", attr: { placeholder: tags ? tr().addTagPlaceholder : tr().addAssigneePlaceholder } });
+    // 既存の値を候補に出して表記ゆれを防ぐ（担当者は "[[" でノートも）/ suggest existing values to avoid spelling drift ("[[" suggests notes for assignees)
+    if (tags) this.attachSingleTagSuggestions(add, values);
+    else {
+      const names = this.assigneeList().filter((a) => !values.includes(a));
+      if (names.length) this.attachSuggestions(add, (list) => names.forEach((n) => list.createEl("option", { value: n })));
+      attachLinkSuggest(this.app, add, path);
+    }
+    add.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add.blur(); } });
+    add.addEventListener("change", () => {
+      const v = tags ? add.value.trim().replace(/^#/, "") : add.value.trim();
+      if (v) void this.editList(path, field, v, true).then(changed);
+    });
+    return add;
+  }
+
+  // 担当者のアバター（頭文字の丸）/ an assignee avatar (initials in a circle)
+  private avatar(parent: HTMLElement, who: string): void {
+    const av = parent.createSpan({ cls: "ogantt-avatar", text: initials(linkLabel(who)) });
+    av.style.background = this.assigneeColor(who);
   }
 
   // ----- 詳細パネル（編集モード）/ editable detail slide-over -----
@@ -2149,77 +2364,15 @@ export class GanttView extends ItemView {
     }
     statusSel.addEventListener("change", () => void this.saveField(k.status, statusSel.value));
 
-    // 担当 / assignee（wikilink はリンク表示。リンク以外の所をクリックで入力欄に、"[[" でノート候補）
-    // assignee: a wikilink shows as a link; click elsewhere in the field to edit, "[[" suggests notes
-    const asgField = fieldRow(tr().fieldAssignee);
-    asgField.addClass("ogantt-assignee-field");
-    const asgView = asgField.createDiv({ cls: "ogantt-assignee-view" });
-    const asgIn = asgField.createEl("input", { type: "text" });
-    const paintAsg = () => {
-      asgView.empty();
-      if (t.assignee) renderLinkValue(asgView, t.assignee, "ogantt-assignee-text");
-      else asgView.createSpan({ cls: "ogantt-muted", text: "—" });
-    };
-    paintAsg();
-    wireLinkHover(this.app, asgView, this, t.path);
-    asgView.addEventListener("click", (e) => {
-      if (handleLinkClick(this.app, e, t.path)) return;
-      asgIn.value = t.assignee ?? "";
-      asgField.addClass("is-editing");
-      asgIn.focus();
-    });
-    attachLinkSuggest(this.app, asgIn, t.path);
-    asgIn.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); asgIn.blur(); }
-      else if (e.key === "Escape") { e.preventDefault(); asgIn.value = t.assignee ?? ""; asgIn.blur(); }
-    });
-    asgIn.addEventListener("blur", () => void (async () => {
-      asgField.removeClass("is-editing");
-      const v = asgIn.value.trim();
-      if (v === (t.assignee ?? "")) return;
-      t.assignee = v || undefined; // 再描画前でも表示を合わせる / keep the view in step before the refresh
-      paintAsg();
-      await this.saveField(k.assignee, v);
-    })());
-
-    // タグ（多値・チップ＋×で削除、入力＋Enterで追加。付与は D&D も可）/ tags: chips with × to remove, input+Enter to add (also via drag)
-    const tagField = fieldRow(tr().fieldTags);
-    tagField.addClass("ogantt-tags-field");
-    for (const tag of t.tags) {
-      const chip = tagField.createSpan({ cls: "ogantt-tag-chip" });
-      this.paintTagChip(chip, tag);
-      chip.createSpan({ text: tag });
-      const x = chip.createEl("button", { cls: "ogantt-date-x clickable-icon" });
-      setIcon(x, "x");
-      x.setAttr("aria-label", tr().removeTagAria);
-      x.addEventListener("click", () => void (async () => {
-        const path = this.selectedPath;
-        if (!path) return;
-        await this.mutate(tr().undoRemoveTag(t.name, tag), [path], () => removeTag(this.app, path, tag));
-        // 背景 refresh が this.tasks を作り替えるので、クロージャの t ではなく最新を引き直して更新
-        // a background refresh may rebuild this.tasks, so look up the live task (not the closure's t)
-        const live = this.tasks.find((x) => x.path === path);
-        if (live) live.tags = live.tags.filter((y) => y !== tag);
-        this.rerender();
-        if (this.selectedPath) await this.openDetail(this.selectedPath); // パネルを再描画 / refresh the panel
-      })());
+    // 担当者・タグ（多値）：チップの × で外し、入力＋Enter で足す（担当者は "[[" でノートも選べる。足すのは D&D でも可）
+    // assignees and tags (multi-valued): × on a chip removes, input + Enter adds ("[[" picks a note as an assignee; drag & drop adds too)
+    const reopen = () => { if (this.selectedPath) void this.openDetail(this.selectedPath); };
+    for (const [field, label] of [["assignees", tr().fieldAssignee], ["tags", tr().fieldTags]] as const) {
+      const row = fieldRow(label);
+      row.addClass("ogantt-tags-field");
+      this.chipList(row, t.path, field, reopen);
+      if (field === "assignees") wireLinkHover(this.app, row, this, t.path);
     }
-    const tagAdd = tagField.createEl("input", { cls: "ogantt-tag-add", type: "text" });
-    tagAdd.placeholder = tr().addTagPlaceholder;
-    // Vault 内の既存タグを候補に（付与済みは除く）/ suggest the vault's tags, minus the ones already on this task
-    this.attachSingleTagSuggestions(tagAdd, t.tags);
-    tagAdd.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tagAdd.blur(); } });
-    tagAdd.addEventListener("change", () => void (async () => {
-      const v = tagAdd.value.trim().replace(/^#/, "");
-      const path = this.selectedPath;
-      if (!v || !path) return;
-      await this.mutate(tr().undoAddTag(t.name, v), [path], async () => (await addTag(this.app, path, v)) || false);
-      // 最新オブジェクトを引き直してメモリ更新→即再描画 / look up the live task, update in-memory, re-render
-      const live = this.tasks.find((x) => x.path === path);
-      if (live && !live.tags.includes(v)) live.tags.push(v);
-      this.rerender();
-      if (this.selectedPath) await this.openDetail(this.selectedPath); // パネルを再描画 / refresh the panel
-    })());
 
     // 親タスク（ある場合のみ・チップ＋×で解除。設定は D&D が主）/ parent task (shown when set; × detaches. set via drag)
     if (t.parent) {
@@ -2284,11 +2437,23 @@ export class GanttView extends ItemView {
 
     // 本文 / body（既定は Obsidian と同じレンダリング表示。クリックで編集、フォーカスを外すと保存して表示に戻る）
     // body: rendered like Obsidian's reading view by default; click to edit, blur saves and returns to the rendered view
+    let bodyText = await readBody(this.app, t.path);
+    if (t.kind === "kanban") {
+      // カンバンは列とカードを小さく並べるだけ（編集はクリックで開くボードで）/ a kanban shows its lanes and cards in miniature; a click opens the board to edit
+      d.createDiv({ cls: "ogantt-detail-label", text: tr().kindKanban });
+      const board = d.createDiv({ cls: "ogantt-kanban" });
+      for (const lane of parseKanban(bodyText)) {
+        const col = board.createDiv({ cls: "ogantt-kanban-lane" });
+        col.createDiv({ cls: "ogantt-kanban-title", text: `${lane.title} · ${lane.cards.length}` });
+        for (const c of lane.cards) col.createDiv({ cls: "ogantt-kanban-card" + (c.done ? " is-done" : ""), text: c.text });
+      }
+      board.onclick = (e) => void this.app.workspace.openLinkText(t.path, "", Keymap.isModEvent(e));
+      return;
+    }
     d.createDiv({ cls: "ogantt-detail-label", text: tr().fieldBody });
     const bodyWrap = d.createDiv({ cls: "ogantt-detail-body" });
     const preview = bodyWrap.createDiv({ cls: "ogantt-detail-body-preview markdown-rendered" });
     const bodyArea = bodyWrap.createEl("textarea", { cls: "ogantt-detail-body-edit" });
-    let bodyText = await readBody(this.app, t.path);
 
     const renderPreview = async (): Promise<void> => {
       preview.empty();
@@ -2330,16 +2495,21 @@ export class GanttView extends ItemView {
     const t = this.tasks.find((x) => x.path === path);
     if (!t) return;
     const hasChildren = this.tasks.some((x) => x.parent === path);
+    // キャンバス型はリンク先の .canvas も一緒に消す（取り消せば両方戻る）/ a canvas task takes its .canvas along (undo brings both back)
+    const files = t.canvas ? [path, t.canvas] : [path];
+    const sub = [hasChildren ? tr().confirmDeleteChildren : "", t.canvas ? tr().confirmDeleteCanvas(t.canvas.split("/").pop()!) : ""].join(" ").trim();
     new ConfirmModal(this.app, {
       title: tr().confirmDeleteTitle,
       body: tr().confirmDeleteBody(t.name),
-      sub: hasChildren ? tr().confirmDeleteChildren : undefined,
+      sub: sub || undefined,
       confirmText: tr().menuDelete,
       cancelText: tr().cancel,
       onConfirm: () => void (async () => {
-        const ok = await this.mutate(tr().undoDelete(t.name), [path], async () =>
-          (await deleteTask(this.app, path)) ? { deleted: [path] } : false
-        );
+        const ok = await this.mutate(tr().undoDelete(t.name), files, async () => {
+          const gone: string[] = [];
+          for (const p of files) if (await deleteTask(this.app, p)) gone.push(p);
+          return gone.length ? { deleted: gone } : false;
+        });
         if (!ok) return;
         // 削除したタスクの詳細が開いていたら閉じる / close the detail panel if it showed the deleted task
         if (this.selectedPath === path) this.closeDetail();
@@ -2492,45 +2662,26 @@ export class GanttView extends ItemView {
   // 時計アイコンのポップアップ：時・分（10分刻み）のドロップダウンで時刻を選ぶ。×で時刻クリア
   // clock-icon popup: pick a time with hour + minute (10-min steps) dropdowns; × clears the time
   private openTimeDropdown(anchor: HTMLElement, current: string, apply: (v: string) => void): void {
-    activeDocument.querySelectorAll(".ogantt-timepick").forEach((e) => e.remove());
     const pad = (n: number): string => String(n).padStart(2, "0");
-    const pop = activeDocument.body.createDiv({ cls: "ogantt-timepick" });
-    const close = () => {
-      pop.remove();
-      activeDocument.removeEventListener("pointerdown", onOutside, true);
-      activeDocument.removeEventListener("keydown", onKey, true);
-    };
-    const onOutside = (e: PointerEvent) => {
-      const tg = e.target as Node;
-      if (!pop.contains(tg) && !anchor.contains(tg)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); close(); }
-    };
-    activeDocument.addEventListener("pointerdown", onOutside, true);
-    activeDocument.addEventListener("keydown", onKey, true);
-
-    const [ch, cm] = /^\d{2}:\d{2}$/.test(current) ? current.split(":") : ["09", "00"];
-    const hourSel = pop.createEl("select", { cls: "dropdown" });
-    for (let h = 0; h < 24; h++) hourSel.createEl("option", { value: pad(h), text: pad(h) });
-    hourSel.value = ch;
-    pop.createSpan({ text: ":" });
-    const minSel = pop.createEl("select", { cls: "dropdown" });
-    for (let m = 0; m < 60; m += 10) minSel.createEl("option", { value: pad(m), text: pad(m) });
-    // 10分刻みに乗らない既存値（手動入力等）も選べるように / keep an off-grid minute (manual entry) selectable
-    if (!minSel.querySelector(`option[value="${cm}"]`)) minSel.createEl("option", { value: cm, text: cm });
-    minSel.value = cm;
-    const onPick = () => apply(`${hourSel.value}:${minSel.value}`);
-    hourSel.addEventListener("change", onPick);
-    minSel.addEventListener("change", onPick);
-    const clr = pop.createEl("button", { cls: "clickable-icon" });
-    setIcon(clr, "x");
-    clr.setAttr("aria-label", tr().clearDate);
-    clr.onclick = () => { apply(""); close(); };
-
-    const r = anchor.getBoundingClientRect();
-    pop.style.top = `${r.bottom + 4}px`;
-    pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+    openPopover(anchor, "ogantt-timepick", (pop, close) => {
+      const [ch, cm] = /^\d{2}:\d{2}$/.test(current) ? current.split(":") : ["09", "00"];
+      const hourSel = pop.createEl("select", { cls: "dropdown" });
+      for (let h = 0; h < 24; h++) hourSel.createEl("option", { value: pad(h), text: pad(h) });
+      hourSel.value = ch;
+      pop.createSpan({ text: ":" });
+      const minSel = pop.createEl("select", { cls: "dropdown" });
+      for (let m = 0; m < 60; m += 10) minSel.createEl("option", { value: pad(m), text: pad(m) });
+      // 10分刻みに乗らない既存値（手動入力等）も選べるように / keep an off-grid minute (manual entry) selectable
+      if (!minSel.querySelector(`option[value="${cm}"]`)) minSel.createEl("option", { value: cm, text: cm });
+      minSel.value = cm;
+      const onPick = () => apply(`${hourSel.value}:${minSel.value}`);
+      hourSel.addEventListener("change", onPick);
+      minSel.addEventListener("change", onPick);
+      const clr = pop.createEl("button", { cls: "clickable-icon" });
+      setIcon(clr, "x");
+      clr.setAttr("aria-label", tr().clearDate);
+      clr.onclick = () => { apply(""); close(); };
+    });
   }
 
   // 非 name 列のセルを描き、読み取り専用でなければダブルクリックの編集を付ける
@@ -2557,12 +2708,11 @@ export class GanttView extends ItemView {
         refresh: () => this.refresh(),
         rerender: () => this.rerender(),
         inlineInput: (cell, value, repaint, commit, configure) => this.inlineInput(cell, value, repaint, commit, configure),
-        openPopover: (anchor, cls, build) => this.openPopover(anchor, cls, build),
         openRangePicker: (anchor, state, active, repaint, save, single) => this.openRangePicker(anchor, state, active, repaint, save, single),
-        attachSuggestions: (inp, fill) => this.attachSuggestions(inp, fill),
-        attachSingleTagSuggestions: (inp, exclude) => this.attachSingleTagSuggestions(inp, exclude),
+        chipList: (host, path, field, changed) => this.chipList(host, path, field, changed),
         paintTagChip: (chip, tag) => this.paintTagChip(chip, tag),
-        openColorMenu: (e, kind, name) => this.openColorMenu(e, kind, name),
+        openTagMenu: (e, tag) => this.openStyleMenu(e, "tag", tag),
+        avatar: (parent, who) => this.avatar(parent, who),
       };
     }
     return this.boardCtx;
@@ -2658,27 +2808,24 @@ export class GanttView extends ItemView {
     // single-date mode when given: a pick sets start = end to that day and closes; the value names the field
     single?: string
   ): void {
-    activeDocument.querySelectorAll(".ogantt-cal").forEach((e) => e.remove());
+    openPopover(anchor, "ogantt-cal", (cal, close) => this.buildRangePicker(cal, close, state, active, repaint, save, single));
+  }
+
+  private buildRangePicker(
+    cal: HTMLElement,
+    close: () => void,
+    state: { start: string; end: string },
+    active: "start" | "end",
+    repaint: () => void,
+    save: () => void | Promise<void>,
+    single?: string
+  ): void {
     const todayStr = dayToStr(todayIndex());
     const base = state[active] || state.start || state.end || todayStr;
     let y = parseInt(base.slice(0, 4), 10);
     let m = parseInt(base.slice(5, 7), 10); // 1-based
     let act = active; // 次のクリックで設定する端点 / endpoint the next click sets
     const wk = moment.weekdaysMin(); // ロケールの曜日略称（日曜始まり）/ localized minimal weekday names (Sunday-first)
-
-    const cal = activeDocument.body.createDiv({ cls: "ogantt-cal" });
-    const close = () => {
-      cal.remove();
-      activeDocument.removeEventListener("pointerdown", onOutside, true);
-      activeDocument.removeEventListener("keydown", onKey, true);
-    };
-    const onOutside = (e: PointerEvent) => {
-      const tg = e.target as Node;
-      if (!cal.contains(tg) && !anchor.contains(tg)) close();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); close(); }
-    };
 
     let mode: "day" | "year" = "day"; // 日ビュー / 年（12ヶ月）ビュー / day view or year (12-month) view
     const months = moment.monthsShort(); // ロケールの月名略称 / localized short month names
@@ -2789,17 +2936,6 @@ export class GanttView extends ItemView {
       else renderDay();
     };
     render();
-
-    // 位置：チップの下（画面外なら上へ反転）/ position below the chip (flip up if it would overflow)
-    const r = anchor.getBoundingClientRect();
-    let top = r.bottom + 4;
-    if (top + cal.offsetHeight > window.innerHeight) top = Math.max(4, r.top - cal.offsetHeight - 4);
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - cal.offsetWidth - 8));
-    cal.style.top = `${top}px`;
-    cal.style.left = `${left}px`;
-
-    activeDocument.addEventListener("pointerdown", onOutside, true);
-    activeDocument.addEventListener("keydown", onKey, true);
   }
 
   // 詳細パネルの幅をドラッグで変更（幅は記憶）/ drag to resize the detail panel (width persisted)

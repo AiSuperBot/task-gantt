@@ -1,6 +1,5 @@
 // テーブル列の定義（ラベル・幅・並べ替え・描画・インライン編集を 1 か所に）
 // table column definitions: label, width, sorting, painting and inline editing in one place
-import { setIcon } from "obsidian";
 import type { BoardContext } from "./board";
 import type { GanttSettings } from "./settings";
 import type { Row, Task, CustomField, CustomValue } from "./types";
@@ -8,15 +7,14 @@ import {
   anchorStart,
   anchorEnd,
   writeField,
-  addTag,
-  removeTag,
   customValueText,
   parseCustomInput,
 } from "./model";
 import { formatDate, dayIndex, dayToStr, todayIndex } from "./timeline";
 import { endForDuration, parseDuration, scheduleOptions, taskDuration, workdaysBetween } from "./schedule";
 import { linkLabel } from "./links";
-import { attachLinkSuggest, handleLinkClick, renderLinkValue } from "./linkui";
+import { handleLinkClick, renderLinkValue } from "./linkui";
+import { openPopover } from "./popover";
 import { t as tr } from "./i18n"; // tr() … ローカル変数 t（Task）との衝突回避 / aliased to avoid clashing with the `t` task var
 
 // 並べ替えのキー（数値同士は差、それ以外は文字列比較）/ a sort key (numbers subtract, anything else compares as text)
@@ -199,24 +197,10 @@ export const BUILTIN_COLUMNS: ColumnDef[] = [
     label: () => tr().fieldAssignee,
     width: 96,
     optional: true,
-    sortKey: (t) => linkLabel(t.assignee ?? "").toLowerCase(),
+    sortKey: (t) => t.assignees.map(linkLabel).join(",").toLowerCase(),
     paint: (ctx, td, row) => paintAssignee(ctx, td, row.task!),
-    edit: (ctx, cell, row) => {
-      const t = row.task!;
-      ctx.inlineInput(
-        cell,
-        t.assignee ?? "",
-        () => paintAssignee(ctx, cell, t),
-        async (v) => {
-          await ctx.mutate(tr().undoEdit(t.name), [t.path], () => writeField(ctx.app, t.path, ctx.settings.keys.assignee, v || undefined));
-          await ctx.refresh();
-        },
-        (inp) => {
-          attachAssigneeSuggestions(ctx, inp);
-          attachLinkSuggest(ctx.app, inp, t.path); // "[[" でノートを候補に / "[[" suggests notes
-        }
-      );
-    },
+    // 担当者は多値なので、タグと同じくチップ＋追加欄をポップオーバーで開く / multi-valued like tags, so it opens chips + an add field
+    edit: (ctx, cell, row) => openListEditor(ctx, cell, row.task!, "assignees"),
     editAria: () => tr().editAssignee,
   },
   {
@@ -245,7 +229,7 @@ export const BUILTIN_COLUMNS: ColumnDef[] = [
     paint: (ctx, td, row) => paintTags(ctx, td, row.task!),
     // タグは多値なので、セル内入力ではなく詳細パネルと同じチップ＋追加欄をポップオーバーで開く
     // tags are multi-valued, so the cell opens the panel's chips + add field in a popover
-    edit: (ctx, cell, row) => openTagEditor(ctx, cell, row.task!),
+    edit: (ctx, cell, row) => openListEditor(ctx, cell, row.task!, "tags"),
     editAria: () => tr().editTags,
   },
 ];
@@ -396,20 +380,15 @@ async function commitProgress(ctx: BoardContext, t: Task, raw: string): Promise<
   await ctx.refresh();
 }
 
-// 担当者セル（wikilink ならクリックでノートを開く）/ assignee cell (a wikilink opens its note on click)
+// 担当者セル（アバター＋名前。wikilink ならクリックでノートを開く）/ assignee cell: avatars + names (a wikilink opens its note on click)
 function paintAssignee(ctx: BoardContext, td: HTMLElement, t: Task): void {
   td.empty();
-  if (!t.assignee) return;
-  const el = renderLinkValue(td, t.assignee, "ogantt-td-text");
-  el.addEventListener("click", (e) => handleLinkClick(ctx.app, e, t.path));
-}
-
-// 既存の担当者を入力候補に出して表記ゆれを防ぐ / suggest existing assignees to avoid spelling drift
-function attachAssigneeSuggestions(ctx: BoardContext, inp: HTMLInputElement): void {
-  const names = [...new Set(ctx.tasks.map((x) => x.assignee).filter((a): a is string => !!a))].sort();
-  if (names.length === 0) return;
-  ctx.attachSuggestions(inp, (list) => {
-    for (const n of names) list.createEl("option", { value: n });
+  td.addClass("ogantt-td-people");
+  for (const a of t.assignees) ctx.avatar(td, a);
+  const names = td.createSpan({ cls: "ogantt-td-text" });
+  t.assignees.forEach((a, i) => {
+    if (i) names.appendText(", ");
+    renderLinkValue(names, a, "").addEventListener("click", (e) => handleLinkClick(ctx.app, e, t.path));
   });
 }
 
@@ -469,53 +448,17 @@ function paintTags(ctx: BoardContext, td: HTMLElement, t: Task): void {
     const chip = td.createSpan({ cls: "ogantt-tag-chip", text: tag });
     ctx.paintTagChip(chip, tag);
     // タグチップを右クリック＝色を変更 / right-click a tag chip to change its color
-    chip.addEventListener("contextmenu", (e) => { e.preventDefault(); e.stopPropagation(); ctx.openColorMenu(e, "tag", tag); });
+    chip.addEventListener("contextmenu", (e) => ctx.openTagMenu(e, tag));
   }
 }
 
-// タグ編集のポップオーバー（詳細パネルと同じ操作：チップの × で削除、入力＋Enter で追加）
-// 1 セルに複数タグを収められないので、日付セルと同じくポップオーバーで開く
-// tag editor popover, same interaction as the detail panel: × on a chip removes, input + Enter adds.
-// a cell can't hold several tags, so it opens a popover just like the date cell does
-function openTagEditor(ctx: BoardContext, anchor: HTMLElement, t: Task): void {
-  const path = t.path;
-  ctx.openPopover(anchor, "ogantt-tagmenu", (menu) => {
+// 多値（タグ・担当者）の編集ポップオーバー。1 セルに収まらないので、詳細パネルと同じチップ＋追加欄を開く
+// the editor popover of a multi-valued column (tags, assignees): a cell can't hold several values, so it opens the panel's chips + add field
+function openListEditor(ctx: BoardContext, anchor: HTMLElement, t: Task, field: "tags" | "assignees"): void {
+  openPopover(anchor, "ogantt-tagmenu", (menu) => {
     const build = (): void => {
       menu.empty();
-      // 背景 refresh が tasks を作り替えるので、毎回パスから最新を引き直す
-      // a background refresh may rebuild the tasks, so look the task up by path every time
-      const live = ctx.tasks.find((x) => x.path === path) ?? t;
-      // 変更をメモリに反映してから盤面とポップオーバーを描き直す / apply in memory, then redraw board + popover
-      const apply = (change: (tags: string[]) => string[]): void => {
-        const l = ctx.tasks.find((x) => x.path === path);
-        if (l) l.tags = change(l.tags);
-        ctx.rerender();
-        build();
-      };
-      const chips = menu.createDiv({ cls: "ogantt-tagmenu-chips" });
-      for (const tag of live.tags) {
-        const chip = chips.createSpan({ cls: "ogantt-tag-chip" });
-        ctx.paintTagChip(chip, tag);
-        chip.createSpan({ text: tag });
-        const x = chip.createEl("button", { cls: "ogantt-date-x clickable-icon" });
-        setIcon(x, "x");
-        x.setAttr("aria-label", tr().removeTagAria);
-        x.addEventListener("click", () => void (async () => {
-          await ctx.mutate(tr().undoRemoveTag(t.name, tag), [path], () => removeTag(ctx.app, path, tag));
-          apply((tags) => tags.filter((y) => y !== tag));
-        })());
-      }
-      const add = menu.createEl("input", { cls: "ogantt-tag-add", type: "text" });
-      add.placeholder = tr().addTagPlaceholder;
-      ctx.attachSingleTagSuggestions(add, live.tags);
-      add.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add.blur(); } });
-      add.addEventListener("change", () => void (async () => {
-        const v = add.value.trim().replace(/^#/, "");
-        if (!v) return;
-        await ctx.mutate(tr().undoAddTag(t.name, v), [path], async () => (await addTag(ctx.app, path, v)) || false);
-        apply((tags) => (tags.includes(v) ? tags : [...tags, v]));
-      })());
-      add.focus(); // 追加後も入力欄に留まって続けて足せる / keep focus so tags can be added back to back
+      ctx.chipList(menu, t.path, field, build).focus(); // 追加後も入力欄に留まって続けて足せる / stay in the field to add more
     };
     build();
   });

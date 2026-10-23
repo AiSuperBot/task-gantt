@@ -12,6 +12,9 @@ export function getAllTags() {
 // 列定義（columns.ts）が参照する UI 部品のスタブ。テストでは描画しない
 // stubs for UI helpers columns.ts imports; tests never paint
 export function setIcon() {}
+export function getIconIds() {
+  return [];
+}
 export const moment = { locale: () => "en" };
 // wikilink UI（linkui.ts）が参照する API のスタブ / stubs for the APIs linkui.ts imports
 export class Component {}
