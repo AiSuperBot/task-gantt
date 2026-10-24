@@ -293,6 +293,10 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
     const cv = fmText(fm[k.canvas]);
     const canvas = cv ? resolveLink(app, cv, file.path) : null;
     const kind: TaskKind = fm["kanban-plugin"] ? "kanban" : canvas?.extension === "canvas" ? "canvas" : "note";
+    // カンバンの進捗はチェックしたカードの割合（カード＝最上位のチェックリスト項目。カード内の入れ子のチェックは数えない）
+    // a kanban's progress is the share of checked cards (cards = top-level checklist items; checklists nested inside a card don't count)
+    const items = kind === "kanban" ? (cache?.listItems ?? []).filter((li) => li.task !== undefined && li.parent < 0) : [];
+    const cards = items.length ? { done: items.filter((li) => li.task !== " ").length, total: items.length } : undefined;
     return {
       path: file.path,
       name: file.basename,
@@ -306,7 +310,8 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
       kind,
       canvas: kind === "canvas" ? canvas?.path : undefined,
       deps: [] as Dep[],
-      progress: fm[k.progress] != null ? Number(fm[k.progress]) : undefined,
+      progress: cards ? Math.round((100 * cards.done) / cards.total) : fm[k.progress] != null ? Number(fm[k.progress]) : undefined,
+      cards,
       milestone,
       parent: undefined,
       tags,

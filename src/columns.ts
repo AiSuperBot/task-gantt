@@ -171,9 +171,17 @@ export const BUILTIN_COLUMNS: ColumnDef[] = [
     width: 84,
     optional: true,
     sortKey: (t) => t.progress ?? -1, // 未設定は 0% より前 / unset sorts ahead of 0%
-    // 進捗はロールアップ ON でも自分の値を表示・編集する（集約する重みが無いため）
-    // progress always shows/edits the task's own value, even when rolled up (there's no weight to aggregate by)
-    paint: (_ctx, td, row) => paintProgress(td, row.task!),
+    // 進捗はロールアップ ON でも自分の値を表示・編集する（集約する重みが無いため）。
+    // カードのあるカンバンはチェックしたカードから計算するので、ここでは編集しない（ホバーで内訳）
+    // progress always shows/edits the task's own value, even when rolled up (there's no weight to aggregate by);
+    // a kanban with cards works it out from its checked cards, so it isn't edited here (hover for the count)
+    paint: (_ctx, td, row) => {
+      const t = row.task!;
+      paintProgress(td, t);
+      if (!t.cards) return;
+      td.setAttr("aria-label", tr().kanbanProgress(t.cards.done, t.cards.total));
+      return false;
+    },
     edit: (ctx, cell, row) => {
       const t = row.task!;
       ctx.inlineInput(
@@ -198,7 +206,7 @@ export const BUILTIN_COLUMNS: ColumnDef[] = [
     width: 96,
     optional: true,
     sortKey: (t) => t.assignees.map(linkLabel).join(",").toLowerCase(),
-    paint: (ctx, td, row) => paintAssignee(ctx, td, row.task!),
+    paint: (ctx, td, row) => paintAssignee(ctx, td, row.task!, ctx.groupBy === "assignee" ? row.group : undefined),
     // 担当者は多値なので、タグと同じくチップ＋追加欄をポップオーバーで開く / multi-valued like tags, so it opens chips + an add field
     edit: (ctx, cell, row) => openListEditor(ctx, cell, row.task!, "assignees"),
     editAria: () => tr().editAssignee,
@@ -226,7 +234,7 @@ export const BUILTIN_COLUMNS: ColumnDef[] = [
     width: 140,
     optional: true,
     sortKey: (t) => t.tags.join(",").toLowerCase(),
-    paint: (ctx, td, row) => paintTags(ctx, td, row.task!),
+    paint: (ctx, td, row) => paintTags(ctx, td, row.task!, ctx.groupBy === "tag" ? row.group : undefined),
     // タグは多値なので、セル内入力ではなく詳細パネルと同じチップ＋追加欄をポップオーバーで開く
     // tags are multi-valued, so the cell opens the panel's chips + add field in a popover
     edit: (ctx, cell, row) => openListEditor(ctx, cell, row.task!, "tags"),
@@ -380,13 +388,17 @@ async function commitProgress(ctx: BoardContext, t: Task, raw: string): Promise<
   await ctx.refresh();
 }
 
-// 担当者セル（アバター＋名前。wikilink ならクリックでノートを開く）/ assignee cell: avatars + names (a wikilink opens its note on click)
-function paintAssignee(ctx: BoardContext, td: HTMLElement, t: Task): void {
+// 担当者セル（アバター＋名前。wikilink ならクリックでノートを開く）。担当者でグループ化しているときは、見出しの人を繰り返さず
+// ほかの人だけを「+」付きで出す / assignee cell: avatars + names (a wikilink opens its note on click). When grouped by assignee,
+// the heading's person isn't repeated: only the others show, after a "+"
+function paintAssignee(ctx: BoardContext, td: HTMLElement, t: Task, heading?: string): void {
   td.empty();
   td.addClass("ogantt-td-people");
-  for (const a of t.assignees) ctx.avatar(td, a);
+  const people = heading ? t.assignees.filter((a) => linkLabel(a) !== heading) : t.assignees;
+  for (const a of people) ctx.avatar(td, a);
   const names = td.createSpan({ cls: "ogantt-td-text" });
-  t.assignees.forEach((a, i) => {
+  if (people.length < t.assignees.length && people.length) names.appendText("+ ");
+  people.forEach((a, i) => {
     if (i) names.appendText(", ");
     renderLinkValue(names, a, "").addEventListener("click", (e) => handleLinkClick(ctx.app, e, t.path));
   });
@@ -441,10 +453,11 @@ function editStatus(ctx: BoardContext, cell: HTMLElement, t: Task): void {
 }
 
 // タグセル（多値・チップ表示）/ tags cell (multi-valued chips)
-function paintTags(ctx: BoardContext, td: HTMLElement, t: Task): void {
+function paintTags(ctx: BoardContext, td: HTMLElement, t: Task, heading?: string): void {
   td.empty();
   td.addClass("ogantt-td-tags");
-  for (const tag of t.tags) {
+  // タグでグループ化しているときは見出しのタグを繰り返さない / when grouped by tag, the heading's tag isn't repeated
+  for (const tag of t.tags.filter((x) => x !== heading)) {
     const chip = td.createSpan({ cls: "ogantt-tag-chip", text: tag });
     ctx.paintTagChip(chip, tag);
     // タグチップを右クリック＝色を変更 / right-click a tag chip to change its color

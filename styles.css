@@ -50,6 +50,7 @@ button.ogantt-dep-add:hover {
 
 .ogantt-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
@@ -72,10 +73,6 @@ button.ogantt-title:hover {
 .ogantt-title-caret svg {
   width: 14px;
   height: 14px;
-}
-/* ツールバーの伸縮スペーサー（右寄せ用）/ flexible spacer to push controls right */
-.ogantt-spacer {
-  flex: 1;
 }
 /* 縮尺の切り替え：1 つにつながったボタン群（押されている 1 つが浮き上がる）/ the zoom segmented control (the pressed segment is raised) */
 .ogantt-seg {
@@ -145,36 +142,21 @@ button.ogantt-title:hover {
   }
 }
 
-/* 表示オプション行（グループ/色分け/フィルタ＋凡例）/ view options row + legend */
+/* 表示オプション（グループ化・色分け・表示メニュー）はツールバーの右端に / the view options (group by, colour by, Display) sit at the toolbar's right end */
 .ogantt-options {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 12px;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  font-size: 0.85em;
+  margin-left: auto;
+  font-size: var(--font-ui-small);
 }
 .ogantt-opt {
   display: inline-flex;
   align-items: center;
   gap: 4px;
 }
-/* チェックボックス型オプション（ラベル全体がクリック可）/ checkbox-style option (whole label clickable) */
-.ogantt-opt-check {
-  cursor: pointer;
-  color: var(--text-muted);
-}
-.ogantt-opt-check input[type="checkbox"] {
-  margin: 0;
-  cursor: pointer;
-}
-/* 使えない切り替え（フォルダでグループ化していないとき）は薄く残す / an unavailable toggle (not grouped by folder) stays, dimmed */
-.ogantt-opt-check:has(input:disabled) {
-  opacity: 0.5;
-  cursor: default;
-}
-/* 列の出し分け（アイコン＋「列」）/ column visibility (icon + "Columns") */
+/* 表示メニューのボタン（アイコン＋「表示」＋▾）/ the Display menu button (icon + "Display" + caret) */
 button.ogantt-opt-gear {
   gap: 4px;
   padding: 2px 6px;
@@ -217,6 +199,18 @@ button.ogantt-opt-gear:hover {
 .ogantt-colmenu-item input[type="checkbox"] {
   margin: 0;
   cursor: pointer;
+}
+/* 使えない切り替え（フォルダでグループ化していないとき）は薄く残し、下に理由 / an unavailable switch stays, dimmed, with the reason below */
+.ogantt-colmenu-item:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+.ogantt-colmenu-note {
+  padding: 0 8px 4px 30px;
+  max-width: 220px;
+  white-space: normal;
+  font-size: 0.85em;
+  color: var(--text-muted);
 }
 /* タグ・担当者の編集ポップオーバー（表のセルから開く）。チップは折り返して並べ、追加欄は 1 行使う
    tag / assignee editor popover (opened from a table cell): chips wrap, the add field takes a full line */
@@ -544,25 +538,19 @@ button.ogantt-preset-del {
   width: 16px;
   height: 16px;
 }
-/* 表示構成と絞り込みを分ける縦の区切り / vertical divider between layout and filters */
-.ogantt-opt-divider {
-  width: 1px;
-  align-self: stretch;
-  min-height: 18px;
-  margin: 0 4px;
-  background: var(--background-modifier-border);
-}
 .ogantt-opt select {
   font-size: 0.95em;
 }
-/* 凡例はオプション行の下に 1 行で（ステータスが増えても上の操作がずれない）
-   the legend sits on its own line under the options (more statuses never shift the controls above) */
+/* 凡例はツールバーの下の細い 1 行（ステータスが増えても上の操作がずれない）
+   the legend is a thin row under the toolbar (more statuses never shift the controls above) */
 .ogantt-legend {
   display: flex;
-  flex-basis: 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 10px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 0.85em;
   color: var(--text-muted);
 }
 .ogantt-legend-chip {
@@ -1081,12 +1069,20 @@ input.ogantt-cell-input[type="number"] {
   font-weight: 600;
   text-anchor: middle;
 }
-/* 色を付けたタグの帯（バー下端）/ the coloured-tag band along a bar's bottom edge */
-/* 背景色の縁取りで、バーと同じ色のタグでも帯が見える / a background-coloured edge keeps the band visible even on a bar of the same colour */
-.ogantt-tag-band {
-  stroke: var(--background-primary);
-  stroke-width: 1;
+/* ラベルの後ろのタグの札：タグの色の淡い地と縁、文字もタグの色（表のタグチップと同じ）
+   the tag pills after a label: a faint fill and edge in the tag's colour, text in it too (like the table's tag chips) */
+.ogantt-tag-pill {
   pointer-events: none;
+}
+.ogantt-tag-pill rect {
+  fill-opacity: 0.14;
+  stroke-opacity: 0.55;
+  stroke-width: 1;
+}
+.ogantt-tag-pill text {
+  font-size: 9.5px;
+  text-anchor: middle;
+  dominant-baseline: middle;
 }
 /* 同じタスクの複製（複数の担当者・タグでのグループ化）をつなぐ点線と、ホバー中のタスクの強調
    the dotted line joining copies of one task (grouped by several assignees or tags), and the hovered task's highlight */
@@ -1365,11 +1361,18 @@ input.ogantt-cell-input[type="number"] {
   overflow-y: auto;
 }
 
-/* 進捗：スライダーを伸ばし、右端に % 表示 / progress: stretch slider, % label on the right */
+/* 進捗：スライダー（カンバンはメーター）を伸ばし、右端に % 表示 / progress: the slider (a meter for a kanban) stretches, % on the right */
 .ogantt-progress-field {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
+}
+/* カンバンの「カード N 枚中 M 枚が完了」/ a kanban's "M of N cards done" */
+.ogantt-progress-note {
+  flex-basis: 100%;
+  font-size: 0.85em;
+  color: var(--text-muted);
 }
 .ogantt-progress-field input[type="range"] {
   flex: 1;

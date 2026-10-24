@@ -35,6 +35,18 @@ export default class GanttPlugin extends Plugin {
       callback: () => void this.activateView(this.currentFolder()),
     });
 
+    // 開いているボードを PNG に書き出す（ボードが前面のときだけ）/ export the board in front as a PNG (only while one is in front)
+    this.addCommand({
+      id: "export-png",
+      name: t().exportPng,
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(GanttView);
+        if (!view) return false;
+        if (!checking) void view.exportPng();
+        return true;
+      },
+    });
+
     // フォルダ右クリック → このフォルダを Gantt 表示 / folder context menu
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {

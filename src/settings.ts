@@ -151,6 +151,8 @@ export interface BoardState {
   rollup: boolean;
   progressLine: boolean;
   showEmptyFolders: boolean;
+  deps: boolean; // 依存の矢印を描くか / whether dependency arrows are drawn
+  tags: boolean; // バーにタグを出すか / whether tags show on the bars
   collapsed: string[];
 }
 

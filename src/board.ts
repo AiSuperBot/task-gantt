@@ -17,6 +17,7 @@ export interface BoardContext {
   readonly settings: GanttSettings;
   readonly tasks: Task[]; // 表示中のボードの全タスク（背景 refresh で作り替わる）/ the board's tasks (rebuilt by background refreshes)
   readonly rollup: boolean; // 親を子孫の範囲で描くか / whether parents are drawn as the span of their descendants
+  readonly groupBy: string; // グループ化の軸（見出しと同じ値は行で繰り返さない）/ the grouping axis (rows don't repeat their heading's value)
   // 書き込みはすべてここを通す（取り消し可能になる）/ every write goes through here (makes it undoable)
   mutate(label: string, paths: string[], fn: () => Promise<MutateResult>): Promise<boolean>;
   // 開始・期限を書き、後続タスクへ連動する（取り消し可）。開始日だけの変更は期間を保って期限日も動かす。

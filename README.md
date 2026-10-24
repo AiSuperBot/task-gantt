@@ -35,9 +35,9 @@ The UI follows Obsidian's display language. Supported: English, Japanese, Korean
 
 ## View options
 
-An options row above the table shapes how the board is displayed.
+The right end of the toolbar shapes how the board is displayed: **Group by**, **Color by**, and the **Display** menu. A thin legend under the toolbar explains the colors.
 
-**Group by** folder, status, assignee or tag, and **color by** status or assignee (with a legend). Each board remembers these, the toggles below and which groups are collapsed. Status never relies on color alone: completed tasks get a ✓ on their label, deferred ones are hatched, and cancelled ones are faded and struck through.
+**Group by** folder, status, assignee or tag, and **color by** status or assignee. **Display** holds what you switch less often: **Dependency arrows**, **Tags on bars**, **Progress line**, **Flat**, **Roll up**, **Show empty folders**, and which table **Columns** to show. Each board remembers all of this, plus which groups are collapsed. Rarer actions, **Export as PNG** and **Reload**, are in the view's **⋯** menu. Status never relies on color alone: completed tasks get a ✓ on their label, deferred ones are hatched, and cancelled ones are faded and struck through.
 
 ![Grouping and color-by options with a legend](docs/images/grouping-en.webp)
 
@@ -47,9 +47,9 @@ Each group heading has an icon for its grouping — a folder, a person, a status
 
 ![Click a column header to sort, with an ↑/↓ indicator](docs/images/sort-en.webp)
 
-**Choose columns** with the **Columns** button — show or hide Start, Due, Duration, Progress, Assignee, Status, and Tags. Any column shown here can be edited by double-clicking its cell. The column layout and sort are remembered across sessions:
+**Choose columns** in the **Display** menu — show or hide Start, Due, Duration, Progress, Assignee, Status, and Tags. Any column shown here can be edited by double-clicking its cell. The column layout and sort are remembered across sessions:
 
-![Show or hide table columns from the gear menu](docs/images/column_en.webp)
+![Show or hide table columns from the Display menu](docs/images/column_en.webp)
 
 **Flat view** lists every task in one sorted list, ignoring folders and nesting:
 
@@ -69,7 +69,7 @@ Show any frontmatter key as a table column. In **Settings → Task Gantt → Cus
 
 ![Custom fields in the settings tab: a key, a label and a type per field](docs/images/custom-fields-settings-en.webp)
 
-A new field's column is shown right away; hide or show it from the gear menu like any other column. Custom columns sort by clicking their header and are edited by double-clicking a cell, and every edit can be undone. Changing a field's key keeps its column's visibility, width and sort, and takes effect when you press Enter or leave the box. If notes still hold values under the old key, you're asked whether to rename that property in those notes too (a note that already has a value under the new key is never overwritten) or only to point the column at the new key. Keys the plugin already reads (the Start / Due / Status / … keys under **Frontmatter keys**, and `tags`) can't be used, and if two fields share a key only the first becomes a column — the settings tab says so.
+A new field's column is shown right away; hide or show it from the **Display** menu like any other column. Custom columns sort by clicking their header and are edited by double-clicking a cell, and every edit can be undone. Changing a field's key keeps its column's visibility, width and sort, and takes effect when you press Enter or leave the box. If notes still hold values under the old key, you're asked whether to rename that property in those notes too (a note that already has a value under the new key is never overwritten) or only to point the column at the new key. Keys the plugin already reads (the Start / Due / Status / … keys under **Frontmatter keys**, and `tags`) can't be used, and if two fields share a key only the first becomes a column — the settings tab says so.
 
 ![Custom field columns in the table, after the built-in columns](docs/images/custom-fields-table-en.webp)
 
@@ -105,19 +105,23 @@ Tasks use Obsidian's native `tags` (frontmatter `tags:` plus inline `#tag`), so 
 
 ## Shared tasks (several assignees)
 
-`assignee` can hold several people: write a list in the frontmatter, or add them one by one in the detail panel or the **Assignee** cell. A shared task shows a stacked avatar per person next to its bar and a people icon by its name, and **color by assignee** splits its bar into one band per person (click a person in the legend to pick their color if two automatic colors look alike). **Group by assignee** lists the task under each of its people; the copies are joined by a dotted line, and hovering one highlights them all. Drag a task onto a person's group to add them — the task keeps its other assignees. With one assignee the value stays a plain string, so existing notes keep their shape.
+`assignee` can hold several people: write a list in the frontmatter, or add them one by one in the detail panel or the **Assignee** cell. A shared task shows a stacked avatar per person next to its bar and a people icon by its name, and **color by assignee** splits its bar into one band per person (click a person in the legend to pick their color if two automatic colors look alike). **Group by assignee** lists the task under each of its people; the copies are joined by a dotted line, and hovering one highlights them all. A row doesn't repeat its heading's person: under *Ana*, the label and the **Assignee** cell show only the others, after a plus (*Visual design · + Ben*), and a task Ana has alone shows just its name. Grouping by tag likewise leaves the heading's tag out of its rows. Drag a task onto a person's group to add them — the task keeps its other assignees. With one assignee the value stays a plain string, so existing notes keep their shape.
 
 ## Coloring tags and folders
 
 Every tag starts from a single **Default tag color** — Obsidian's own tag color unless you change it in **Settings → Task Gantt → Tag colors** — and you can override any individual tag on top of that. Folders get an automatic color from their name instead.
 
-Colors are picked from a palette of 17, plus a rainbow swatch that opens your system's color picker for any hue. A tag with a color of its own also shows as a thin band along the bottom of the bars it's on, so you can spot it on the timeline; tags that follow the default color add no band.
+Colors are picked from a palette of 17, plus a rainbow swatch that opens your system's color picker for any hue. On the timeline, a task's tags follow its label as small pills tinted with each tag's color (up to three, then *+N*); turn them off with **Display → Tags on bars**.
 
 **Right-click a folder heading, a tag heading, or a tag chip** to change or reset its color. Setting a color registers that tag under **Per-tag colors** in settings; resetting removes it again, so the list holds exactly the tags you have deliberately coloured — everything else follows the default. You can also add a tag there by picking it from your vault's tags, and removing one asks for confirmation, since the settings tab has no undo. Rows are listed alphabetically. Folder colors are right-click only.
 
 <video src="https://github.com/katoiek/task-gantt/raw/main/docs/images/coloring_folder_tag.mp4" controls width="100%"></video>
 
 > If the video doesn't play above, [watch it here](docs/images/coloring_folder_tag.mp4).
+
+## Export as PNG
+
+Choose **Export as PNG** from the view's **⋯** menu, or run the command, to save the whole board as an image, including rows scrolled out of view. It keeps the current theme and the **Display** menu's choices, adds the board's name and date on top and a color key for the current **Color by** underneath, and goes wherever your vault keeps attachments. A notice links to the file.
 
 ## Creating tasks
 
@@ -128,7 +132,7 @@ Press **＋ New task** to create a dated note in the current folder and rename i
 A task is always a note — its frontmatter keeps the dates, status and the rest — but its content can be one of three kinds. Pick one from the **▾** next to **＋ New task**:
 
 - **Note** (the default): the body is the task's description.
-- **Kanban board**: the note is created in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s format, with one lane per status. The detail panel shows its lanes and cards in miniature; click them to open the board (as a board with the Kanban plugin installed, as Markdown otherwise).
+- **Kanban board**: the note is created in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s format, with one lane per status. The detail panel shows its lanes and cards in miniature; click them to open the board (as a board with the Kanban plugin installed, as Markdown otherwise). Its **progress is the share of checked cards**: check cards on the board and the bar fills (the panel shows, say, *2 of 5 cards done*). It isn't edited by hand while the board has cards.
 - **Canvas**: a same-named `.canvas` is created next to the note, linked from its `canvas` key and embedded in the body, so the detail panel shows the canvas. Deleting the task deletes that canvas too, and undo brings both back.
 
 The table marks Kanban and Canvas tasks with an icon. Any note counts as a Kanban task when its frontmatter has `kanban-plugin: board`, and as a Canvas task when its `canvas` key links to a `.canvas` file.
@@ -176,7 +180,7 @@ Drag from a bar's round handle to another bar to create a dependency, or use **A
 
 ## Duration
 
-The **Duration** column (turn it on from the gear menu) shows how many **workdays** a task spans, counting both ends and skipping the non-working days set in settings (Saturday and Sunday by default). It isn't stored anywhere: it's worked out from `start` and `end`, which stay the source of truth.
+The **Duration** column (turn it on from the **Display** menu) shows how many **workdays** a task spans, counting both ends and skipping the non-working days set in settings (Saturday and Sunday by default). It isn't stored anywhere: it's worked out from `start` and `end`, which stay the source of truth.
 
 - **Change the duration** (double-click the cell, or use the field in the detail panel) and the start stays put while the due date moves. A task with no start date starts today.
 - **Change only the start date** and the due date moves with it, so the duration stays the same — the bar slides. Changing the due date changes the duration instead. Dragging a bar's edge on the timeline resizes it as before.
@@ -324,9 +328,9 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ## 表示オプション
 
-表の上のオプション行で、ボードの見せ方を調整できます。
+ツールバーの右端の **グループ化**・**色分け**・**表示** メニューで、ボードの見せ方を調整できます。ツールバーの下の細い行は色の凡例です。
 
-**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者・凡例付き）。これらと下の表示切替、折りたたんだグループはボードごとに記憶されます。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
+**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者）。**表示** メニューには、ときどき切り替えるもの（**依存の矢印**・**バーのタグ**・**稲妻線**・**フラット表示**・**ロールアップ**・**空フォルダを表示**）と、表に出す**列**がまとまっています。これらと折りたたんだグループはボードごとに記憶されます。たまにしか使わない **PNG として書き出す** と **再読み込み** は、ビューの **⋯** メニューにあります。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
 
 ![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.webp)
 
@@ -336,9 +340,9 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ![列ヘッダのクリックでソート（↑/↓ 表示）](docs/images/sort-ja.webp)
 
-**列の表示**は **列の表示** ボタンから、開始・期限・期間・進捗・担当者・ステータス・タグを出し分け。ここに出せる列はすべてセルのダブルクリックで編集できます。列レイアウトとソートはセッションをまたいで保存されます：
+**列の表示**は **表示** メニューから、開始・期限・期間・進捗・担当者・ステータス・タグを出し分け。ここに出せる列はすべてセルのダブルクリックで編集できます。列レイアウトとソートはセッションをまたいで保存されます：
 
-![歯車メニューから列を表示／非表示](docs/images/column_ja.webp)
+![表示メニューから列を表示／非表示](docs/images/column_ja.webp)
 
 **フラット表示**は、フォルダや入れ子を無視して全タスクを1本のソート済みリストで表示します：
 
@@ -358,7 +362,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ![設定画面のカスタムフィールド。フィールドごとにキー・表示名・種類を指定](docs/images/custom-fields-settings-ja.webp)
 
-追加したフィールドの列はすぐに表示され、ほかの列と同じく歯車メニューで表示を切り替えられます。見出しのクリックで並べ替え、セルのダブルクリックで編集でき、編集はすべて取り消せます。キー名を変えても、列の表示・幅・並べ替えの設定はそのまま残ります。キーの変更は Enter を押すか入力欄を離れたときに反映され、旧キーの値を持つノートがあれば、ノート側のプロパティ名も変えるか（新しいキーに既に値があるノートは上書きしません）、列が読むキーだけを変えるかを尋ねます。プラグインが既に使っているキー（**フロントマターのキー名**にある開始・期限・ステータスなどのキーと `tags`）は使えません。また、同じキーのフィールドが複数あるときは最初の 1 つだけが列になります。どちらも設定画面に注意書きが出ます。
+追加したフィールドの列はすぐに表示され、ほかの列と同じく **表示** メニューで表示を切り替えられます。見出しのクリックで並べ替え、セルのダブルクリックで編集でき、編集はすべて取り消せます。キー名を変えても、列の表示・幅・並べ替えの設定はそのまま残ります。キーの変更は Enter を押すか入力欄を離れたときに反映され、旧キーの値を持つノートがあれば、ノート側のプロパティ名も変えるか（新しいキーに既に値があるノートは上書きしません）、列が読むキーだけを変えるかを尋ねます。プラグインが既に使っているキー（**フロントマターのキー名**にある開始・期限・ステータスなどのキーと `tags`）は使えません。また、同じキーのフィールドが複数あるときは最初の 1 つだけが列になります。どちらも設定画面に注意書きが出ます。
 
 ![テーブルのカスタムフィールド列。組み込みの列の後ろに並ぶ](docs/images/custom-fields-table-ja.webp)
 
@@ -394,19 +398,23 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ## 共有タスク（複数の担当者）
 
-`assignee` には複数の人を入れられます。フロントマターにリストで書くか、詳細パネルや**担当者**セルで 1 人ずつ追加します。共有タスクはバーの横に人数分のアバターが重なって並び、名前の前に人のアイコンが付きます。**担当者で色分け**すると、バーが一人ひとりの色の帯に分かれます（自動の色が似ていて見分けにくいときは、凡例の人をクリックして色を選べます）。**担当者でグループ化**すると、そのタスクは担当者それぞれのグループに並び、同じタスクどうしは点線でつながり、どれかにマウスを載せるとまとめて強調されます。タスクを人のグループへドラッグするとその人を追加します（ほかの担当者はそのまま）。担当者が 1 人のときは値は従来どおり文字列のままなので、既存のノートの書き方は変わりません。
+`assignee` には複数の人を入れられます。フロントマターにリストで書くか、詳細パネルや**担当者**セルで 1 人ずつ追加します。共有タスクはバーの横に人数分のアバターが重なって並び、名前の前に人のアイコンが付きます。**担当者で色分け**すると、バーが一人ひとりの色の帯に分かれます（自動の色が似ていて見分けにくいときは、凡例の人をクリックして色を選べます）。**担当者でグループ化**すると、そのタスクは担当者それぞれのグループに並び、同じタスクどうしは点線でつながり、どれかにマウスを載せるとまとめて強調されます。行では見出しの人を繰り返しません。*Ana* の下では、ラベルと**担当者**セルにほかの人だけが「+」付きで出て（*Visual design · + Ben*）、Ana だけのタスクは名前だけになります。タグでグループ化したときも、見出しのタグは行に出しません。タスクを人のグループへドラッグするとその人を追加します（ほかの担当者はそのまま）。担当者が 1 人のときは値は従来どおり文字列のままなので、既存のノートの書き方は変わりません。
 
 ## タグ・フォルダの色
 
 タグの色はすべて **タグの既定色** を土台にし、そこから個別に上書きします。既定色は **設定 → Task Gantt → タグの色** で指定でき、未設定なら Obsidian 本体のタグ色に従います。フォルダは従来どおり名前から自動で色が付きます。
 
-色は 17 色のパレットから選べ、虹色の見本を押すとシステムの色選択が開いて好きな色合いを選べます。自分で色を付けたタグは、そのタグを持つバーの下端にも細い帯で控えめに表示され、タイムライン上で見分けられます（既定色のままのタグは帯を出しません）。
+色は 17 色のパレットから選べ、虹色の見本を押すとシステムの色選択が開いて好きな色合いを選べます。タイムラインでは、タスクのタグがラベルの後ろに小さな札で、それぞれのタグの色で控えめに並びます（3 つまで。それ以上は *+N*）。**表示 → バーのタグ** で隠せます。
 
 **フォルダの見出し・タグの見出し・タグのチップを右クリック**して、色の変更／リセットができます。色を指定すると、そのタグが設定の**個別のタグ**に登録され、リセットすると登録が外れます。つまり一覧には**自分で色を決めたタグだけ**が並び、それ以外は既定色に従います。設定側からは Vault のタグを選んで追加でき、削除には確認が入ります（設定画面には取り消しが無いため）。並びはタグ名順です（フォルダの色は右クリックのみ）。
 
 <video src="https://github.com/katoiek/task-gantt/raw/main/docs/images/coloring_folder_tag.mp4" controls width="100%"></video>
 
 > 上で動画が再生されない場合は [こちら](docs/images/coloring_folder_tag.mp4) からご覧ください。
+
+## PNG として書き出す
+
+ビューの **⋯** メニュー（またはコマンド）の **PNG として書き出す** で、画面外の行も含めたボード全体を画像として保存できます。今のテーマと **表示** メニューの設定のまま、上にボード名と日付、下に今の **色分け** の凡例が付き、Vault の添付ファイルの置き場所に保存されます。通知からファイルを開けます。
 
 ## タスクの作成
 
@@ -417,7 +425,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 タスクは常に 1 つのノートで、日付やステータスなどはフロントマターが持ちます。そのうえで中身を 3 種類から選べます。**＋ 新規タスク**の横の **▾** から選んでください：
 
 - **ノート**（既定）：本文がタスクの説明です。
-- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。
+- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。**進捗はチェックしたカードの割合**で、ボードでカードをチェックするとバーが伸びます（パネルには *カード 5 枚中 2 枚が完了* のように出ます）。カードがある間は手で編集しません。
 - **キャンバス**：ノートと同じ名前の `.canvas` を隣に作り、`canvas` キーでリンクして本文に埋め込むので、詳細パネルにキャンバスが表示されます。タスクを削除するとそのキャンバスも削除され、取り消せば両方が戻ります。
 
 表では、カンバンとキャンバスのタスクにアイコンが付きます。フロントマターに `kanban-plugin: board` があるノートはカンバン、`canvas` キーが `.canvas` にリンクしているノートはキャンバスとして扱います。
@@ -465,7 +473,7 @@ after:
 
 ## 期間（Duration）
 
-**期間**列（歯車メニューで表示）は、タスクが何**稼働日**かかるかを表示します。両端の日を含めて数え、設定した休日（既定は土・日）は数えません。期間はどこにも保存されず、`start` と `end` から計算します（日付が常に正です）。
+**期間**列（**表示** メニューで表示）は、タスクが何**稼働日**かかるかを表示します。両端の日を含めて数え、設定した休日（既定は土・日）は数えません。期間はどこにも保存されず、`start` と `end` から計算します（日付が常に正です）。
 
 - **期間を変える**（セルのダブルクリック、または詳細パネルの欄）と、開始日はそのままで期限日が動きます。開始日が無いタスクは今日から始まります。
 - **開始日だけを変える**と、期限日も一緒に動き、期間が保たれます（バーが平行移動します）。期限日を変えた場合は期間が変わります。タイムラインでバーの端をドラッグしたときは、これまでどおり伸び縮みします。

@@ -48,6 +48,9 @@ export interface Task {
   canvas?: string; // キャンバス型の実体（.canvas のパス）/ a canvas task's .canvas file path
   deps: Dep[]; // 先行タスクへの依存（解決済み）/ resolved dependencies on predecessors
   progress?: number; // 0-100
+  // カンバンのカード数（チェック済み・全体）。カードがあれば進捗はここから計算する
+  // a kanban's cards (checked, all); when it has cards, progress is worked out from them
+  cards?: { done: number; total: number };
   milestone: boolean;
   parent?: string; // 親タスクのパス（解決済み）/ resolved parent task path
   tags: string[]; // タグ（# 抜き・本文/フロントマター両方を統合）/ tags (without #, frontmatter + inline)

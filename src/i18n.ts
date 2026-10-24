@@ -143,6 +143,13 @@ interface Strings {
   expand: string;
   collapse: string;
   folderOnly: string; // フォルダでグループ化したときだけ使える / only when grouped by folder
+  optDisplay: string; // 表示メニュー / the Display menu
+  optArrows: string; // 依存の矢印の表示 / show dependency arrows
+  optTagLabels: string; // バーのタグの表示 / show tags on the bars
+  exportPng: string;
+  exportDone: (path: string) => string;
+  exportOpen: string;
+  kanbanProgress: (done: number, total: number) => string;
   // 取り消し / undo
   nothingToUndo: string;
   undone: (label: string) => string;
@@ -589,6 +596,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "展開",
     collapse: "折りたたむ",
     folderOnly: "フォルダでグループ化しているときに使えます",
+    optDisplay: "表示",
+    optArrows: "依存の矢印",
+    optTagLabels: "バーのタグ",
+    exportPng: "PNG として書き出す",
+    exportDone: (path) => `${path} に書き出しました`,
+    exportOpen: "開く",
+    kanbanProgress: (done, total) => `カード ${total} 枚中 ${done} 枚が完了`,
   }),
   en: () => ({
     colTask: "Task",
@@ -857,6 +871,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "Expand",
     collapse: "Collapse",
     folderOnly: "Available when grouped by folder",
+    optDisplay: "Display",
+    optArrows: "Dependency arrows",
+    optTagLabels: "Tags on bars",
+    exportPng: "Export as PNG",
+    exportDone: (path) => `Exported to ${path}`,
+    exportOpen: "Open",
+    kanbanProgress: (done, total) => `${done} of ${total} cards done`,
   }),
   zh: () => ({
     colTask: "任务",
@@ -1125,6 +1146,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "展开",
     collapse: "折叠",
     folderOnly: "按文件夹分组时可用",
+    optDisplay: "显示",
+    optArrows: "依赖箭头",
+    optTagLabels: "条形上的标签",
+    exportPng: "导出为 PNG",
+    exportDone: (path) => `已导出到 ${path}`,
+    exportOpen: "打开",
+    kanbanProgress: (done, total) => `${total} 张卡片中已完成 ${done} 张`,
   }),
   "zh-tw": () => ({
     colTask: "任務",
@@ -1393,6 +1421,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "展開",
     collapse: "摺疊",
     folderOnly: "依資料夾分組時可用",
+    optDisplay: "顯示",
+    optArrows: "依賴箭頭",
+    optTagLabels: "長條上的標籤",
+    exportPng: "匯出為 PNG",
+    exportDone: (path) => `已匯出至 ${path}`,
+    exportOpen: "開啟",
+    kanbanProgress: (done, total) => `${total} 張卡片中已完成 ${done} 張`,
   }),
   ko: () => ({
     colTask: "작업",
@@ -1661,6 +1696,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "펼치기",
     collapse: "접기",
     folderOnly: "폴더로 그룹화할 때 사용할 수 있습니다",
+    optDisplay: "표시",
+    optArrows: "의존 관계 화살표",
+    optTagLabels: "막대의 태그",
+    exportPng: "PNG로 내보내기",
+    exportDone: (path) => `${path}(으)로 내보냈습니다`,
+    exportOpen: "열기",
+    kanbanProgress: (done, total) => `카드 ${total}개 중 ${done}개 완료`,
   }),
   fr: () => ({
     colTask: "Tâche",
@@ -1929,6 +1971,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "Déplier",
     collapse: "Replier",
     folderOnly: "Disponible en groupant par dossier",
+    optDisplay: "Affichage",
+    optArrows: "Flèches de dépendance",
+    optTagLabels: "Tags sur les barres",
+    exportPng: "Exporter en PNG",
+    exportDone: (path) => `Exporté vers ${path}`,
+    exportOpen: "Ouvrir",
+    kanbanProgress: (done, total) => `${done} cartes terminées sur ${total}`,
   }),
   es: () => ({
     colTask: "Tarea",
@@ -2197,6 +2246,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "Expandir",
     collapse: "Contraer",
     folderOnly: "Disponible al agrupar por carpeta",
+    optDisplay: "Visualización",
+    optArrows: "Flechas de dependencia",
+    optTagLabels: "Etiquetas en las barras",
+    exportPng: "Exportar como PNG",
+    exportDone: (path) => `Exportado a ${path}`,
+    exportOpen: "Abrir",
+    kanbanProgress: (done, total) => `${done} de ${total} tarjetas hechas`,
   }),
   ru: () => ({
     colTask: "Задача",
@@ -2465,6 +2521,13 @@ const STRINGS: Record<Lang, () => Strings> = {
     expand: "Развернуть",
     collapse: "Свернуть",
     folderOnly: "Доступно при группировке по папкам",
+    optDisplay: "Вид",
+    optArrows: "Стрелки зависимостей",
+    optTagLabels: "Теги на полосах",
+    exportPng: "Экспорт в PNG",
+    exportDone: (path) => `Экспортировано: ${path}`,
+    exportOpen: "Открыть",
+    kanbanProgress: (done, total) => `Готово карточек: ${done} из ${total}`,
   }),
 };
 
