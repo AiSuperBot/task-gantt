@@ -20,6 +20,18 @@ function offSet(cal: WorkCalendar): Set<number> {
   return s.size >= 7 ? new Set() : s;
 }
 
+// 休日を塗る CSS グラデーション（1 週間周期で繰り返す）。firstDay はタイムライン左端の通日番号
+// a CSS gradient shading the non-working days, repeating every week; firstDay is the day index at the timeline's left edge
+export function offDayGradient(firstDay: number, cal: WorkCalendar, ppd: number, color: string): string {
+  const first = weekday(firstDay);
+  const stops = [...offSet(cal)]
+    .map((w) => (w - first + 7) % 7)
+    .sort((a, b) => a - b)
+    .map((k) => `transparent ${k * ppd}px, ${color} ${k * ppd}px, ${color} ${(k + 1) * ppd}px, transparent ${(k + 1) * ppd}px`);
+  // 繰り返しの周期は「最初の色の位置〜最後の位置」なので、0px から始めて 1 週間ちょうどにする / a repeating gradient's period runs from its first stop to its last, so start at 0px to make it exactly one week
+  return stops.length ? `repeating-linear-gradient(to right, transparent 0px, ${stops.join(", ")}, transparent ${7 * ppd}px)` : "none";
+}
+
 export function isWorkday(day: number, cal: WorkCalendar): boolean {
   return !offSet(cal).has(weekday(day));
 }

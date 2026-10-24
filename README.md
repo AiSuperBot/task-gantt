@@ -16,7 +16,7 @@ The folder opens as a table + timeline, with groups, bars, milestones, and depen
 
 ![The opened Gantt chart with groups, bars, milestones and dependencies](docs/images/gantt-chart.webp)
 
-Click a task to open the detail panel and edit its dates, status, assignee, progress, and body:
+Click a task or its bar to open the detail panel beside the board and edit its dates, status, assignee, progress, and body:
 
 ![Task detail panel for editing dates, status, assignee, progress and body](docs/images/detail-panel.webp)
 
@@ -25,10 +25,11 @@ Click a task to open the detail panel and edit its dates, status, assignee, prog
 1. In **Settings → Task Gantt**, set the **target folder** (e.g. `Projects/Cleanup`).
 2. Open the view from the **"Open Gantt" ribbon icon** in the left column (or the command **"Open Gantt"**). The ribbon opens the Gantt for the folder of the currently open note — or the folder selected in the file explorer — and falls back to the default folder in settings (the **vault root** when none is set). You can also right-click any folder → **Open as Gantt**.
 3. Direct subfolders become **groups**, and the `.md` files inside them become **tasks**.
-4. **Drag a bar / resize its edges** to write the new dates back to that file's `start`/`end` frontmatter. **Every column the table can show is editable in place — just double-click the cell.** Start and Due open a calendar, Duration takes a number of workdays, Progress takes a percentage (0–100; blank or 0 clears it), Status opens a dropdown, and Assignee and Tags open a small editor with a chip per value (× to remove) and an add field — assignees suggest the names already used on the board (type `[[` to link a note instead), tags suggest the vault's existing tags. Enter or clicking away saves, Esc cancels.
-5. Click a task in the table — or **double-click its bar** — to slide in a **detail panel** (dates, status, assignee, progress, body) from the right. Links in the body are clickable (internal links open the note, Ctrl/Cmd-click for a new tab, with Page preview on hover); click anywhere else in the body to edit it, and type `[[` to insert a link to a note.
+4. **Drag a bar / resize its edges** to write the new dates back to that file's `start`/`end` frontmatter. **Every column the table can show is editable in place — just double-click the cell** (a single click selects the row, and a pencil marks editable cells on hover). Start and Due open a calendar, Duration takes a number of workdays, Progress takes a percentage (0–100; blank or 0 clears it), Status opens a dropdown, and Assignee and Tags open a small editor with a chip per value (× to remove) and an add field — assignees suggest the names already used on the board (type `[[` to link a note instead), tags suggest the vault's existing tags. Enter or clicking away saves, Esc cancels.
+5. Click a task in the table or its bar to open the **detail panel** (dates, status, assignee, dependencies, progress, body). It sits beside the board instead of covering it, follows changes made elsewhere, and closes with its × or **Esc**. Hover a bar for a summary card (dates, duration, status, progress, assignees). Links in the body are clickable (internal links open the note, Ctrl/Cmd-click for a new tab, with Page preview on hover); click anywhere else in the body to edit it, and type `[[` to insert a link to a note.
 6. Use the **＋ New task** button to create a one-day task in the current folder and name it on the spot — its **▾** creates a [Kanban board or a Canvas](#task-kinds-note-kanban-canvas) task instead — and **Today** to scroll the timeline to the current date.
-7. Use the **Day / Week / Month / Fit** buttons to change the timeline scale. **Fit** auto-scales to the pane width and re-fits when you resize.
+7. Use the **Day / Week / Month / Fit** buttons to change the timeline scale; the date in the middle of the screen stays put. **Fit** auto-scales to the pane width and re-fits when you resize. Axis dates follow Obsidian's language, the month (the year in Month view) is named above them, and non-working days are shaded. The folder name at the top left switches the board to another folder.
+8. **Keyboard**: in the table, ↑/↓ (and Home/End, Page Up/Down) move between rows, →/← expand and collapse, **Enter** opens the detail panel (or toggles a group), **F2** renames, and **Shift+F10** or the menu key opens the row menu. **Esc** closes the panel and puts you back on the row.
 
 The UI follows Obsidian's display language. Supported: English, Japanese, Korean, Chinese (Simplified & Traditional), French, Spanish, and Russian; any other language falls back to English.
 
@@ -36,7 +37,7 @@ The UI follows Obsidian's display language. Supported: English, Japanese, Korean
 
 An options row above the table shapes how the board is displayed.
 
-**Group by** folder, status, or assignee, and **color by** status or assignee (with a legend):
+**Group by** folder, status, assignee or tag, and **color by** status or assignee (with a legend). Each board remembers these, the toggles below and which groups are collapsed. Status never relies on color alone: completed tasks get a ✓ on their label, deferred ones are hatched, and cancelled ones are faded and struck through.
 
 ![Grouping and color-by options with a legend](docs/images/grouping-en.webp)
 
@@ -46,7 +47,7 @@ Each group heading has an icon for its grouping — a folder, a person, a status
 
 ![Click a column header to sort, with an ↑/↓ indicator](docs/images/sort-en.webp)
 
-**Choose columns** with the gear button — show or hide Start, Due, Duration, Progress, Assignee, Status, and Tags. Any column shown here can be edited by double-clicking its cell. The column layout and sort are remembered across sessions:
+**Choose columns** with the **Columns** button — show or hide Start, Due, Duration, Progress, Assignee, Status, and Tags. Any column shown here can be edited by double-clicking its cell. The column layout and sort are remembered across sessions:
 
 ![Show or hide table columns from the gear menu](docs/images/column_en.webp)
 
@@ -92,7 +93,7 @@ Open **Presets** for one-click filter sets. Built-in presets are **No dates (no 
 
 ## Moving tasks between folders
 
-When grouped by folder, **drag a task row** onto a folder to move the task into it (or onto another task to drop it into that task's folder). Links are updated automatically, and the move is **undoable** with **Ctrl/Cmd+Z** or the undo button. Empty folders stay visible as rows so you always have a drop target; the **Show empty folders** toggle (on by default) controls this.
+When grouped by folder, **drag a task row** onto a folder to move the task into it (or onto another task to drop it into that task's folder). While you drag, the row under the pointer says what the drop will do, e.g. *Move to “Marketing”* or *Make subtask of “API”*. Without dragging, **right-click a task's name** (long-press on touch, Shift+F10 from the keyboard) for **Make subtask of…**, **Detach from parent**, **Move to folder…** and **Delete**. Links are updated automatically, and the move is **undoable** with **Ctrl/Cmd+Z** or the undo button. Empty folders stay visible as rows so you always have a drop target; the **Show empty folders** toggle (on by default) controls this.
 
 ## Subtasks
 
@@ -171,7 +172,7 @@ Sample data for a quick try lives in `examples/Cleaning Project お掃除プロ�
 
 ## Dependencies
 
-Drag from a bar's round handle to another bar to create a dependency. The connected ends decide the type: **FS** (finish→start), **SS** (start→start), **FF** (finish→finish). SS/FF successors snap to their predecessor when you reschedule. An FS successor is **pushed later when its predecessor slips into it** — it moves to the next workday after the predecessor's due date and keeps its duration — and the push carries on down the chain. Moving a predecessor earlier never pulls its successors back, so gaps you left on purpose stay. Turn this off with **Push FS successors automatically** in settings. Milestones never move through dependencies. Click a dependency line to remove it (undo with **Ctrl/Cmd+Z** or the undo button).
+Drag from a bar's round handle to another bar to create a dependency, or use **Add dependency…** in the detail panel: pick the type, then the task this one waits on. The connected ends decide the type: **FS** (finish→start), **SS** (start→start), **FF** (finish→finish). SS/FF successors snap to their predecessor when you reschedule. An FS successor is **pushed later when its predecessor slips into it** — it moves to the next workday after the predecessor's due date and keeps its duration — and the push carries on down the chain. Moving a predecessor earlier never pulls its successors back, so gaps you left on purpose stay. Turn this off with **Push FS successors automatically** in settings. Milestones never move through dependencies. To remove a dependency, hover its line and click the **×** that appears, or use the × on it in the detail panel; a notice offers **Undo** (so do **Ctrl/Cmd+Z** and the undo button). Clicking the line itself does nothing, so a stray click can't break a link.
 
 ## Duration
 
@@ -313,10 +314,11 @@ MIT — see [`LICENSE`](./LICENSE).
 1. **設定 → Task Gantt** で**対象フォルダ**を指定（例: `Projects/お掃除`）。
 2. 左列の **「Gantt を開く」リボンアイコン**（またはコマンド「Gantt を開く」）でビューを開く。リボンは、**現在開いているノートのフォルダ**（またはエクスプローラで選択中のフォルダ）を Gantt 表示し、どちらも無ければ設定の既定フォルダ（未設定なら **Vault ルート**）を開きます。フォルダを右クリック →**「Open as Gantt」**でも開けます。
 3. 直下のサブフォルダが**グループ**、その中の `.md` が**タスク**になります。
-4. バーを**ドラッグ／端をリサイズ**すると、そのファイルの `start`/`end` に書き戻します。**テーブルに表示できる列はすべて、セルをダブルクリックすればその場で編集できます。** 開始・期限はカレンダー、期間は稼働日数の入力、進捗は % の直接入力（0–100。空欄または 0 で未設定）、ステータスはドロップダウン、担当者とタグは詳細パネルと同じエディタ（値ごとのチップと × による削除＋追加欄。担当者はボード内で既に使われている名前を、タグは Vault 内の既存タグを候補に出し、担当者は `[[` でノートへのリンクにもできます）が開きます。Enter またはフォーカスを外すと保存、Esc で取消します。
-5. 表のタスクをクリック、または**バーをダブルクリック**すると、右から**詳細パネル**（日付・ステータス・担当者・進捗・本文）がスライドインします。
+4. バーを**ドラッグ／端をリサイズ**すると、そのファイルの `start`/`end` に書き戻します。**テーブルに表示できる列はすべて、セルをダブルクリックすればその場で編集できます**（シングルクリックは行の選択。編集できるセルにはホバーで鉛筆が出ます）。 開始・期限はカレンダー、期間は稼働日数の入力、進捗は % の直接入力（0–100。空欄または 0 で未設定）、ステータスはドロップダウン、担当者とタグは詳細パネルと同じエディタ（値ごとのチップと × による削除＋追加欄。担当者はボード内で既に使われている名前を、タグは Vault 内の既存タグを候補に出し、担当者は `[[` でノートへのリンクにもできます）が開きます。Enter またはフォーカスを外すと保存、Esc で取消します。
+5. 表のタスクかバーをクリックすると**詳細パネル**（日付・ステータス・担当者・依存・進捗・本文）が開きます。パネルはボードを覆わず横に並び、他の場所での変更にも追従し、× か **Esc** で閉じます。バーにマウスを載せると概要カード（日付・期間・ステータス・進捗・担当者）が出ます。
 6. **＋ 新規タスク**ボタンで現在のフォルダに1日タスクを作ってその場で命名（横の **▾** から[カンバン・キャンバス](#タスクの種類ノートカンバンキャンバス)のタスクも作れます）、**今日**ボタンでタイムラインを今日へスクロールできます。
-7. **Day / Week / Month / Fit** ボタンで時間軸の拡大率を変更。**Fit** はペイン幅に自動で収め、リサイズにも追従します。
+7. **Day / Week / Month / Fit** ボタンで時間軸の拡大率を変更（画面中央の日付はそのまま）。**Fit** はペイン幅に自動で収め、リサイズにも追従します。軸の日付は Obsidian の表示言語に従い、その上に月（Month では年）の帯が付き、休日は網掛けされます。左上のフォルダ名から別のフォルダのボードへ切り替えられます。
+8. **キーボード**：表では ↑/↓（と Home/End・Page Up/Down）で行を移動、→/← で開閉、**Enter** で詳細パネル（グループは開閉）、**F2** で名前の変更、**Shift+F10** かメニューキーで行のメニュー。**Esc** でパネルを閉じて元の行に戻ります。
 
 UI 表示は Obsidian の表示言語に追従します。対応言語：英語・日本語・韓国語・中国語（簡体／繁体）・フランス語・スペイン語・ロシア語（その他は英語にフォールバック）。
 
@@ -324,7 +326,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 表の上のオプション行で、ボードの見せ方を調整できます。
 
-**グループ化**（フォルダ／ステータス／担当者）と**色分け**（ステータス／担当者・凡例付き）：
+**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者・凡例付き）。これらと下の表示切替、折りたたんだグループはボードごとに記憶されます。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
 
 ![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.webp)
 
@@ -334,7 +336,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ![列ヘッダのクリックでソート（↑/↓ 表示）](docs/images/sort-ja.webp)
 
-**列の表示**は歯車ボタンから、開始・期限・期間・進捗・担当者・ステータス・タグを出し分け。ここに出せる列はすべてセルのダブルクリックで編集できます。列レイアウトとソートはセッションをまたいで保存されます：
+**列の表示**は **列の表示** ボタンから、開始・期限・期間・進捗・担当者・ステータス・タグを出し分け。ここに出せる列はすべてセルのダブルクリックで編集できます。列レイアウトとソートはセッションをまたいで保存されます：
 
 ![歯車メニューから列を表示／非表示](docs/images/column_ja.webp)
 
@@ -380,7 +382,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ## フォルダ間のタスク移動
 
-フォルダでグループ化しているとき、**タスク行をドラッグ**してフォルダにドロップするとそのフォルダへ移動できます（別タスクへドロップすると、そのタスクと同じフォルダへ）。リンクは自動更新され、移動は **Ctrl/Cmd+Z** または取り消しボタンで**元に戻せます**。空のフォルダも行として表示されるので常にドロップ先になります（**空フォルダを表示**トグル＝既定ON で切替）。
+フォルダでグループ化しているとき、**タスク行をドラッグ**してフォルダにドロップするとそのフォルダへ移動できます（別タスクへドロップすると、そのタスクと同じフォルダへ）。ドラッグ中は、ポインタの下の行にドロップの結果（*「Marketing」へ移動*、*「API」のサブタスクにする* など）が表示されます。ドラッグしなくても、**タスク名を右クリック**（タッチは長押し、キーボードは Shift+F10）で **サブタスクにする…**・**親タスクから外す**・**フォルダへ移動…**・**削除** を選べます。リンクは自動更新され、移動は **Ctrl/Cmd+Z** または取り消しボタンで**元に戻せます**。空のフォルダも行として表示されるので常にドロップ先になります（**空フォルダを表示**トグル＝既定ON で切替）。
 
 ## サブタスク
 
@@ -459,7 +461,7 @@ after:
 
 ## 依存関係
 
-バーの丸ハンドルから別のバーへドラッグすると依存を作成します。つないだ端で種類が決まります：**FS**（終了→開始）・**SS**（開始→開始）・**FF**（終了→終了）。SS/FF の後続は、先行の日程変更に追従します。FS の後続は、**先行が遅れて重なったときに後ろへ押し出されます**。先行の期限日の次の稼働日へ移り、期間はそのまま保たれます。押し出しはその先の後続へも連鎖します。先行を前倒ししても後続は引き戻されないので、わざと空けた間隔は残ります。この動作は設定の **FS の後続を自動で押し出す** でオフにできます。マイルストーンは依存では動きません。依存線をクリックで切断（**Ctrl/Cmd+Z** または取り消しボタンで戻せます）。
+バーの丸ハンドルから別のバーへドラッグするか、詳細パネルの **先行タスクを追加…** で種類を選んでから先行タスクを選ぶと依存を作成します。つないだ端で種類が決まります：**FS**（終了→開始）・**SS**（開始→開始）・**FF**（終了→終了）。SS/FF の後続は、先行の日程変更に追従します。FS の後続は、**先行が遅れて重なったときに後ろへ押し出されます**。先行の期限日の次の稼働日へ移り、期間はそのまま保たれます。押し出しはその先の後続へも連鎖します。先行を前倒ししても後続は引き戻されないので、わざと空けた間隔は残ります。この動作は設定の **FS の後続を自動で押し出す** でオフにできます。マイルストーンは依存では動きません。依存を外すには、線にマウスを載せて出る **×** をクリックするか、詳細パネルの依存の × を押します。通知の **取り消し**（または **Ctrl/Cmd+Z**・取り消しボタン）で戻せます。線そのもののクリックでは外れないので、誤クリックで依存が消えることはありません。
 
 ## 期間（Duration）
 

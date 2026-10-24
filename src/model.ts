@@ -604,7 +604,8 @@ export function parseKanban(body: string): KanbanLane[] {
 }
 
 // タスク（ファイル）をリネーム。リンクも更新される / rename the task file (updates links)
-export async function renameTask(app: App, path: string, newName: string): Promise<string | null> {
+// 同じフォルダに同名のノートがあれば "taken"（上書きも例外も起こさない）/ "taken" when a note of that name already sits in the folder (no overwrite, no exception)
+export async function renameTask(app: App, path: string, newName: string): Promise<string | null | "taken"> {
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) return null;
   const safe = newName.replace(/[\\/:*?"<>|]/g, "").trim();
@@ -612,6 +613,7 @@ export async function renameTask(app: App, path: string, newName: string): Promi
   const dir = file.parent && file.parent.path !== "/" ? file.parent.path + "/" : "";
   const newPath = `${dir}${safe}.md`;
   if (newPath === path) return path;
+  if (app.vault.getAbstractFileByPath(newPath)) return "taken";
   await app.fileManager.renameFile(file, newPath);
   return newPath;
 }

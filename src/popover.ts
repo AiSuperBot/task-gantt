@@ -20,17 +20,29 @@ export function openPopover(anchor: HTMLElement, cls: string, build: (menu: HTML
   const win = doc.defaultView ?? window;
   doc.querySelectorAll(`.${cls}`).forEach((e) => e.remove());
   const menu = doc.body.createDiv({ cls: `ogantt-popover ${cls}` });
+  const before = doc.activeElement as HTMLElement | null; // 閉じたらここへフォーカスを返す / focus returns here on close
   const close = () => {
+    const inside = menu.contains(doc.activeElement);
     menu.remove();
     doc.removeEventListener("pointerdown", onOutside, true);
     doc.removeEventListener("keydown", onKey, true);
+    if (inside && before?.isConnected) before.focus();
   };
   const onOutside = (e: PointerEvent) => {
     const tg = e.target as Node;
     if (!menu.contains(tg) && !anchor.contains(tg)) close();
   };
+  // Esc で閉じ、Tab はポップオーバーの中を巡回させる（キーボードで外へ迷い出ない）
+  // Esc closes; Tab cycles inside the popover so keyboard focus can't wander off behind it
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape") { e.preventDefault(); close(); }
+    if (e.key === "Escape") { e.preventDefault(); close(); return; }
+    if (e.key !== "Tab" || !menu.contains(doc.activeElement)) return;
+    const items = Array.from(menu.querySelectorAll<HTMLElement>("input, select, textarea, button, [tabindex='0']")).filter((el) => !el.matches(":disabled"));
+    const edge = e.shiftKey ? items[0] : items[items.length - 1];
+    if (doc.activeElement === edge) {
+      e.preventDefault();
+      (e.shiftKey ? items[items.length - 1] : items[0])?.focus();
+    }
   };
   build(menu, close);
   // 中身を作ってから寸法を測って位置決め。anchor の下に置き、画面外に出るなら上へ反転する
@@ -42,6 +54,8 @@ export function openPopover(anchor: HTMLElement, cls: string, build: (menu: HTML
   menu.style.left = `${Math.max(8, Math.min(r.left, win.innerWidth - menu.offsetWidth - 8))}px`;
   doc.addEventListener("pointerdown", onOutside, true);
   doc.addEventListener("keydown", onKey, true);
+  // 中身がまだフォーカスを取っていなければ最初の操作できる要素へ / move focus to the first control unless the content already took it
+  if (!menu.contains(doc.activeElement)) menu.querySelector<HTMLElement>("input, select, textarea, button, [tabindex='0']")?.focus();
 }
 
 // パレットの色見本＋カスタム（ネイティブの色選択＝色相から自由に選べる）を host に並べる
@@ -68,7 +82,7 @@ export function pickColor(anchor: HTMLElement, current: string, onPick: (color: 
 // アイコンのピッカー：候補の一覧と、Obsidian の全アイコンからの検索 / icon picker: suggestions, plus a search over all of Obsidian's icons
 export function pickIcon(anchor: HTMLElement, onPick: (icon: string) => void): void {
   openPopover(anchor, "ogantt-iconpick", (menu, close) => {
-    const search = menu.createEl("input", { type: "search", attr: { placeholder: tr().searchIcons } });
+    const search = menu.createEl("input", { type: "search", attr: { placeholder: tr().searchIcons, "aria-label": tr().searchIcons } });
     const grid = menu.createDiv({ cls: "ogantt-iconpick-grid" });
     const all = getIconIds().map((id) => id.replace(/^lucide-/, ""));
     const paint = () => {
@@ -82,6 +96,5 @@ export function pickIcon(anchor: HTMLElement, onPick: (icon: string) => void): v
     };
     search.oninput = paint;
     paint();
-    window.setTimeout(() => search.focus(), 0);
   });
 }

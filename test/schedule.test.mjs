@@ -12,6 +12,7 @@ import {
   keepDurationOnStartChange,
   successorClosure,
   cascadeDates,
+  offDayGradient,
 } from "./schedule.mjs";
 import { dayIndex, dayToStr } from "./timeline.mjs";
 
@@ -146,6 +147,11 @@ const OPTS = { cal: CAL, fs: true };
   const ch = cascadeDates([a, b], ["A"], OPTS);
   check("循環でも終了する", ch.size <= 2);
 }
+
+// 休日の帯：左端が水曜（2026-10-21）なら土日は 4・5 日目 / non-working days: from a Wednesday, Sat and Sun are the 4th and 5th days
+const g = offDayGradient(dayIndex("2026-10-21"), { off: [0, 6] }, 10, "red");
+check("休日の帯: 土(30-40px)と日(40-50px)が 70px 周期（0px 始まり）", g === "repeating-linear-gradient(to right, transparent 0px, transparent 30px, red 30px, red 40px, transparent 40px, transparent 40px, red 40px, red 50px, transparent 50px, transparent 70px)");
+check("休日の帯: 休日なしは none", offDayGradient(0, { off: [] }, 10, "red") === "none");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

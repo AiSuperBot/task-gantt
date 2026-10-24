@@ -145,6 +145,7 @@ src/view/
 - フィルタ（`settings.filters`）は全ボードで共有される 1 組だけ。
 - `settings.boards[key]` へ保存する（`getState` / `setState` も併用）。キーは `folder:<path>` 形式にし、将来の Bases 用に `base:<id>` を入れられるようにする。
 - `vault.on("rename")` でフォルダのリネームに追従する。既存のグローバル値は初期値として移行する。
+- **完了**（フィルタを除く）：`settings.boards["folder:<path>"]` に保存し、フォルダのリネーム・移動では `main.ts` がキーを付け替え、開いているビューも新しいフォルダを追う。表示オプションはこれまで保存していなかったので、移行する値は無い。フィルタは引き続き全ボード共通。
 
 ### 3-3. i18n の言語別ファイル化（低優先・省略可）
 
@@ -162,9 +163,9 @@ src/view/
 | B | ベースライン | 計画時点の日付をフロントマターに保存し、現在のバーの下に薄く重ねる。進捗線と組み合わせて遅れを可視化 |
 | B | Obsidian Bases ビュー対応 | Bases のカスタムビュー API で「Base → ガント表示」。フォルダ横断の集計（README の既知の制限）を解消する。`minAppVersion` を 1.10 以上へ引き上げる必要あり |
 | C | テンプレートからの新規作成 | フォルダごとに雛形ノートを指定。Templater とも連携しやすい |
-| C | 休日・非稼働日 | タイムラインでの網掛けと、期間計算からの除外オプション |
+| C | 休日・非稼働日 | タイムラインでの網掛けと、期間計算からの除外オプション（**完了**：期間計算からの除外は設定の非稼働日、網掛けは Day / Week 表示）|
 | C | エクスポート | PNG / SVG（タイムライン）、CSV（テーブル） |
-| C | 仮想スクロール | 大規模ボードで `rerender` の全 DOM 再構築コストを削減する。性能の報告が来てから |
+| C | 仮想スクロール | 大規模ボードで `rerender` の全 DOM 再構築コストを削減する。性能の報告が来てから（**完了**：見えている行の前後だけを描く。1,000 タスクで DOM 33,363 → 1,415、ボードを開く時間 0.7–0.9 秒 → 約 50 ms）|
 
 ---
 ---
@@ -228,6 +229,7 @@ Phase 1 → Redo (1-5) → Phase 2 (column registry → custom fields) → multi
 
 1. **Split `src/view.ts`** into `src/view/{GanttView,filterBar,detailPanel,cells,timelineSvg,dnd,popover}.ts`, sharing state through the `BoardContext` from Phase 2-1. Line numbers are approximate as of 2.9.1.
 2. **Per-board view state**: `groupBy` / `colorBy` / `flat` / `rollup` / `progressLine` / `showEmptyFolders` / `collapsed` currently last only while the view is open, and filters are one global set. Persist them under `settings.boards[key]` (plus `getState` / `setState`) with keys like `folder:<path>` (leaving room for `base:<id>`), follow folder renames via `vault.on("rename")`, and migrate the current globals as defaults.
+   - **Done** (filters excepted): stored under `settings.boards["folder:<path>"]`; a folder rename or move re-keys it in `main.ts`, and an open view follows the folder. The view options were never saved before, so there was nothing to migrate. Filters are still one set shared by every board.
 3. **Split i18n** (low priority, optional) into `src/i18n/<lang>.ts`. Missing keys are already type errors, so this is only for readability.
 
 ## Phase 4 (v3.0): Larger features
@@ -240,6 +242,6 @@ Phase 1 → Redo (1-5) → Phase 2 (column registry → custom fields) → multi
 | B | Baseline | Save the planned dates in frontmatter and draw them as a faint bar under the current one; pairs with the progress line |
 | B | Obsidian Bases view | Offer the Gantt as a Bases custom view, removing the cross-folder limitation in the README. Requires raising `minAppVersion` to 1.10+ |
 | C | New task from a template | Per-folder template note; plays well with Templater |
-| C | Non-working days | Shade on the timeline; optionally exclude from duration math |
+| C | Non-working days | Shade on the timeline; optionally exclude from duration math (**done**: duration math skips the non-working days from settings; Day and Week views shade them) |
 | C | Export | PNG / SVG (timeline), CSV (table) |
-| C | Virtual scrolling | Cut the full-DOM rebuild cost of `rerender` on large boards, once performance reports come in |
+| C | Virtual scrolling | Cut the full-DOM rebuild cost of `rerender` on large boards, once performance reports come in (**done**: only the rows around the viewport are drawn; at 1,000 tasks the DOM drops from 33,363 to 1,415 nodes and opening the board from 0.7–0.9 s to about 50 ms) |

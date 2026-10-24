@@ -1,7 +1,10 @@
 import { ZoomMode, Task, DateFormat, DateValue, DateOp } from "./types";
 
 const MS_PER_DAY = 86400000;
-const MIN_TICK_GAP = 36; // 日付軸のラベル同士の最小間隔(px) / the narrowest gap between two axis labels (px)
+// 日付軸のラベル同士の最小間隔(px)。週・月の目盛りは言語によって長い（"9 нояб." など）ので広めに
+// the narrowest gap between two axis labels (px); week and month labels run long in some languages ("9 нояб.")
+const MIN_TICK_GAP = 36;
+const MIN_TICK_GAP_WIDE = 56;
 
 // 'YYYY-MM-DD' を UTC の通日番号へ / parse to a UTC day index
 export function dayIndex(dateStr: string): number {
@@ -168,27 +171,40 @@ export interface Tick {
   major: boolean; // 月境界など / month boundary
 }
 
-// 上部の日付軸の目盛りを生成。weekdays は日曜始まりの曜日ラベル。ラベル同士が詰まりすぎる目盛りは間引き、
-// 月初（major）と重なる通常の目盛りは月初を残す
-// generate header ticks; weekdays = labels, Sunday first. A tick too close to the previous one is dropped,
-// except that a month start (major) replaces the regular tick it would collide with
-export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, weekdays: string[]): Tick[] {
+// 上部の日付軸の目盛りを生成（Day＝毎日、Week＝月曜と月初、Month＝月初）。文字列は label が作る（言語ごとの書式は呼び出し側）。
+// ラベル同士が詰まりすぎる目盛りは間引き、月初（major）と重なる通常の目盛りは月初を残す
+// generate header ticks (Day: every day, Week: Mondays and month starts, Month: month starts); `label` writes the text,
+// so the caller owns the locale. A tick too close to the previous one is dropped, except that a month start (major)
+// replaces the regular tick it would collide with
+export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, label: (d: Date, zoom: ZoomMode) => string): Tick[] {
   const ticks: Tick[] = [];
+  const gap = zoom === "Day" ? MIN_TICK_GAP : MIN_TICK_GAP_WIDE;
   for (let day = range.min; day <= range.max; day++) {
     const d = new Date(day * MS_PER_DAY);
     const x = (day - range.min) * ppd;
     const major = d.getUTCDate() === 1;
-    let label = "";
-    if (zoom === "Day") label = `${d.getUTCDate()} ${weekdays[d.getUTCDay()]}`;
-    else if (zoom === "Week" && (d.getUTCDay() === 1 || major)) label = `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-    else if (zoom === "Month" && major) label = `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}`;
-    if (!label) continue;
+    if (!(zoom === "Day" || (zoom === "Week" && (d.getUTCDay() === 1 || major)) || (zoom === "Month" && major))) continue;
+    const text = label(d, zoom);
     const prev = ticks[ticks.length - 1];
-    if (prev && x - prev.x < MIN_TICK_GAP) {
-      if (major && !prev.major) ticks[ticks.length - 1] = { x, label, major };
+    if (prev && x - prev.x < gap) {
+      if (major && !prev.major) ticks[ticks.length - 1] = { x, label: text, major };
       continue;
     }
-    ticks.push({ x, label, major });
+    ticks.push({ x, label: text, major });
   }
   return ticks;
+}
+
+// 目盛りの上の帯：Day/Week は月、Month は年の区切りに見出し（左端にも今の月・年を出す）
+// the band above the ticks: a heading at each month (Day/Week) or year (Month), plus one at the left edge for the current one
+export function buildBands(range: DateRange, zoom: ZoomMode, ppd: number, label: (d: Date) => string): Tick[] {
+  const out: Tick[] = [];
+  for (let day = range.min; day <= range.max; day++) {
+    const d = new Date(day * MS_PER_DAY);
+    const start = d.getUTCDate() === 1 && (zoom !== "Month" || d.getUTCMonth() === 0);
+    if (day === range.min || start) out.push({ x: (day - range.min) * ppd, label: label(d), major: start });
+  }
+  // 左端の見出しのすぐ後に区切りが来るなら左端の分は出さない（重なるため）/ drop the left-edge heading when a boundary follows right after it
+  if (out.length > 1 && out[1].x - out[0].x < MIN_TICK_GAP_WIDE * 2) out.shift();
+  return out;
 }

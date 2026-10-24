@@ -7,7 +7,7 @@ import type { SettingDefinitionItem, SettingDefinitionList, SettingGroupItem } f
 import type GanttPlugin from "./main";
 import { StatusDef, StatusGroup, STATUS_GROUPS, ZoomMode, DateFormat, Filter, FilterMatch, FilterPreset, CustomField, CustomFieldType } from "./types";
 import { collectAllTags, customFieldIssues, filesWithFrontmatterKey, renameFrontmatterKey } from "./model";
-import { ChoiceModal, ConfirmModal, TagSuggestModal } from "./modals";
+import { ChoiceModal, ConfirmModal, PickModal } from "./modals";
 import { obsidianTagColor, toHex } from "./colors";
 import { pickColor } from "./popover";
 import { t as tr, statusGroupLabel } from "./i18n";
@@ -95,6 +95,9 @@ export interface GanttSettings {
   assigneeColors: { name: string; color: string }[]; // 担当者の表示名ごとの色 / colours keyed by an assignee's display name
   // グループ見出しのアイコン（キーは "<グループ化の軸>:<見出し名>"）/ group heading icons, keyed "<group-by axis>:<heading>"
   icons: Record<string, string>;
+  // ボードごとの表示。キーは "folder:<パス>"（"folder:" は Vault ルート。将来の Bases 用に "base:<id>" を空けておく）
+  // each board's view setup, keyed "folder:<path>" ("folder:" = vault root; "base:<id>" is left free for Bases boards)
+  boards: Record<string, BoardState>;
   // 通知（Discord / Slack の Incoming Webhook）/ notifications via incoming webhooks
   notify: {
     discordWebhook: string; // 空欄で無効 / empty disables
@@ -140,6 +143,17 @@ export interface GanttSettings {
   };
 }
 
+// ボードの表示の組み立て（開き直しても保つ）/ a board's view setup, kept across reopening
+export interface BoardState {
+  groupBy: "folder" | "status" | "assignee" | "tag";
+  colorBy: "status" | "assignee";
+  flat: boolean;
+  rollup: boolean;
+  progressLine: boolean;
+  showEmptyFolders: boolean;
+  collapsed: string[];
+}
+
 // タスク1件分の同期スナップショット（ループ防止と差分検出に使う）
 // per-task sync snapshot (drives loop prevention and change detection)
 export interface GcalSyncState {
@@ -180,6 +194,7 @@ export const DEFAULT_SETTINGS: GanttSettings = {
   folderColors: [],
   assigneeColors: [],
   icons: {},
+  boards: {},
   notify: {
     discordWebhook: "",
     slackWebhook: "",
@@ -287,7 +302,7 @@ export class GanttSettingTab extends PluginSettingTab {
   private ctlZoom(setting: Setting): void {
     const s = this.plugin.settings;
     setting.addDropdown((d) =>
-      d.addOptions({ Day: "Day", Week: "Week", Month: "Month", Fit: "Fit" }).setValue(s.defaultZoom).onChange((v) => {
+      d.addOptions({ Day: tr().zoomDay, Week: tr().zoomWeek, Month: tr().zoomMonth, Fit: tr().zoomFit }).setValue(s.defaultZoom).onChange((v) => {
         s.defaultZoom = v as ZoomMode;
         this.save();
       })
@@ -606,7 +621,7 @@ export class GanttSettingTab extends PluginSettingTab {
       new Notice(tr().setNoTagsToColor);
       return;
     }
-    new TagSuggestModal(this.plugin.app, choices, tr().setPickTagPlaceholder, (tag) => {
+    new PickModal(this.plugin.app, choices, (tag) => tag, tr().setPickTagPlaceholder, (tag) => {
       // 既定色を初期値にして、そこから変えてもらう / seed with the default so the user edits from there
       s.tagColors.push({ name: tag, color: toHex(s.defaultTagColor || obsidianTagColor()) });
       this.save();

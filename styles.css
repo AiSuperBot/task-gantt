@@ -1,12 +1,52 @@
 /* ===== Gantt board (表＋タイムライン レイアウト / table + timeline layout) ===== */
 .ogantt-board {
   display: flex;
-  flex-direction: column;
   height: 100%;
   padding: 0;
   position: relative;
   overflow: hidden;
+  /* 休日の網掛けの色 / the shading of non-working days */
+  --ogantt-offday: var(--background-modifier-hover);
 }
+/* ツールバーからボード本体までの列。詳細パネルはこの右に並び、ボードを覆わない
+   the column from the toolbar down to the board; the detail panel docks to its right instead of covering it */
+.ogantt-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* ---- 見た目を消したボタン（文字・チップ・区切りとして見せる）。Obsidian の button:not(.clickable-icon) と同じ強さで後に読むので勝つ。個々の見た目はこの後のルールで上書きする
+   buttons stripped of chrome (they read as text, chips or segments); same specificity as Obsidian's button:not(.clickable-icon), loaded later, so they win; each button's own look comes from the rules after this ---- */
+button.ogantt-title,
+button.ogantt-opt-gear,
+.ogantt-seg button,
+button.ogantt-filter-chip-main,
+button.ogantt-filter-chip-x,
+button.ogantt-preset-item,
+button.ogantt-preset-apply,
+button.ogantt-preset-del,
+button.ogantt-date-val,
+button.ogantt-legend-chip,
+button.ogantt-dep-add,
+button.ogantt-task-chevron {
+  height: auto;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font: inherit;
+  color: inherit;
+}
+button.ogantt-preset-item:hover,
+button.ogantt-preset-apply:hover {
+  background: var(--background-modifier-hover);
+}
+button.ogantt-legend-chip:hover,
+button.ogantt-dep-add:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
 
 .ogantt-toolbar {
   display: flex;
@@ -15,31 +55,57 @@
   padding: 6px 10px;
   border-bottom: 1px solid var(--background-modifier-border);
 }
-.ogantt-title {
+/* フォルダ名＝ボードの切り替え / the folder name doubles as the board switcher */
+button.ogantt-title {
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: var(--font-ui-medium);
   font-weight: 600;
+}
+button.ogantt-title:hover {
+  background: var(--background-modifier-hover);
+}
+.ogantt-title-caret {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+.ogantt-title-caret svg {
+  width: 14px;
+  height: 14px;
 }
 /* ツールバーの伸縮スペーサー（右寄せ用）/ flexible spacer to push controls right */
 .ogantt-spacer {
   flex: 1;
 }
-.ogantt-toolbar button.is-active {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-}
-/* 新規タスク追加ボタン（アイコン＋ラベル）/ add-task button (icon + label) */
-.ogantt-add {
+/* 縮尺の切り替え：1 つにつながったボタン群（押されている 1 つが浮き上がる）/ the zoom segmented control (the pressed segment is raised) */
+.ogantt-seg {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--button-radius, 6px);
+  background: var(--background-modifier-hover);
+}
+.ogantt-seg button {
+  padding: 2px 10px;
+  color: var(--text-muted);
+}
+.ogantt-seg button:hover {
+  color: var(--text-normal);
+}
+.ogantt-seg button.is-active {
+  background: var(--background-primary);
+  color: var(--text-normal);
+  box-shadow: var(--shadow-s);
+}
+/* 新規タスク追加ボタン（アイコン＋ラベル）。種類を選ぶ ▾ と 1 つのボタンに見せる
+   add-task button (icon + label), reading as one split button with the kind caret */
+.ogantt-add {
   gap: 4px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .ogantt-add-label {
   font-size: 0.9em;
-}
-/* 種類を選ぶ ▾ は「＋」と 1 つのボタンに見せる / the kind caret reads as one split button with "+" */
-.ogantt-add {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
 }
 .ogantt-add-kind {
   margin-left: -6px; /* ツールバーの gap を打ち消す / cancel the toolbar gap */
@@ -48,9 +114,35 @@
   border-bottom-left-radius: 0;
   border-left: 1px solid var(--background-modifier-border);
 }
+/* 空の状態：理由と次の一手のボタン / the empty state: the reason, plus a button for the next step */
 .ogantt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
   padding: 24px;
   color: var(--text-muted);
+}
+/* 最初の描画までの仮の行 / placeholder rows until the first render */
+.ogantt-skeleton {
+  flex: 1;
+  padding: 52px 12px 0;
+}
+.ogantt-skeleton-row {
+  width: 55%;
+  height: 12px;
+  margin-bottom: 18px;
+  border-radius: 4px;
+  background: var(--background-modifier-hover);
+  animation: ogantt-pulse 1.2s ease-in-out infinite alternate;
+}
+.ogantt-skeleton-row:nth-child(even) {
+  width: 35%;
+}
+@keyframes ogantt-pulse {
+  from {
+    opacity: 0.45;
+  }
 }
 
 /* 表示オプション行（グループ/色分け/フィルタ＋凡例）/ view options row + legend */
@@ -77,16 +169,20 @@
   margin: 0;
   cursor: pointer;
 }
-/* 列の出し分け（歯車ボタン）/ column visibility gear button */
-.ogantt-opt-gear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
+/* 使えない切り替え（フォルダでグループ化していないとき）は薄く残す / an unavailable toggle (not grouped by folder) stays, dimmed */
+.ogantt-opt-check:has(input:disabled) {
+  opacity: 0.5;
+  cursor: default;
 }
-.ogantt-opt-gear svg {
-  width: 16px;
-  height: 16px;
+/* 列の出し分け（アイコン＋「列」）/ column visibility (icon + "Columns") */
+button.ogantt-opt-gear {
+  gap: 4px;
+  padding: 2px 6px;
+  color: var(--text-muted);
+}
+button.ogantt-opt-gear:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
 }
 /* 列メニュー（ポップオーバー）/ column-visibility popover */
 /* ポップオーバー共通の外枠（列・フィルタ・タグ・カレンダー・時刻・色・アイコン・ステータス）
@@ -208,14 +304,16 @@
 .ogantt-filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
   border-radius: 12px;
   font-size: 0.9em;
   background: var(--background-modifier-hover);
   color: var(--text-normal);
-  cursor: pointer;
   white-space: nowrap;
+}
+button.ogantt-filter-chip-main {
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 12px;
 }
 .ogantt-filter-chip-ico {
   display: inline-flex;
@@ -226,11 +324,10 @@
   width: 13px;
   height: 13px;
 }
-.ogantt-filter-chip-x {
-  display: inline-flex;
-  align-items: center;
+button.ogantt-filter-chip-x {
+  padding: 2px 8px 2px 2px;
+  border-radius: 12px;
   color: var(--text-muted);
-  cursor: pointer;
 }
 .ogantt-filter-chip-x:hover {
   color: var(--text-normal);
@@ -349,20 +446,28 @@
   font-size: 0.8em;
   color: var(--text-muted);
 }
+button.ogantt-preset-item,
 .ogantt-preset-item {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
+  width: 100%;
   padding: 4px 8px;
   border-radius: 4px;
-  cursor: pointer;
   white-space: nowrap;
 }
 .ogantt-preset-item:hover {
   background: var(--background-modifier-hover);
 }
-.ogantt-preset-item span:first-child {
+/* マイプリセット：適用ボタン＋削除ボタン / a user preset: an apply button plus a delete button */
+.ogantt-preset-item.ogantt-preset-user {
+  padding: 0;
+}
+button.ogantt-preset-apply {
   flex: 1;
+  justify-content: flex-start;
+  padding: 4px 8px;
 }
 .ogantt-preset-item-ico {
   display: inline-flex;
@@ -374,14 +479,13 @@
   height: 14px;
 }
 /* マイプリセットの削除アイコン（ホバーで出す）/ user-preset delete icon (reveal on hover) */
-.ogantt-preset-del {
-  display: inline-flex;
-  align-items: center;
+button.ogantt-preset-del {
+  padding: 4px 8px;
   color: var(--text-muted);
   opacity: 0;
-  cursor: pointer;
 }
-.ogantt-preset-item:hover .ogantt-preset-del {
+.ogantt-preset-item:hover .ogantt-preset-del,
+.ogantt-preset-del:focus-visible {
   opacity: 1;
 }
 .ogantt-preset-del:hover {
@@ -451,12 +555,14 @@
 .ogantt-opt select {
   font-size: 0.95em;
 }
+/* 凡例はオプション行の下に 1 行で（ステータスが増えても上の操作がずれない）
+   the legend sits on its own line under the options (more statuses never shift the controls above) */
 .ogantt-legend {
-  display: inline-flex;
+  display: flex;
+  flex-basis: 100%;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 10px;
-  margin-left: auto;
   color: var(--text-muted);
 }
 .ogantt-legend-chip {
@@ -471,16 +577,9 @@
   flex: none;
 }
 /* ステータスの凡例はクリックで編集 / a status legend chip opens its editor on click */
-.ogantt-legend-chip.is-clickable {
-  cursor: pointer;
-  height: auto;
+button.ogantt-legend-chip {
   padding: 1px 4px;
-  border: none;
   border-radius: 4px;
-  background: none;
-  box-shadow: none;
-  color: inherit;
-  font: inherit;
 }
 .ogantt-legend-chip.is-clickable:hover {
   background: var(--background-modifier-hover);
@@ -525,6 +624,7 @@
   color: var(--text-muted);
 }
 .ogantt-th {
+  position: relative; /* 右端の幅グリップの基準 / anchors the width grip on the right edge */
   width: 84px;
   padding: 0 8px;
   flex: none;
@@ -559,7 +659,11 @@
   background: var(--background-primary);
   border-right: 1px solid var(--background-modifier-border);
 }
+/* 行は見えている範囲だけ作るので、行番号から絶対位置に置く / only rows in view exist, so each is placed absolutely from its index */
 .ogantt-tr {
+  position: absolute;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--background-modifier-border-hover);
@@ -590,6 +694,19 @@
 .ogantt-tr.is-drop-target {
   background: var(--background-modifier-active-hover, var(--background-modifier-hover));
   box-shadow: inset 2px 0 0 var(--interactive-accent);
+}
+/* 落とすと何が起きるか（「〜のサブタスクにする」など）/ what a drop will do ("Make subtask of …" and so on) */
+.ogantt-tr.is-drop-target::after {
+  content: attr(data-drop-label);
+  position: absolute;
+  right: 6px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 0.9em;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .ogantt-td {
   width: 84px;
@@ -673,6 +790,7 @@ input.ogantt-cell-input[type="number"] {
   height: 14px;
 }
 .ogantt-task-chevron.is-clickable {
+  padding: 0;
   cursor: pointer;
 }
 .ogantt-task-chevron.is-clickable:hover {
@@ -723,6 +841,7 @@ input.ogantt-cell-input[type="number"] {
    the row centers its cells, so an empty cell would collapse to zero height and become unclickable;
    stretch + flex keeps the full-row-height hit area even with no value. */
 .ogantt-td-editable {
+  position: relative;
   cursor: pointer;
   border-radius: 4px;
   align-self: stretch;
@@ -732,6 +851,19 @@ input.ogantt-cell-input[type="number"] {
 .ogantt-td-editable:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
+}
+/* ホバーで鉛筆＝編集できる合図（ダブルクリックで編集）/ a pencil on hover says the cell is editable (double-click edits) */
+.ogantt-td-editable:hover::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  width: 11px;
+  height: 11px;
+  margin-top: -5.5px;
+  background: var(--text-faint);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21.17 6.81a1 1 0 0 0-3.98-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.63l4.35-1.32a2 2 0 0 0 .83-.5z'/%3E%3Cpath d='m15 5 4 4'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
 }
 /* flex 化したセル内で省略記号を維持する（テキストは直下に置かず span で包む）
    keep ellipsis inside the flexed cell (text is wrapped in a span, not a bare text node) */
@@ -827,16 +959,35 @@ input.ogantt-cell-input[type="number"] {
   grid-column: 2;
   grid-row: 2;
 }
+/* 目盛りは下半分、月・年の帯は上半分 / ticks fill the lower half, the month/year band the upper */
 .ogantt-tick {
   position: absolute;
-  top: 0;
-  height: 100%;
+  top: 50%;
+  height: 50%;
   display: flex;
   align-items: center;
   padding-left: 3px;
   font-size: 0.72em;
   color: var(--text-muted);
+  white-space: nowrap;
   border-left: 1px solid var(--background-modifier-border-hover);
+}
+.ogantt-band {
+  position: absolute;
+  top: 0;
+  height: 50%;
+  display: flex;
+  align-items: center;
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: nowrap;
+  border-left: 1px solid var(--background-modifier-border);
+}
+/* 名前は箱の中で左端に貼り付く（left は表の幅を JS で）/ the name sticks to the left edge within its box (left = the table width, from JS) */
+.ogantt-band span {
+  position: sticky;
+  padding: 0 4px;
 }
 .ogantt-tick.is-major {
   color: var(--text-normal);
@@ -846,10 +997,6 @@ input.ogantt-cell-input[type="number"] {
 
 .ogantt-svg {
   display: block;
-}
-.ogantt-grid-row {
-  stroke: var(--background-modifier-border-hover);
-  stroke-width: 1;
 }
 .ogantt-grid-group {
   fill: var(--background-secondary);
@@ -872,6 +1019,26 @@ input.ogantt-cell-input[type="number"] {
 .ogantt-bar {
   cursor: grab;
 }
+/* タッチでもバー・ハンドルをドラッグできるように（スクロールに取られない）/ let touch drag bars and handles instead of scrolling */
+.ogantt-bar,
+.ogantt-milestone,
+.ogantt-handle {
+  touch-action: none;
+}
+/* 延期は斜線、キャンセルは薄く＋取り消し線（完了はラベルの ✓）。色だけに頼らずステータスが分かる
+   deferred is hatched, cancelled is faded and struck through (completed gets a ✓ on its label), so status reads without colour */
+.ogantt-bar-hatch {
+  pointer-events: none;
+}
+.ogantt-hatch-line {
+  fill: rgba(255, 255, 255, 0.45);
+}
+.ogantt-bar-g.is-cancelled {
+  opacity: 0.55;
+}
+.ogantt-bar-g.is-cancelled .ogantt-bar-label {
+  text-decoration: line-through;
+}
 .ogantt-bar:active {
   cursor: grabbing;
 }
@@ -887,7 +1054,7 @@ input.ogantt-cell-input[type="number"] {
 .ogantt-milestone:active {
   cursor: grabbing;
 }
-/* フォルダのまとめバー / group (folder) summary bar */
+/* 見出しのまとめバー（色は見出しの色を JS で。無いときはこの色）/ a heading's summary bar (tinted with the heading colour from JS; this one otherwise) */
 .ogantt-group-bar {
   fill: var(--text-accent);
   opacity: 0.85;
@@ -960,30 +1127,30 @@ input.ogantt-cell-input[type="number"] {
   fill: var(--color-red);
   opacity: 0.9;
 }
-/* 線のどこでもクリックで切断 / click anywhere on the line to remove */
+/* 線に載ると強調し、× が出る（外すのは × だけ）/ hovering the line highlights it and shows the × (only the × removes it) */
 .ogantt-dep-hit {
   fill: none;
   stroke: transparent;
   stroke-width: 10;
   pointer-events: stroke;
-  cursor: pointer;
 }
 .ogantt-dep-g:hover .ogantt-dep {
-  stroke: var(--color-red);
+  stroke: var(--interactive-accent);
   opacity: 1;
   stroke-width: 2.2;
 }
 .ogantt-dep-g:hover .ogantt-dep-arrow {
-  fill: var(--color-red);
+  fill: var(--interactive-accent);
   opacity: 1;
 }
-/* ホバーで出る × 目印 / X marker on hover */
 .ogantt-dep-x {
   opacity: 0;
   pointer-events: none;
+  cursor: pointer;
 }
 .ogantt-dep-g:hover .ogantt-dep-x {
   opacity: 1;
+  pointer-events: auto;
 }
 .ogantt-dep-x-bg {
   fill: var(--background-primary);
@@ -1094,25 +1261,35 @@ input.ogantt-cell-input[type="number"] {
   color: var(--text-warning);
 }
 
-/* ---- 詳細パネル（右からスライドイン）/ detail slide-over ---- */
+/* ---- 詳細パネル（ボードの右に並ぶ。スマホでは全面）/ detail panel (docked beside the board; full screen on phones) ---- */
 .ogantt-detail {
-  position: absolute;
-  top: 0;
-  right: 0;
+  display: none;
+  position: relative;
+  flex: none;
   height: 100%;
   width: 380px; /* JS から上書き / overridden from JS */
-  max-width: 92%;
+  max-width: 70%;
   background: var(--background-primary);
   border-left: 1px solid var(--background-modifier-border);
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.18);
-  transform: translateX(100%);
-  transition: transform 0.18s ease;
   overflow-y: auto;
-  z-index: 5;
   padding: 12px 14px 12px 18px;
 }
 .ogantt-detail.is-open {
-  transform: translateX(0);
+  display: block;
+  animation: ogantt-panel-in 0.16s ease-out;
+}
+@keyframes ogantt-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+.is-phone .ogantt-detail {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  max-width: none;
+  z-index: 5;
 }
 /* 左端の幅リサイズハンドル / left-edge resize handle */
 .ogantt-detail-resizer {
@@ -1234,10 +1411,12 @@ input.ogantt-cell-input[type="number"] {
   width: 14px;
   height: 14px;
 }
-.ogantt-date-val {
+button.ogantt-date-val {
+  display: block;
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1254,7 +1433,6 @@ input.ogantt-cell-input[type="number"] {
   width: auto;
   height: auto;
   color: var(--text-muted);
-  box-shadow: none;
   background: transparent;
 }
 .ogantt-date-x .svg-icon {
@@ -1280,7 +1458,6 @@ input.ogantt-cell-input[type="number"] {
   font-weight: 600;
   background: transparent;
   border: none;
-  box-shadow: none;
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 6px;
@@ -1304,6 +1481,8 @@ button.ogantt-cal-title:hover {
   cursor: pointer;
   font-size: 0.85em;
   color: var(--text-normal);
+}
+.ogantt-cal-month:not(.is-current) {
   box-shadow: none;
 }
 .ogantt-cal-month:hover {
@@ -1344,6 +1523,8 @@ button.ogantt-cal-title:hover {
   cursor: pointer;
   font-size: 0.85em;
   color: var(--text-normal);
+}
+.ogantt-cal-day:not(.is-today) {
   box-shadow: none;
 }
 .ogantt-cal-day:hover {
@@ -1442,9 +1623,6 @@ button.ogantt-cal-title:hover {
 }
 
 /* 列幅リサイズグリップ（ヘッダ右端）/ column resize grip on the header right edge */
-.ogantt-th {
-  position: relative;
-}
 .ogantt-col-grip {
   position: absolute;
   top: 0;
@@ -1583,4 +1761,97 @@ button.ogantt-cal-title:hover {
 .ogantt-kanban-card.is-done {
   color: var(--text-faint);
   text-decoration: line-through;
+}
+
+/* キーボードの現在位置は必ず見せる（見た目を消したボタン・行・ボタン役の要素も同じ輪郭で）
+   keyboard focus always shows, with one outline for stripped buttons, rows and button-like elements alike */
+:is(.ogantt-board, .ogantt-popover) :is(button, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+.ogantt-board .ogantt-tr:focus-visible {
+  outline-offset: -2px;
+}
+
+/* 詳細パネルの依存：種類＋先行タスクのチップと、追加 / the panel's dependencies: type + predecessor chips, and the add control */
+.ogantt-dep-chip-type {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.ogantt-detail-field select.ogantt-dep-type-select {
+  width: auto;
+}
+button.ogantt-dep-add {
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+/* バーのホバーカード / the bar hover card */
+.ogantt-card {
+  position: fixed;
+  z-index: var(--layer-tooltip, 70);
+  display: none;
+  max-width: 300px;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+  font-size: var(--font-ui-smaller);
+  pointer-events: none;
+}
+.ogantt-card.is-visible {
+  display: block;
+}
+.ogantt-card-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.ogantt-card-row {
+  display: flex;
+  gap: 8px;
+  color: var(--text-normal);
+}
+.ogantt-card-label {
+  min-width: 64px;
+  color: var(--text-muted);
+}
+
+/* 指で操作するとき：ハンドル・グリップを大きく、依存の × は常に出す / touch: larger handles and grips, the dependency × always shown */
+@media (pointer: coarse) {
+  .ogantt-handle {
+    r: 11px;
+  }
+  .ogantt-col-grip,
+  .ogantt-detail-resizer {
+    width: 14px;
+  }
+  .ogantt-dep-x {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* 動きを減らす設定ではアニメーションを止める / no animation when reduced motion is requested */
+@media (prefers-reduced-motion: reduce) {
+  .ogantt-detail.is-open,
+  .ogantt-skeleton-row {
+    animation: none;
+  }
+}
+/* パネル自体はフォーカスの受け皿なので輪郭を出さない / the panel only holds focus after Esc, so it gets no outline */
+.ogantt-board .ogantt-detail:focus-visible {
+  outline: none;
+}
+/* 自動フィットの計測用（全タスク行のその列を見えない場所に描く）/ the auto-fit probe: every task row's cell, painted where nobody sees it */
+.ogantt-measure-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
 }

@@ -1,6 +1,6 @@
 // 日付フィルタの解決・判定（resolveDateValue / matchDate）と稲妻線ジオメトリの検証
 // Tests for date-filter resolution/matching and progress-line geometry
-import { resolveDateValue, matchDate, dayIndex, dayToStr, todayIndex, progressLineX, buildProgressLine, buildTicks } from "./timeline.mjs";
+import { resolveDateValue, matchDate, dayIndex, dayToStr, todayIndex, progressLineX, buildProgressLine, buildTicks, buildBands } from "./timeline.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -117,11 +117,23 @@ check("行が空でも両端だけ返す", buildProgressLine([], BASIS, 30, 0).l
 // 日付軸：月初の目盛りが近くの月曜と重なるときは月初を残す（2026-11-01 は日曜、11-02 は月曜）
 // date axis: a month start that collides with a nearby Monday wins (2026-11-01 is a Sunday, 11-02 a Monday)
 const WD = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const wk = buildTicks({ min: dayIndex("2026-10-26"), max: dayIndex("2026-11-10") }, "Week", 16, WD);
+const lbl = (d, z) => (z === "Day" ? `${d.getUTCDate()} ${WD[d.getUTCDay()]}` : `${d.getUTCMonth() + 1}/${d.getUTCDate()}`);
+const wk = buildTicks({ min: dayIndex("2026-10-26"), max: dayIndex("2026-11-10") }, "Week", 16, lbl);
 check("週目盛り: 10/26, 11/1, 11/9（11/2 は 11/1 と重なるので省く）", wk.map((t) => t.label).join(" ") === "10/26 11/1 11/9");
 check("週目盛り: 月初は major", wk[1].major && !wk[0].major);
-const dayTicks = buildTicks({ min: dayIndex("2026-10-01"), max: dayIndex("2026-10-04") }, "Day", 20, WD);
+const dayTicks = buildTicks({ min: dayIndex("2026-10-01"), max: dayIndex("2026-10-04") }, "Day", 20, lbl);
 check("日目盛り: 詰まりすぎる日は間引く", dayTicks.map((t) => t.label).join(" ") === "1 Th 3 Sa");
+// 目盛りの書式は呼び出し側（言語ごと）。日-月の順の言語でも月初の扱いは同じ / the caller owns the format; day-month locales behave the same
+const fr = new Intl.DateTimeFormat("fr", { day: "numeric", month: "short", timeZone: "UTC" });
+check("週目盛り: 書式は label 次第（fr）", buildTicks({ min: dayIndex("2026-11-01"), max: dayIndex("2026-11-02") }, "Week", 16, (d) => fr.format(d))[0].label === "1 nov.");
+
+// 目盛りの上の帯：左端に今の月、月の区切りごとに見出し / the band: the current month at the left edge, then one per month
+const band = buildBands({ min: dayIndex("2026-10-10"), max: dayIndex("2026-12-05") }, "Week", 16, (d) => `${d.getUTCMonth() + 1}`);
+check("帯: 10 月（左端）・11 月・12 月", band.map((b) => b.label).join(" ") === "10 11 12" && band[0].x === 0 && band[1].major);
+const yearBand = buildBands({ min: dayIndex("2026-11-10"), max: dayIndex("2027-02-01") }, "Month", 5, (d) => `${d.getUTCFullYear()}`);
+check("帯(Month): 年の区切りだけ", yearBand.map((b) => b.label).join(" ") === "2026 2027");
+const tight = buildBands({ min: dayIndex("2026-10-30"), max: dayIndex("2026-11-20") }, "Week", 16, (d) => `${d.getUTCMonth() + 1}`);
+check("帯: すぐ月が替わるなら左端の見出しは省く", tight.map((b) => b.label).join(" ") === "11");
 
 // 今日は端末の暦で数える（UTC だと時差のぶん前後にずれる）/ today follows the device calendar, not UTC
 check("todayIndex はローカルの日付", [0, 30, 23 * 60 + 30].every((min) => dayToStr(todayIndex(new Date(2026, 9, 23, 0, min))) === "2026-10-23"));

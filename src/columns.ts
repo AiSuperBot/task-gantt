@@ -406,7 +406,7 @@ function paintStatus(ctx: BoardContext, td: HTMLElement, t: Task): void {
 function editStatus(ctx: BoardContext, cell: HTMLElement, t: Task): void {
   if (cell.querySelector("input, select")) return;
   cell.empty();
-  const sel = cell.createEl("select", { cls: "ogantt-cell-input" });
+  const sel = cell.createEl("select", { cls: "ogantt-cell-input", attr: { "aria-label": tr().fieldStatus } });
   sel.createEl("option", { text: "—", value: "" }); // 未設定に戻す / clear the status
   for (const s of ctx.settings.statuses) {
     const o = sel.createEl("option", { text: s.label, value: s.id });

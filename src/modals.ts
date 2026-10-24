@@ -70,21 +70,21 @@ export class ChoiceModal extends Modal {
   }
 }
 
-// 候補一覧から1件選ばせる小さなピッカー（タグ名の手入力ミスを避けるために使う）
-// a small picker over a fixed list of choices, used so tag names never have to be typed by hand
-export class TagSuggestModal extends SuggestModal<string> {
-  constructor(app: App, private choices: string[], placeholder: string, private onPick: (value: string) => void) {
+// 候補一覧から1件選ばせる小さなピッカー（タグ・タスク・フォルダ）。名前を手入力させない（打ち間違いを避ける）
+// a small picker over a fixed list (tags, tasks, folders), so names never have to be typed by hand
+export class PickModal<T> extends SuggestModal<T> {
+  constructor(app: App, private choices: T[], private label: (item: T) => string, placeholder: string, private onPick: (item: T) => void) {
     super(app);
     this.setPlaceholder(placeholder);
   }
-  getSuggestions(query: string): string[] {
+  getSuggestions(query: string): T[] {
     const q = query.trim().toLowerCase();
-    return q ? this.choices.filter((c) => c.toLowerCase().includes(q)) : this.choices;
+    return q ? this.choices.filter((c) => this.label(c).toLowerCase().includes(q)) : this.choices;
   }
-  renderSuggestion(value: string, el: HTMLElement): void {
-    el.setText(value);
+  renderSuggestion(item: T, el: HTMLElement): void {
+    el.setText(this.label(item));
   }
-  onChooseSuggestion(value: string): void {
-    this.onPick(value);
+  onChooseSuggestion(item: T): void {
+    this.onPick(item);
   }
 }

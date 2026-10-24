@@ -66,10 +66,12 @@ export default class GanttPlugin extends Plugin {
         if (file.extension === "md") schedulePush(this);
       })
     );
-    // リネーム・移動は同期状態のキーを付け替える / renames re-key the sync state
+    // リネーム・移動は同期状態のキーを付け替え、フォルダならボードの表示設定もついて行かせる
+    // renames re-key the sync state; a folder rename carries its boards' view setup along
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
         if (file instanceof TFile) migrateRenamedPath(this, oldPath, file.path);
+        else if (file instanceof TFolder) this.moveBoards(oldPath, file.path);
       })
     );
     // 削除はイベントの孤児掃除を予約 / deletions schedule the orphan cleanup
@@ -100,6 +102,20 @@ export default class GanttPlugin extends Plugin {
         }, 60_000)
       );
     });
+  }
+
+  // フォルダ（と配下）のボード設定のキー "folder:<パス>" を付け替える / re-key the "folder:<path>" board setups of a renamed folder and its subfolders
+  private moveBoards(from: string, to: string): void {
+    const boards = this.settings.boards;
+    let moved = false;
+    for (const key of Object.keys(boards)) {
+      const path = key.startsWith("folder:") ? key.slice(7) : null;
+      if (path == null || (path !== from && !path.startsWith(from + "/"))) continue;
+      boards[`folder:${to}${path.slice(from.length)}`] = boards[key];
+      delete boards[key];
+      moved = true;
+    }
+    if (moved) void this.saveData(this.settings);
   }
 
   // フォーカス中フォルダを推定 / best-effort current folder
@@ -149,6 +165,7 @@ export default class GanttPlugin extends Plugin {
     this.settings.folderColors = (this.settings.folderColors ?? []).map((c) => ({ ...c }));
     this.settings.assigneeColors = (this.settings.assigneeColors ?? []).map((c) => ({ ...c }));
     this.settings.icons = { ...(this.settings.icons ?? {}) };
+    this.settings.boards = { ...(this.settings.boards ?? {}) };
     this.settings.columnWidths = { ...(this.settings.columnWidths ?? {}) };
     this.settings.customFields = (this.settings.customFields ?? []).map((f) => ({ ...f }));
     this.settings.nonWorkingDays = [...(this.settings.nonWorkingDays ?? DEFAULT_SETTINGS.nonWorkingDays)];
