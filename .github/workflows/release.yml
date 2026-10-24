@@ -29,6 +29,10 @@ jobs:
           npm test
           npm run build
 
+      # 配布する styles.css だけを圧縮する（リポジトリのコメント付きの原本はそのまま）/ minify only the shipped styles.css (the commented source in the repo stays as is)
+      - name: Minify styles
+        run: npx esbuild styles.css --minify --outfile=styles.css --allow-overwrite
+
       # 成果物の出所を暗号的に証明する / attest the provenance of the build artifacts
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4

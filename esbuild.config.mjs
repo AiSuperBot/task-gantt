@@ -30,6 +30,9 @@ const context = await esbuild.context({
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
+  // 翻訳を \uXXXX に逃がさず UTF-8 のまま出す（日中韓露の 1 文字が 6 バイトから 2〜3 バイトに）
+  // emit translations as UTF-8 instead of \uXXXX escapes (a CJK or Cyrillic character drops from 6 bytes to 2-3)
+  charset: "utf8",
   outfile: "main.js",
   minify: prod,
 });

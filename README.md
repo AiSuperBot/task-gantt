@@ -10,15 +10,15 @@ An interactive project-management Gantt for Obsidian. **One Markdown file = one 
 
 Open a folder as a Gantt from the left-column ribbon button, or by right-clicking the folder → **Open as Gantt**:
 
-![Open a folder as a Gantt from the ribbon button or the right-click menu](docs/images/open-as-gantt.png)
+![Open a folder as a Gantt from the ribbon button or the right-click menu](docs/images/open-as-gantt.webp)
 
 The folder opens as a table + timeline, with groups, bars, milestones, and dependency arrows:
 
-![The opened Gantt chart with groups, bars, milestones and dependencies](docs/images/gantt-chart.png)
+![The opened Gantt chart with groups, bars, milestones and dependencies](docs/images/gantt-chart.webp)
 
 Click a task to open the detail panel and edit its dates, status, assignee, progress, and body:
 
-![Task detail panel for editing dates, status, assignee, progress and body](docs/images/detail-panel.png)
+![Task detail panel for editing dates, status, assignee, progress and body](docs/images/detail-panel.webp)
 
 ## Usage
 
@@ -38,25 +38,25 @@ An options row above the table shapes how the board is displayed.
 
 **Group by** folder, status, or assignee, and **color by** status or assignee (with a legend):
 
-![Grouping and color-by options with a legend](docs/images/grouping-en.png)
+![Grouping and color-by options with a legend](docs/images/grouping-en.webp)
 
 Each group heading has an icon for its grouping — a folder, a person, a status dot or a tag. **Right-click a heading** to pick its color and to give it any icon from Obsidian's icon set (searchable), e.g. a person icon for a folder that holds one person's work. In the legend, **click a status** to rename it, recolor it, change its group or delete it, and **＋** adds a status; when coloring by assignee, click a person to pick their color.
 
 **Sort** by clicking a column header; click it again to flip ascending/descending (↑/↓):
 
-![Click a column header to sort, with an ↑/↓ indicator](docs/images/sort-en.png)
+![Click a column header to sort, with an ↑/↓ indicator](docs/images/sort-en.webp)
 
 **Choose columns** with the gear button — show or hide Start, Due, Duration, Progress, Assignee, Status, and Tags. Any column shown here can be edited by double-clicking its cell. The column layout and sort are remembered across sessions:
 
-![Show or hide table columns from the gear menu](docs/images/column_en.png)
+![Show or hide table columns from the gear menu](docs/images/column_en.webp)
 
 **Flat view** lists every task in one sorted list, ignoring folders and nesting:
 
-![Flat view: all tasks in a single sorted list](docs/images/flatview-en.png)
+![Flat view: all tasks in a single sorted list](docs/images/flatview-en.webp)
 
 **Progress line** draws a jagged line down the board from today, bending to each task's achieved progress: **left of today means behind schedule, right means ahead**. Per row, the line sits at the point on the bar matching the task's `progress` — so a task due last week but only 40% done pulls the line back to its 40% mark. Tasks at 100% and tasks that haven't started yet (and aren't due to) stay on the today line, as do folder rows and rolled-up parent bars. A task past its start date with no progress pulls the line back to its start date. Its color is configurable in **Settings → Task Gantt → Progress line color**.
 
-![The Progress column and the progress line, both enabled from the view options](docs/images/progressline_en.png)
+![The Progress column and the progress line, both enabled from the view options](docs/images/progressline_en.webp)
 
 ## Custom fields
 
@@ -66,11 +66,11 @@ Show any frontmatter key as a table column. In **Settings → Task Gantt → Cus
 - **Number** — right-aligned and sorted numerically.
 - **Date** — shown in your date format and edited with the same calendar as Start / Due (the date part only).
 
-![Custom fields in the settings tab: a key, a label and a type per field](docs/images/custom-fields-settings-en.png)
+![Custom fields in the settings tab: a key, a label and a type per field](docs/images/custom-fields-settings-en.webp)
 
 A new field's column is shown right away; hide or show it from the gear menu like any other column. Custom columns sort by clicking their header and are edited by double-clicking a cell, and every edit can be undone. Changing a field's key keeps its column's visibility, width and sort, and takes effect when you press Enter or leave the box. If notes still hold values under the old key, you're asked whether to rename that property in those notes too (a note that already has a value under the new key is never overwritten) or only to point the column at the new key. Keys the plugin already reads (the Start / Due / Status / … keys under **Frontmatter keys**, and `tags`) can't be used, and if two fields share a key only the first becomes a column — the settings tab says so.
 
-![Custom field columns in the table, after the built-in columns](docs/images/custom-fields-table-en.png)
+![Custom field columns in the table, after the built-in columns](docs/images/custom-fields-table-en.webp)
 
 ## Filters
 
@@ -80,7 +80,7 @@ A **filter row** below the options narrows the board. Click **Add filter** and p
 - **Status / Status group / Assignee / Tag** let you tick several values — including **(none)** for unset — with *is / is not / is empty / is not empty*.
 - **Start date / Due date** compare against a preset (yesterday/today/tomorrow), a specific date, a relative date (e.g. *1 week from now*, recomputed each day), or a date range, with *is / before / after / on or before / on or after / empty / not empty*.
 
-![The filter row with chips and the match toggle](docs/images/filter-en.png)
+![The filter row with chips and the match toggle](docs/images/filter-en.webp)
 
 With two or more filters, choose **Show items matching → Match all** (AND) or **Match any** (OR) on the right.
 
@@ -88,7 +88,7 @@ With two or more filters, choose **Show items matching → Match all** (AND) or 
 
 Open **Presets** for one-click filter sets. Built-in presets are **No dates (no bar)**, **Has dates**, **Overdue**, **Unassigned**, **Completed**, and **Incomplete**. The last two read the **status group** rather than status names: *Completed* is everything in the Completed group, and *Incomplete* is everything that is neither Completed nor Cancelled — active work, deferred work, and tasks with no status at all. Build any combination of filters and **save it as a preset** by typing a name — saved presets can be re-applied or deleted, and **Clear filters** removes them all. Filters and presets persist across sessions.
 
-![Built-in and saved filter presets](docs/images/filter-preset-en.png)
+![Built-in and saved filter presets](docs/images/filter-preset-en.webp)
 
 ## Moving tasks between folders
 
@@ -193,7 +193,7 @@ Open **Settings → Task Gantt** to configure the default folder, subfolder recu
 
 The **Timezone** setting (system or a fixed GMT offset, listed with representative cities) controls how times of day are displayed and saved. Changing it re-displays stored times in the new offset.
 
-![Timezone setting with representative cities](docs/images/timezone-en.png)
+![Timezone setting with representative cities](docs/images/timezone-en.webp)
 
 **Non-working days** (Saturday & Sunday, Friday & Saturday, Sunday only, or none) are skipped when counting a task's duration and when dependencies move tasks. **Push FS successors automatically** (on by default) controls whether a slipping predecessor pushes its FS successors.
 
@@ -207,15 +207,15 @@ The **group** is what tells the plugin whether a task is finished. There are fou
 
 You can also rename the **frontmatter keys** the plugin reads (start, end, status, assignee, after, progress, milestone, canvas) to match your own vault conventions.
 
-![Task Gantt settings: customizable statuses and frontmatter keys](docs/images/settings-en.png)
+![Task Gantt settings: customizable statuses and frontmatter keys](docs/images/settings-en.webp)
 
 ## Notifications (optional)
 
 Task Gantt can post reminders for tasks that have a **time of day** to **Discord** and/or **Slack** via incoming webhooks. In **Settings → Task Gantt → Notifications**, set the webhook URLs, choose the targets (start / due), and pick the lead times (1 week / 1 day / 1 hour / 10 minutes before, or at the exact time). Use **Send a test message** to verify the webhook instantly.
 
-![Notification settings](docs/images/notification_en.png)
+![Notification settings](docs/images/notification_en.webp)
 
-![Notification messages in Discord](docs/images/notification_discord.png)
+![Notification messages in Discord](docs/images/notification_discord.webp)
 
 - **Network use**: when enabled, the plugin sends HTTP POST requests containing only the task name and its date/time to the webhook URLs you configured — nothing else is sent, and nowhere else. Leaving both URLs empty (the default) disables all network access.
 - Notifications fire only while Obsidian is running. Triggers that passed while Obsidian was closed are skipped, and each trigger is sent at most once.
@@ -235,7 +235,7 @@ The plugin has no server, so it uses **your own Google Cloud project**:
 3. Create an **OAuth client ID** of type **Desktop app**, and paste the client ID and secret into the plugin settings.
 4. Press **Connect** — your browser opens Google's consent screen, and the plugin receives the authorization on `127.0.0.1` (loopback). Then pick the **calendar to sync** (a dedicated calendar is recommended).
 
-![Google Calendar settings](docs/images/gcal-settings-en.png)
+![Google Calendar settings](docs/images/gcal-settings-en.webp)
 
 ### How it syncs
 
@@ -249,7 +249,7 @@ The plugin has no server, so it uses **your own Google Cloud project**:
 
 **Example** — `Test1` and `Test2` carry `gcal: true` and pushed through as events; `Test3 (no flag)` stayed local only. The `Test3 from GC` event and the `七夕` holiday were created directly in Google Calendar and never became tasks:
 
-![Obsidian board next to the synced Google Calendar](docs/images/gcal-compare.png)
+![Obsidian board next to the synced Google Calendar](docs/images/gcal-compare.webp)
 
 ### Disclosure
 
@@ -298,15 +298,15 @@ MIT — see [`LICENSE`](./LICENSE).
 
 左列のリボンボタン、またはフォルダの右クリック →**「Open as Gantt」**から Gantt として開きます：
 
-![リボンボタンまたは右クリックメニューからフォルダを Gantt として開く](docs/images/open-as-gantt.png)
+![リボンボタンまたは右クリックメニューからフォルダを Gantt として開く](docs/images/open-as-gantt.webp)
 
 「表＋タイムライン」で開き、グループ・バー・マイルストーン・依存の矢印が表示されます：
 
-![開いたガントチャート（グループ・バー・マイルストーン・依存）](docs/images/gantt-chart.png)
+![開いたガントチャート（グループ・バー・マイルストーン・依存）](docs/images/gantt-chart.webp)
 
 タスクをクリックすると詳細パネルが開き、日付・状態・担当・進捗・本文を編集できます：
 
-![タスクの詳細パネル（日付・状態・担当・進捗・本文の編集）](docs/images/detail-panel.png)
+![タスクの詳細パネル（日付・状態・担当・進捗・本文の編集）](docs/images/detail-panel.webp)
 
 ## 使い方
 
@@ -326,25 +326,25 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 **グループ化**（フォルダ／ステータス／担当者）と**色分け**（ステータス／担当者・凡例付き）：
 
-![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.png)
+![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.webp)
 
 グループの見出しには、グループ化の軸に合わせたアイコン（フォルダ・人・ステータスの丸・タグ）が付きます。**見出しを右クリック**すると色を選べるほか、Obsidian のアイコン一覧（検索可）から好きなアイコンを付けられます（例：ある人の作業をまとめたフォルダに人のアイコン）。凡例の**ステータスをクリック**すると名前・色・グループの変更や削除ができ、**＋** でステータスを追加できます。担当者で色分け中は、凡例の人をクリックしてその人の色を選べます。
 
 **ソート**は列ヘッダをクリック。もう一度クリックで昇順／降順を切替（↑/↓）：
 
-![列ヘッダのクリックでソート（↑/↓ 表示）](docs/images/sort-ja.png)
+![列ヘッダのクリックでソート（↑/↓ 表示）](docs/images/sort-ja.webp)
 
 **列の表示**は歯車ボタンから、開始・期限・期間・進捗・担当者・ステータス・タグを出し分け。ここに出せる列はすべてセルのダブルクリックで編集できます。列レイアウトとソートはセッションをまたいで保存されます：
 
-![歯車メニューから列を表示／非表示](docs/images/column_ja.png)
+![歯車メニューから列を表示／非表示](docs/images/column_ja.webp)
 
 **フラット表示**は、フォルダや入れ子を無視して全タスクを1本のソート済みリストで表示します：
 
-![フラット表示：全タスクを1本のソート済みリストで](docs/images/flatview-ja.png)
+![フラット表示：全タスクを1本のソート済みリストで](docs/images/flatview-ja.webp)
 
 **稲妻線**は、今日を基準にした垂線を各タスクの実績到達点まで折り曲げた折れ線です。**今日より左に折れれば遅れ、右なら進み**を意味します。各行の点は、タスクの `progress` に対応するバー上の位置に置かれます（先週が期限なのに 40% のタスクは、線をその 40% 地点まで引き戻します）。100% のタスク、まだ開始日が来ていない未着手タスク、フォルダ行、ロールアップ中の親バーは今日線上を素通りします。開始日を過ぎているのに進捗 0% のタスクは、線を開始日まで引き戻します。線の色は**設定 → Task Gantt → 稲妻線の色**で変更できます。
 
-![進捗列と稲妻線（どちらも表示オプションから有効化）](docs/images/progressline_ja.png)
+![進捗列と稲妻線（どちらも表示オプションから有効化）](docs/images/progressline_ja.webp)
 
 ## カスタムフィールド
 
@@ -354,11 +354,11 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 - **数値** — 右揃えで表示し、数値として並べ替えます。
 - **日付** — 設定の日付形式で表示し、開始・期限と同じカレンダーで編集します（日付部分のみ）。
 
-![設定画面のカスタムフィールド。フィールドごとにキー・表示名・種類を指定](docs/images/custom-fields-settings-ja.png)
+![設定画面のカスタムフィールド。フィールドごとにキー・表示名・種類を指定](docs/images/custom-fields-settings-ja.webp)
 
 追加したフィールドの列はすぐに表示され、ほかの列と同じく歯車メニューで表示を切り替えられます。見出しのクリックで並べ替え、セルのダブルクリックで編集でき、編集はすべて取り消せます。キー名を変えても、列の表示・幅・並べ替えの設定はそのまま残ります。キーの変更は Enter を押すか入力欄を離れたときに反映され、旧キーの値を持つノートがあれば、ノート側のプロパティ名も変えるか（新しいキーに既に値があるノートは上書きしません）、列が読むキーだけを変えるかを尋ねます。プラグインが既に使っているキー（**フロントマターのキー名**にある開始・期限・ステータスなどのキーと `tags`）は使えません。また、同じキーのフィールドが複数あるときは最初の 1 つだけが列になります。どちらも設定画面に注意書きが出ます。
 
-![テーブルのカスタムフィールド列。組み込みの列の後ろに並ぶ](docs/images/custom-fields-table-ja.png)
+![テーブルのカスタムフィールド列。組み込みの列の後ろに並ぶ](docs/images/custom-fields-table-ja.webp)
 
 ## フィルタ
 
@@ -368,7 +368,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 - **ステータス／ステータスグループ／担当者／タグ**：複数値をチェックで選択（**（なし）＝未設定**も選べます）。と一致／以外／未設定／設定あり
 - **開始日／期限日**：プリセット（昨日・今日・明日）／具体的な日付／相対的な日付（例：*1 週間後*・毎日再計算）／期間と比較。と一致／より前／より後／以前／以後／未設定／設定あり
 
-![チップと一致条件トグルを備えたフィルタ行](docs/images/filter-ja.png)
+![チップと一致条件トグルを備えたフィルタ行](docs/images/filter-ja.webp)
 
 フィルタが2件以上あるときは、右端の **表示するタスク → すべてに一致**（AND）／**いずれかに一致**（OR）で結合方法を選べます。
 
@@ -376,7 +376,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 **プリセット**からワンクリックでフィルタ構成を切り替えられます。組み込みプリセットは **日付なし（バーなし）／日付あり／期限切れ／未割り当て／完了済み／未完了**。後ろの 2 つはステータス名ではなく**ステータスグループ**を見ます：**完了済み**は完了グループのタスク、**未完了**は完了でもキャンセルでもないタスク（アクティブ・延期・ステータス未設定）です。任意のフィルタ構成に名前を付けて**プリセットとして保存**でき、保存したプリセットは再適用・削除が可能です。**フィルタをクリア**で全解除。フィルタとプリセットはセッションをまたいで保存されます。
 
-![組み込みプリセットとマイプリセット](docs/images/filter-preset-ja.png)
+![組み込みプリセットとマイプリセット](docs/images/filter-preset-ja.webp)
 
 ## フォルダ間のタスク移動
 
@@ -481,7 +481,7 @@ after:
 
 **タイムゾーン**設定（システム / 固定GMTオフセット・代表都市付き一覧）で時刻の表示・保存に使うタイムゾーンを選べます。変更すると保存済みの時刻が新しいオフセットに換算されて表示されます。
 
-![代表都市付きのタイムゾーン設定](docs/images/timezone-ja.png)
+![代表都市付きのタイムゾーン設定](docs/images/timezone-ja.webp)
 
 **休日の曜日**（土・日／金・土／日のみ／なし）は、期間の計算と依存による移動のときに数えません。**FS の後続を自動で押し出す**（既定はオン）で、先行の遅れを FS の後続へ伝えるかを切り替えます。
 
@@ -495,15 +495,15 @@ after:
 
 プラグインが読む**フロントマターのキー名**（start / end / status / assignee / after / progress / milestone / canvas）も、各自の Vault の慣習に合わせて変更できます。
 
-![Task Gantt の設定：カスタマイズ可能なステータスとフロントマターキー](docs/images/settings-ja.png)
+![Task Gantt の設定：カスタマイズ可能なステータスとフロントマターキー](docs/images/settings-ja.webp)
 
 ## 通知（任意）
 
 **時刻を設定した**タスクの開始・期限を、Incoming Webhook 経由で **Discord** / **Slack** に通知できます。**設定 → Task Gantt → 通知** で Webhook URL・対象（開始/期限）・通知タイミング（1週間前・1日前・1時間前・10分前・時刻ちょうど）を設定してください。**テスト送信**ボタンで Webhook の疎通をすぐ確認できます。
 
-![通知設定](docs/images/notification_ja.png)
+![通知設定](docs/images/notification_ja.webp)
 
-![Discord に届いた通知](docs/images/notification_discord.png)
+![Discord に届いた通知](docs/images/notification_discord.webp)
 
 - **ネットワーク利用について**：有効にすると、設定した Webhook URL に対してタスク名と日時のみを HTTP POST で送信します。それ以外の情報は送らず、他の宛先にも送信しません。URL を両方空欄（既定）にすればネットワークアクセスは一切行いません。
 - 通知は Obsidian の起動中のみ動作します。終了中に過ぎたタイミングはスキップされ、同じ通知は二度送られません。
@@ -523,7 +523,7 @@ after:
 3. **OAuth クライアント ID**（種類：**デスクトップアプリ**）を作成し、クライアント ID とシークレットをプラグイン設定に貼り付ける。
 4. **接続**を押すとブラウザで Google の同意画面が開き、`127.0.0.1`（ループバック）で認可を受け取ります。その後**同期先カレンダー**を選択してください（専用カレンダーの利用を推奨）。
 
-![Google カレンダーの設定画面](docs/images/gcal-settings-ja.png)
+![Google カレンダーの設定画面](docs/images/gcal-settings-ja.webp)
 
 ### 同期の仕組み
 
@@ -537,7 +537,7 @@ after:
 
 **例**：`Test1` と `Test2` は `gcal: true` を付けて Push され、イベントとして反映されています。`Test3 (no flag)` はフラグが無いためローカルのみに留まっています。一方 `Test3 from GC` と祝日「七夕」は Google カレンダー側で直接作られたもので、タスクとしては取り込まれていません：
 
-![Obsidian のボードと同期後の Google カレンダーの比較](docs/images/gcal-compare.png)
+![Obsidian のボードと同期後の Google カレンダーの比較](docs/images/gcal-compare.webp)
 
 ### 開示事項
 
