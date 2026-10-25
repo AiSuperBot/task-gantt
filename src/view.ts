@@ -119,14 +119,11 @@ function violated(t: Task, pred: Task, type: DepType): boolean {
   return dayIndex(sEnd) < dayIndex(pEnd);
 }
 
-// 依存を作る 2 つのハンドル（全バーで共有）/ the two connector handles, shared by every bar
+// 依存を作る 2 つのハンドル（全バーで共有。矢印を隠しているときと書き出しには無い）/ the two connector handles, shared by every bar (none with arrows hidden, or in an export)
 interface Handles {
   show(t: Task, g: SVGGElement, lx: number, rx: number, cy: number): void;
   hide(): void;
 }
-
-// 矢印を隠しているとき・書き出しのときのハンドル（何もしない）/ the handles when arrows are hidden, and for an export (they do nothing)
-const NO_HANDLES: Handles = { show() {}, hide() {} };
 
 // 描く依存 1 本と、両端の行番号 / one dependency to draw, with the rows of both ends
 interface DepRow {
@@ -135,8 +132,6 @@ interface DepRow {
   type: DepType;
   si: number;
   pi: number;
-  lo: number;
-  hi: number;
 }
 
 export class GanttView extends ItemView {
@@ -204,7 +199,6 @@ export class GanttView extends ItemView {
   private titleText: HTMLElement | null = null;
   private legendHost!: HTMLElement; // 色の凡例の行 / the colour key row
   private measureCtx = createEl("canvas").getContext("2d")!; // 文字幅を測る（DOM のレイアウトを起こさない）/ measures text without a DOM layout
-  private widthCache = new Map<string, number>(); // 測った幅（描き直しごとに捨てる）/ measured widths, dropped per redraw
   private tagColorCache = new Map<string, string>(); // タグの色（既定色は CSS を読むので、描き直しごとに 1 回）/ tag colours (the default reads CSS, so once per redraw)
   private assigneeCache: string[] | null = null; // ボードの担当者一覧（描き直しごとに作る）/ the board's assignees, built once per redraw
   private late: Set<string> | null = null; // 矢印を隠しているときの、依存が守られていない後続 / with arrows hidden, successors whose dependency is broken
@@ -462,7 +456,6 @@ export class GanttView extends ItemView {
     this.hideCard(); // 下のバーが作り直される / the bar under it is about to be replaced
     this.assigneeCache = null;
     this.tagColorCache.clear();
-    this.widthCache.clear();
     this.renderLegend(); // 凡例はデータ（担当者）で変わる / the legend depends on the data (the assignees)
     this.renderFilterBar(); // 統合フィルタ行を最新データで更新 / refresh the unified filter row
     const view = this.processTasks(); // フィルタ＋グループ適用後 / after filter + group remap
@@ -1191,13 +1184,12 @@ export class GanttView extends ItemView {
     if (this.colorBy === "status") {
       return this.plugin.settings.statuses.map((s) => ({ color: s.color, label: s.label, edit: (chip: HTMLElement) => this.openStatusEditor(chip, s) }));
     }
-    const people: { color: string; label: string; edit?: (chip: HTMLElement) => void }[] = this.assigneeList().map((a) => ({
+    const none = this.tasks.some((t) => !t.assignees.length) ? [{ color: FALLBACK_BAR, label: tr().noneLabel }] : [];
+    return [...this.assigneeList().map((a) => ({
       color: this.assigneeColor(a),
       label: linkLabel(a),
       edit: (chip: HTMLElement) => pickColor(chip, this.assigneeColor(a), (c) => this.setColorOverride("assignee", linkLabel(a), c)),
-    }));
-    if (this.tasks.some((t) => !t.assignees.length)) people.push({ color: FALLBACK_BAR, label: tr().noneLabel });
-    return people;
+    })), ...none];
   }
 
   // 凡例（色分けの基準を説明）。ステータスなら ＋ で追加できる / the legend explaining the colours; with statuses, + adds one
@@ -1213,7 +1205,7 @@ export class GanttView extends ItemView {
 
   // 凡例のチップ。onClick があればボタン（キーボードでも開ける）/ a legend chip; a button when clickable, so the keyboard reaches it too
   private legendChip(parent: HTMLElement, color: string, label: string, onClick?: (chip: HTMLElement) => void): void {
-    const chip = onClick ? parent.createEl("button", { cls: "ogantt-legend-chip is-clickable" }) : parent.createDiv({ cls: "ogantt-legend-chip" });
+    const chip = onClick ? parent.createEl("button", { cls: "ogantt-legend-chip" }) : parent.createDiv({ cls: "ogantt-legend-chip" });
     const sw = chip.createSpan({ cls: "ogantt-legend-swatch" });
     sw.style.background = color;
     chip.createSpan({ text: label });
@@ -1705,7 +1697,7 @@ export class GanttView extends ItemView {
     if (this.progressLine) this.drawProgressLine(svg, width, bodyH);
     // 依存作成ハンドルは最前面のレイヤーに 2 つだけ置き、全バーで共有する。矢印を隠しているときは矢印もハンドルも描かない
     // two connector handles in the topmost layer, shared by every bar; with arrows hidden, neither arrows nor handles are drawn
-    const handles = this.showDeps ? this.makeHandles(svg, layer("ogantt-handles-layer")) : NO_HANDLES;
+    const handles = this.showDeps ? this.makeHandles(svg, layer("ogantt-handles-layer")) : null;
     const fill = this.barFill(svg);
     const deps = this.showDeps ? this.depRows() : [];
     // 矢印を隠しても、依存が守られていない後続はバーの赤い縁で分かる / with arrows hidden, a successor whose dependency is broken still gets a red outline
@@ -1743,7 +1735,7 @@ export class GanttView extends ItemView {
         if (row.kind === "group") this.drawGroupRow(bgLayer, barLayer, row, i, width);
         else this.drawBar(barLayer, svg, row, i, fill, handles);
       }
-      for (const dep of deps) if (dep.hi >= win.first && dep.lo <= win.last) this.drawDep(depLayer, dep);
+      for (const dep of deps) if (Math.max(dep.si, dep.pi) >= win.first && Math.min(dep.si, dep.pi) <= win.last) this.drawDep(depLayer, dep);
       // キーボードの行が描かれていなければ、描いた先頭の行を Tab で入れる行にする / when the keyboard's row isn't drawn, the first drawn row takes Tab
       if (this.cursor < win.first || this.cursor > win.last) body.querySelector(`.ogantt-tr[data-index="${Math.min(first, win.last)}"]`)?.setAttribute("tabindex", "0");
       else if (hadFocus) body.querySelector<HTMLElement>(`.ogantt-tr[data-index="${this.cursor}"]`)?.focus({ preventScroll: true });
@@ -2156,7 +2148,7 @@ export class GanttView extends ItemView {
 
   // タスク 1 行のバー（ロールアップ・マイルストーン・通常）。ステータスの種類は色以外でも示す：完了は ✓、延期は斜線、キャンセルは取り消し線
   // one task's bar (rollup, milestone or regular). The status group also shows without colour: ✓ completed, hatching deferred, strike-through cancelled
-  private drawBar(layer: SVGElement, svg: SVGElement, row: Row, i: number, fill: (t: Task) => string, handles: Handles): void {
+  private drawBar(layer: SVGElement, svg: SVGElement, row: Row, i: number, fill: (t: Task) => string, handles: Handles | null): void {
     const t = row.task!;
     const group = statusGroupOf(this.plugin.settings.statuses, t.status);
     const cyMid = i * ROW_H + ROW_H / 2;
@@ -2228,10 +2220,10 @@ export class GanttView extends ItemView {
     }
     this.drawLabel(g, t, rx + LABEL_GAP, cyMid, group, row.group);
     g.addEventListener("pointerenter", (e) => {
-      handles.show(t, g, lx, rx, cyMid);
+      handles?.show(t, g, lx, rx, cyMid);
       this.showCard(t, e);
     });
-    g.addEventListener("pointerleave", () => handles.hide());
+    g.addEventListener("pointerleave", () => handles?.hide());
     open(g);
     layer.appendChild(g);
   }
@@ -2312,16 +2304,10 @@ export class GanttView extends ItemView {
     if (tags.length > MAX_PILLS) g.appendChild(this.svgEl("text", { x: px, y: cy + 4, class: "ogantt-bar-label", "font-size": LABEL_PX })).textContent = `+${tags.length - MAX_PILLS}`;
   }
 
-  // 文字列の幅（キャンバスで測るので DOM のレイアウトを起こさない。描き直しのあいだは覚えておく）/ a string's width, measured on a canvas (no DOM layout), kept for the redraw
+  // 文字列の幅（キャンバスで測るので DOM のレイアウトを起こさない）/ a string's width, measured on a canvas (no DOM layout)
   private textWidth(text: string, px: number, weight = 400): number {
-    const font = `${weight} ${px}px ${this.fontFamily}`;
-    const key = `${font}|${text}`;
-    let w = this.widthCache.get(key);
-    if (w === undefined) {
-      this.measureCtx.font = font;
-      this.widthCache.set(key, (w = this.measureCtx.measureText(text).width));
-    }
-    return w;
+    this.measureCtx.font = `${weight} ${px}px ${this.fontFamily}`;
+    return this.measureCtx.measureText(text).width;
   }
 
   // 色を等分した横縞のグラデーションを用意して fill の url を返す（共有タスクの担当者の色）
@@ -2427,18 +2413,17 @@ export class GanttView extends ItemView {
   // remove a dependency (undoable); it goes at once, so a notice offers an Undo button
   private async removeDep(succPath: string, predPath: string, type: DepType): Promise<void> {
     const ok = await this.mutate(tr().undoRemoveDep(type), [succPath], () => removeDependency(this.app, this.plugin.settings, succPath, predPath));
-    if (ok) this.undoNotice(tr().undoRemoveDep(type));
+    // record() が前の通知を閉じたので、新しい通知だけ出す / record() already closed the previous notice
+    if (ok) this.undoToast = this.buttonNotice(tr().undoRemoveDep(type), tr().undoAria, () => void this.undo(), 6000);
     await this.refresh();
   }
 
-  // 取り消しボタン付きの通知 / a notice with an Undo button
-  private undoNotice(message: string): void {
-    const frag = createFragment((f) => {
+  // ボタン付きの通知（取り消す・開く）/ a notice with a button (Undo, Open)
+  private buttonNotice(message: string, button: string, onClick: () => void, ms: number): Notice {
+    return new Notice(createFragment((f) => {
       f.appendText(`${message} `);
-      f.createEl("button", { cls: "ogantt-notice-undo", text: tr().undoAria }).onclick = () => void this.undo();
-    });
-    this.undoToast?.hide();
-    this.undoToast = new Notice(frag, 6000);
+      f.createEl("button", { text: button }).onclick = onClick;
+    }), ms);
   }
 
   // roots の日付変更を依存に沿って後続へ伝える（SS/FF は揃える、FS は設定で押し出す・稼働日で期間を保つ）。
@@ -2495,7 +2480,7 @@ export class GanttView extends ItemView {
       for (const dep of t.deps) {
         const pi = rowOf.get(dep.path);
         const pred = byPath.get(dep.path);
-        if (pi != null && pred) out.push({ t, pred, type: dep.type, si, pi, lo: Math.min(si, pi), hi: Math.max(si, pi) });
+        if (pi != null && pred) out.push({ t, pred, type: dep.type, si, pi });
       }
     }
     return out;
@@ -2778,8 +2763,7 @@ export class GanttView extends ItemView {
 
   // タグ・担当者のチップ（× で外す）と追加欄（Enter で足す）。詳細パネルと表のポップオーバーで共用し、追加欄を返す
   // chips for tags / assignees (× removes) plus an add field (Enter adds); shared by the detail panel and the table popover. Returns the field
-  private chipList(host: HTMLElement, at: string | (() => string), field: "tags" | "assignees", changed: () => void): HTMLInputElement {
-    const now = () => (typeof at === "string" ? at : at());
+  private chipList(host: HTMLElement, now: () => string, field: "tags" | "assignees", changed: () => void): HTMLInputElement {
     const path = now();
     const t = this.tasks.find((x) => x.path === path);
     const values = t?.[field] ?? [];
@@ -3283,7 +3267,7 @@ export class GanttView extends ItemView {
         rerender: () => this.rerender(),
         inlineInput: (cell, value, repaint, commit, configure) => this.inlineInput(cell, value, repaint, commit, configure),
         openRangePicker: (anchor, state, active, repaint, save, single) => this.openRangePicker(anchor, state, active, repaint, save, single),
-        chipList: (host, path, field, changed) => this.chipList(host, path, field, changed),
+        chipList: (host, path, field, changed) => this.chipList(host, () => path, field, changed),
         paintTagChip: (chip, tag) => this.paintTagChip(chip, tag),
         openTagMenu: (e, tag) => this.openStyleMenu(e, "tag", tag),
         avatar: (parent, who) => this.avatar(parent, who),
@@ -3615,7 +3599,8 @@ export class GanttView extends ItemView {
       // 添付ファイルの置き場所へ。"/" を渡すと、相対の設定も適当なノートではなく Vault のルートから決まる
       // where the vault keeps attachments; "/" makes a relative setting resolve from the vault root rather than from some note
       const path = await this.app.fileManager.getAvailablePathForAttachment(name, "/");
-      this.exportedNotice(await this.app.vault.createBinary(path, await blob.arrayBuffer()));
+      const file = await this.app.vault.createBinary(path, await blob.arrayBuffer());
+      this.buttonNotice(tr().exportDone(file.path), tr().exportOpen, () => void this.app.workspace.getLeaf("tab").openFile(file), 8000);
     } catch (e) {
       console.error(e);
       new Notice(tr().exportFailed);
@@ -3684,7 +3669,7 @@ export class GanttView extends ItemView {
       const fill = this.barFill(svg);
       this.rows.forEach((row, i) => {
         if (row.kind === "group") this.drawGroupRow(groupBg, barLayer, row, i, width);
-        else this.drawBar(barLayer, svg, row, i, fill, NO_HANDLES);
+        else this.drawBar(barLayer, svg, row, i, fill, null);
       });
       if (this.showDeps) for (const dep of this.depRows()) this.drawDep(depLayer, dep);
       // ラベルとタグは時間軸の右端より先まで伸びることがあるので、描いたものを測って画像の幅を決める。
@@ -3760,14 +3745,6 @@ export class GanttView extends ItemView {
       URL.revokeObjectURL(url);
       canvas.width = canvas.height = 0; // 大きなキャンバスのメモリをすぐ手放す / release the big canvas right away
     }
-  }
-
-  // 書き出し完了の通知（開くボタン付き）/ the export-done notice, with an Open button
-  private exportedNotice(file: TFile): void {
-    new Notice(createFragment((f) => {
-      f.appendText(`${tr().exportDone(file.path)} `);
-      f.createEl("button", { text: tr().exportOpen }).onclick = () => void this.app.workspace.getLeaf("tab").openFile(file);
-    }), 8000);
   }
 
   // 書き出す SVG に埋め込む CSS：このプラグインのルールと、そこで使う CSS 変数の今の値（テーマの色）

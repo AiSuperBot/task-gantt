@@ -35,30 +35,15 @@ export default class GanttPlugin extends Plugin {
       callback: () => void this.activateView(this.currentFolder()),
     });
 
-    // 開いているボードを PNG に書き出す（ボードが前面のときだけ）/ export the board in front as a PNG (only while one is in front)
-    this.addCommand({
-      id: "export-png",
-      name: t().exportPng,
-      checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(GanttView);
-        if (!view) return false;
-        if (!checking) void view.exportPng();
-        return true;
-      },
-    });
-
-    // 開いているボードを読み直す（ツールバーから「⋯」メニューへ移したので、ホットキーも割り当てられるように）
-    // reload the board in front (moved from the toolbar to the "⋯" menu, so it can take a hotkey too)
-    this.addCommand({
-      id: "reload-board",
-      name: t().reloadAria,
-      checkCallback: (checking) => {
-        const view = this.app.workspace.getActiveViewOfType(GanttView);
-        if (!view) return false;
-        if (!checking) void view.refresh();
-        return true;
-      },
-    });
+    // 前面のボードへのコマンド（ボードが前面のときだけ）：PNG に書き出す・読み直す（読み直しはツールバーから「⋯」メニューへ移したので、ホットキーも割り当てられるように）
+    // commands for the board in front (only while one is): export as PNG, and reload (moved from the toolbar to the "⋯" menu, so it can take a hotkey too)
+    const boardCommand = (id: string, name: string, run: (view: GanttView) => void) => this.addCommand({ id, name, checkCallback: (checking) => {
+      const view = this.app.workspace.getActiveViewOfType(GanttView);
+      if (view && !checking) run(view);
+      return !!view;
+    } });
+    boardCommand("export-png", t().exportPng, (view) => void view.exportPng());
+    boardCommand("reload-board", t().reloadAria, (view) => void view.refresh());
 
     // フォルダ右クリック → このフォルダを Gantt 表示 / folder context menu
     this.registerEvent(

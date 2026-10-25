@@ -37,16 +37,15 @@ button.ogantt-task-chevron {
   font: inherit;
   color: inherit;
 }
+button.ogantt-title:hover,
+button.ogantt-opt-gear:hover,
 button.ogantt-preset-item:hover,
-button.ogantt-preset-apply:hover {
-  background: var(--background-modifier-hover);
-}
+button.ogantt-preset-apply:hover,
 button.ogantt-legend-chip:hover,
 button.ogantt-dep-add:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
-
 
 .ogantt-toolbar {
   display: flex;
@@ -62,9 +61,6 @@ button.ogantt-title {
   padding: 2px 6px;
   font-size: var(--font-ui-medium);
   font-weight: 600;
-}
-button.ogantt-title:hover {
-  background: var(--background-modifier-hover);
 }
 .ogantt-title-caret {
   display: inline-flex;
@@ -161,10 +157,6 @@ button.ogantt-opt-gear {
   gap: 4px;
   padding: 2px 6px;
   color: var(--text-muted);
-}
-button.ogantt-opt-gear:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
 }
 /* ポップオーバー共通の外枠（列・フィルタ・タグ・カレンダー・時刻・色・アイコン・ステータス）
    shared popover chrome (columns, filters, tags, calendar, time, colour, icon, status) */
@@ -572,10 +564,6 @@ button.ogantt-preset-del {
 button.ogantt-legend-chip {
   padding: 1px 4px;
   border-radius: 4px;
-}
-.ogantt-legend-chip.is-clickable:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-normal);
 }
 .ogantt-legend-add {
   width: 20px;
