@@ -11,6 +11,9 @@ const SUGGESTED_ICONS = [
   "home", "building-2", "package", "shield", "wrench", "flask-conical", "globe", "zap",
 ];
 
+// ポップオーバーの中で操作できる要素 / what can take focus inside a popover
+const FOCUSABLE = "input, select, textarea, button, [tabindex='0']";
+
 // anchor の直下に開き、外側クリック/Esc で閉じる。中身は build が作り、close を受け取る。同じ cls の既存ポップオーバーは先に閉じる
 // open under `anchor`, closed on outside click / Esc; `build` fills it and receives `close`. An open popover of the same cls closes first
 export function openPopover(anchor: HTMLElement, cls: string, build: (menu: HTMLElement, close: () => void) => void): void {
@@ -37,7 +40,7 @@ export function openPopover(anchor: HTMLElement, cls: string, build: (menu: HTML
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") { e.preventDefault(); close(); return; }
     if (e.key !== "Tab" || !menu.contains(doc.activeElement)) return;
-    const items = Array.from(menu.querySelectorAll<HTMLElement>("input, select, textarea, button, [tabindex='0']")).filter((el) => !el.matches(":disabled"));
+    const items = focusable();
     const edge = e.shiftKey ? items[0] : items[items.length - 1];
     if (doc.activeElement === edge) {
       e.preventDefault();
@@ -45,17 +48,20 @@ export function openPopover(anchor: HTMLElement, cls: string, build: (menu: HTML
     }
   };
   build(menu, close);
+  const focusable = () => Array.from(menu.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => !el.matches(":disabled"));
   // 中身を作ってから寸法を測って位置決め。anchor の下に置き、画面外に出るなら上へ反転する
   // measure after building, then place below the anchor, flipping above when it would overflow
   const r = anchor.getBoundingClientRect();
   let top = r.bottom + 4;
   if (top + menu.offsetHeight > win.innerHeight) top = Math.max(4, r.top - menu.offsetHeight - 4);
   menu.style.top = `${top}px`;
+  // 窓に収まらない分はスクロールさせる（短い画面でも下の項目に届く）/ whatever doesn't fit the window scrolls, so short screens still reach the last items
+  menu.style.maxHeight = `${win.innerHeight - top - 4}px`;
   menu.style.left = `${Math.max(8, Math.min(r.left, win.innerWidth - menu.offsetWidth - 8))}px`;
   doc.addEventListener("pointerdown", onOutside, true);
   doc.addEventListener("keydown", onKey, true);
   // 中身がまだフォーカスを取っていなければ最初の操作できる要素へ / move focus to the first control unless the content already took it
-  if (!menu.contains(doc.activeElement)) menu.querySelector<HTMLElement>("input, select, textarea, button, [tabindex='0']")?.focus();
+  if (!menu.contains(doc.activeElement)) focusable()[0]?.focus();
 }
 
 // パレットの色見本＋カスタム（ネイティブの色選択＝色相から自由に選べる）を host に並べる

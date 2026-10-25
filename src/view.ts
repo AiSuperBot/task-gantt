@@ -27,7 +27,7 @@ import {
   anchorEnd,
   statusGroupOf,
 } from "./model";
-import { cascadeDates, endForDuration, keepDurationOnStartChange, offDayGradient, parseDuration, scheduleOptions, successorClosure, taskDuration } from "./schedule";
+import { cascadeDates, endForDuration, isWorkday, keepDurationOnStartChange, offDayGradient, parseDuration, scheduleOptions, successorClosure, taskDuration } from "./schedule";
 import {
   DateRange,
   computeRange,
@@ -50,9 +50,9 @@ import { attachLinkSuggest, handleLinkClick, renderLinkValue, wireLinkHover } fr
 import { t as tr, statusGroupLabel } from "./i18n"; // tr() … ローカル変数 t（Task）との衝突回避 / aliased to avoid clashing with the `t` task var
 import { schedulePush } from "./gcal/sync";
 import { isConnected } from "./gcal/auth";
-import { applyFilters, regroup, GroupBy } from "./filter";
+import { applyFilters, besideHeading, regroup, GroupBy } from "./filter";
 import { BoardContext, Move, MutateResult } from "./board";
-import { BUILTIN_COLUMNS, CellColumn, ColumnDef, columnWidth, customColumn, taskComparator, visibleColumns } from "./columns";
+import { BUILTIN_COLUMNS, CellColumn, ColumnDef, columnWidth, customColumn, paintProgress, taskComparator, visibleColumns } from "./columns";
 
 const ROW_H = 30; // 行の高さ（表とタイムラインで共通）/ shared row height
 const HEAD_H = 40; // ヘッダー高さ / header height
@@ -65,6 +65,12 @@ const FALLBACK_BAR = "#7c8db5"; // ステータス/担当者が未設定のと�
 const MAX_INDENT_DEPTH = 8; // インデントの段数上限（論理ツリーは無制限）/ visual indent cap (the tree itself is unlimited)
 const MAX_AVATARS = 3; // バーの横に並べるアバターの数（名前はラベルに全員）/ avatars beside a bar (the label names everyone)
 const MAX_PILLS = 3; // ラベルの後ろに並べるタグの数（残りは +N）/ tag pills after a label (the rest become +N)
+// バーのラベルとタグの札の文字の大きさ。描くときの font-size と、札の位置を決める幅の計測の両方に使う
+// the font sizes of bar labels and tag pills, used both as their font-size and when measuring widths to place the pills
+const LABEL_PX = 11;
+const PILL_PX = 9.5;
+// 書き出す画像の文字：SVG 画像の中でも使えるシステムフォント / the exported image's text: a system font that also exists inside an SVG image
+const EXPORT_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 // バー端からラベルまで。依存の矢印が折れる位置（12px）と端のハンドル（11px）の先に置く
 // from the bar end to the label: past the turn of a dependency arrow (12px) and the end handle (11px)
 const LABEL_GAP = 18;
@@ -97,6 +103,20 @@ interface HistoryEntry {
 function movesUnder(a: Move, b: Move): boolean {
   if (a.from === b.from && a.to === b.to) return true;
   return b.from.startsWith(a.from + "/") && b.to === a.to + b.from.slice(a.from.length);
+}
+
+// 依存が守られていないか（FS：先行の期限日以前に始まる、SS：先行より前に始まる、FF：先行より前に終わる）。矢印の赤と、矢印を隠したときのバーの縁で使う
+// whether a dependency is broken (FS: starts on or before the predecessor's due date, SS: starts before it, FF: ends before it);
+// it turns the arrow red, and outlines the bar when arrows are hidden
+function violated(t: Task, pred: Task, type: DepType): boolean {
+  const sStart = anchorStart(t);
+  const sEnd = anchorEnd(t);
+  const pStart = anchorStart(pred);
+  const pEnd = anchorEnd(pred);
+  if (!sStart || !sEnd || !pStart || !pEnd) return false;
+  if (type === "FS") return dayIndex(sStart) <= dayIndex(pEnd);
+  if (type === "SS") return dayIndex(sStart) < dayIndex(pStart);
+  return dayIndex(sEnd) < dayIndex(pEnd);
 }
 
 // 依存を作る 2 つのハンドル（全バーで共有）/ the two connector handles, shared by every bar
@@ -140,7 +160,8 @@ export class GanttView extends ItemView {
   private showDeps = true; // 依存の矢印（とリンクを作るハンドル）/ dependency arrows (and the handles that make links)
   private showTags = true; // バーの後ろのタグ / tags after the bars' labels
   private allFolders: string[][] = []; // スコープ配下の全フォルダ（相対セグメント）/ all folders under scope
-  private optionsHost!: HTMLElement; // グループ/色分け/表示切替/凡例の差し替え先 / layout options + legend container
+  private groupSel!: HTMLSelectElement; // ツールバーの「グループ化」/ the toolbar's Group by
+  private colorSel!: HTMLSelectElement; // ツールバーの「色分け」/ the toolbar's Color by
   private filterHost!: HTMLElement; // 統合フィルタ行の差し替え先 / unified filter bar container
 
   // 取り消し・やり直し履歴（対象ファイルのスナップショット＋移動）/ undo & redo history (snapshots of affected files + moves)
@@ -182,7 +203,12 @@ export class GanttView extends ItemView {
   private detailEl!: HTMLElement;
   private titleText: HTMLElement | null = null;
   private legendHost!: HTMLElement; // 色の凡例の行 / the colour key row
-  private measureCtx: CanvasRenderingContext2D | null = null; // 文字幅を測る（DOM のレイアウトを起こさない）/ measures text without a DOM layout
+  private measureCtx = createEl("canvas").getContext("2d")!; // 文字幅を測る（DOM のレイアウトを起こさない）/ measures text without a DOM layout
+  private widthCache = new Map<string, number>(); // 測った幅（描き直しごとに捨てる）/ measured widths, dropped per redraw
+  private tagColorCache = new Map<string, string>(); // タグの色（既定色は CSS を読むので、描き直しごとに 1 回）/ tag colours (the default reads CSS, so once per redraw)
+  private assigneeCache: string[] | null = null; // ボードの担当者一覧（描き直しごとに作る）/ the board's assignees, built once per redraw
+  private late: Set<string> | null = null; // 矢印を隠しているときの、依存が守られていない後続 / with arrows hidden, successors whose dependency is broken
+  private exporting = false; // PNG の書き出し中 / a PNG export is running
   private fontFamily = ""; // バーの文字のフォント（計測用）/ the bars' font, for measuring
   private undoBtn: HTMLButtonElement | null = null;
   private redoBtn: HTMLButtonElement | null = null;
@@ -243,6 +269,8 @@ export class GanttView extends ItemView {
       this.scheduleRefresh();
     }));
     this.registerEvent(this.app.vault.on("create", (file) => { if (inScope(file.path)) this.scheduleRefresh(); }));
+    // テーマ・フォントが変わったら描き直す（タグの札の位置は文字幅から決める）/ redraw after a theme or font change (tag pills are placed from text widths)
+    this.registerEvent(this.app.workspace.on("css-change", () => { if (this.boardMain) this.rerender(); }));
     this.registerEvent(this.app.vault.on("delete", (file) => { if (inScope(file.path)) this.scheduleRefresh(); }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       if (this.historyBusy === 0 && !this.isOwnMove(oldPath, file.path)) this.queueOutsideRename(oldPath, file.path);
@@ -285,14 +313,14 @@ export class GanttView extends ItemView {
     root.empty();
     root.addClass("ogantt-board");
     const pane = root.createDiv({ cls: "ogantt-pane" });
-    this.renderToolbar(pane); // 右端に表示オプション（optionsHost）/ the view options (optionsHost) sit on its right
+    this.renderToolbar(pane); // 右端に表示オプション / the view options sit on its right
     this.legendHost = pane.createDiv({ cls: "ogantt-legend" }); // 色の凡例 / the colour key
     this.filterHost = pane.createDiv({ cls: "ogantt-filterbar" }); // 統合フィルタ行 / the filter row
     this.gridHost = pane.createDiv({ cls: "ogantt-host" });
     this.detailEl = root.createDiv({ cls: "ogantt-detail", attr: { tabindex: "-1" } }); // Esc で欄を抜けたときの受け皿 / takes focus when Esc leaves a field
     // ペインの大きさが変わったら（ウィンドウ・サイドバー・詳細パネルの開閉）見える行を描き足し、Fit は幅に合わせ直す
     // when the pane resizes (window, sidebars, the detail panel opening or closing) draw any newly visible rows, and re-fit in Fit
-    const ro = new ResizeObserver(() => {
+    const ro = new (this.contentEl.win as Window & typeof globalThis).ResizeObserver(() => { // ビューの窓のもの（ポップアウトでも）/ the view's own window's (popouts too)
       this.paintWindow?.();
       if (this.zoom !== "Fit" || this.gridHost.clientWidth === this.fitWidth) return;
       if (this.fitTimer != null) window.clearTimeout(this.fitTimer);
@@ -404,17 +432,17 @@ export class GanttView extends ItemView {
     this.rollup = b?.rollup ?? false;
     this.progressLine = b?.progressLine ?? false;
     this.showEmptyFolders = b?.showEmptyFolders ?? true;
-    this.showDeps = b?.deps ?? true;
-    this.showTags = b?.tags ?? true;
+    this.showDeps = b?.showDeps ?? true;
+    this.showTags = b?.showTags ?? true;
     this.collapsed = new Set(b?.collapsed ?? []);
+    this.groupSel.value = this.groupBy;
+    this.colorSel.value = this.colorBy;
   }
 
   // 表示オプションを覚える / remember the view options
   private saveBoard(): void {
-    const { groupBy, colorBy, flat, rollup, progressLine, showEmptyFolders } = this;
-    this.plugin.settings.boards[`folder:${this.folder}`] = {
-      groupBy, colorBy, flat, rollup, progressLine, showEmptyFolders, deps: this.showDeps, tags: this.showTags, collapsed: [...this.collapsed],
-    };
+    const { groupBy, colorBy, flat, rollup, progressLine, showEmptyFolders, showDeps, showTags } = this;
+    this.plugin.settings.boards[`folder:${this.folder}`] = { groupBy, colorBy, flat, rollup, progressLine, showEmptyFolders, showDeps, showTags, collapsed: [...this.collapsed] };
     this.saveSoon();
   }
 
@@ -432,7 +460,10 @@ export class GanttView extends ItemView {
   rerender(): void {
     if (!this.gridHost) this.buildSkeleton();
     this.hideCard(); // 下のバーが作り直される / the bar under it is about to be replaced
-    this.renderOptions(); // グループ/色分け/凡例を最新データで更新 / refresh layout options + legend
+    this.assigneeCache = null;
+    this.tagColorCache.clear();
+    this.widthCache.clear();
+    this.renderLegend(); // 凡例はデータ（担当者）で変わる / the legend depends on the data (the assignees)
     this.renderFilterBar(); // 統合フィルタ行を最新データで更新 / refresh the unified filter row
     const view = this.processTasks(); // フィルタ＋グループ適用後 / after filter + group remap
     const compare = taskComparator(this.columns(), this.plugin.settings);
@@ -1045,8 +1076,6 @@ export class GanttView extends ItemView {
       }
       m.showAtMouseEvent(e);
     };
-    // 以降のコントロールは「＋」の右に左詰めで並べる（詳細パネルで隠れないように）
-    // keep the following controls left-packed next to "+" (so the detail panel can't hide them)
     // 今日へスクロール / scroll to today
     const todayBtn = bar.createEl("button", { cls: "ogantt-today-btn", text: tr().today });
     todayBtn.onclick = () => this.scrollToToday();
@@ -1079,9 +1108,31 @@ export class GanttView extends ItemView {
     this.redoBtn = redo;
     this.updateUndoButton();
 
-    // 右端：グループ化・色分け・表示メニュー（中身は rerender で差し替え）。読み直しと PNG の書き出しは「⋯」メニューへ
-    // on the right: group by, colour by and the Display menu (repopulated on rerender); reload and PNG export live in the "⋯" menu
-    this.optionsHost = bar.createDiv({ cls: "ogantt-options" });
+    // 右端：グループ化・色分け・表示メニュー。データに依存しないので一度だけ作る（描き直しても表示メニューの起点が消えない）。
+    // ときどき切り替える表示と列は表示メニューへ、読み直しと PNG の書き出しは「⋯」メニューへ
+    // on the right: group by, colour by and the Display menu, built once since they don't depend on the data (so the Display menu's
+    // anchor survives redraws). Occasional switches and the columns live in the Display menu; reload and PNG export in the "⋯" menu
+    const host = bar.createDiv({ cls: "ogantt-options" });
+    // 見える名前つきのセレクト（アイコンだけに頼らない）/ a select with a visible name, not just an icon
+    const makeSelect = (icon: string, label: string, opts: [string, string][], on: (v: string) => void): HTMLSelectElement => {
+      const wrap = host.createEl("label", { cls: "ogantt-opt" });
+      setIcon(wrap.createSpan({ cls: "ogantt-opt-ico" }), icon);
+      wrap.createSpan({ text: label });
+      const sel = wrap.createEl("select", { cls: "dropdown", attr: { "aria-label": label } });
+      for (const [value, text] of opts) sel.createEl("option", { text, value });
+      sel.addEventListener("change", () => on(sel.value));
+      return sel;
+    };
+    this.groupSel = makeSelect("layers", tr().optGroupLabel,
+      [["folder", tr().optGroupFolder], ["status", tr().fieldStatus], ["assignee", tr().fieldAssignee], ["tag", tr().fieldTags]],
+      (v) => { this.groupBy = v as GroupBy; this.collapsed.clear(); this.saveBoard(); this.rerender(); });
+    this.colorSel = makeSelect("palette", tr().optColorLabel, [["status", tr().fieldStatus], ["assignee", tr().fieldAssignee]],
+      (v) => { this.colorBy = v as typeof this.colorBy; this.saveBoard(); this.rerender(); });
+    const display = host.createEl("button", { cls: "ogantt-opt-gear", attr: { "aria-haspopup": "true" } });
+    setIcon(display.createSpan({ cls: "ogantt-opt-ico" }), "sliders-horizontal");
+    display.createSpan({ text: tr().optDisplay });
+    setIcon(display.createSpan({ cls: "ogantt-preset-caret" }), "chevron-down");
+    display.onclick = () => this.openDisplayMenu(display);
   }
 
   // 表示の「⋯」メニュー：PNG に書き出す・読み直す（ツールバーに置くほど頻繁ではない操作）
@@ -1092,120 +1143,72 @@ export class GanttView extends ItemView {
     super.onPaneMenu(menu, source);
   }
 
-  // ----- 表示オプション（グループ化・色分け・表示メニュー）＋凡例 / view options (group by, colour by, Display menu) + legend -----
-  // よく使うグループ化と色分けだけをツールバーに置き、ときどき切り替える表示と列は表示メニューへ。データに依存するので rerender 毎に作り直す
-  // only the frequent group by and colour by sit on the toolbar; occasional display switches and the columns go into the Display menu.
-  // Rebuilt each rerender, since it depends on the data
-  private renderOptions(): void {
-    const host = this.optionsHost;
-    host.empty();
-
-    // 見える名前つきのセレクト（アイコンだけに頼らない）/ a select with a visible name, not just an icon
-    const makeSelect = (icon: string, label: string, value: string, opts: [string, string][], on: (v: string) => void): void => {
-      const wrap = host.createEl("label", { cls: "ogantt-opt" });
-      setIcon(wrap.createSpan({ cls: "ogantt-opt-ico" }), icon);
-      wrap.createSpan({ text: label });
-      const sel = wrap.createEl("select", { cls: "dropdown", attr: { "aria-label": label } });
-      for (const [val, text] of opts) {
-        const o = sel.createEl("option", { text, value: val });
-        if (val === value) o.selected = true;
-      }
-      sel.addEventListener("change", () => on(sel.value));
-    };
-
-    // ── 表示の組み立て（グループ化・色分け）/ layout (group + color) ──
-    // グループ化 / group by
-    makeSelect(
-      "layers",
-      tr().optGroupLabel,
-      this.groupBy,
-      [["folder", tr().optGroupFolder], ["status", tr().fieldStatus], ["assignee", tr().fieldAssignee], ["tag", tr().fieldTags]],
-      (v) => { this.groupBy = v as typeof this.groupBy; this.collapsed.clear(); this.saveBoard(); this.rerender(); }
-    );
-    // 色分け / color by
-    makeSelect(
-      "palette",
-      tr().optColorLabel,
-      this.colorBy,
-      [["status", tr().fieldStatus], ["assignee", tr().fieldAssignee]],
-      (v) => { this.colorBy = v as typeof this.colorBy; this.saveBoard(); this.rerender(); }
-    );
-    // 表示メニュー / the Display menu
-    const display = host.createEl("button", { cls: "ogantt-opt-gear", attr: { "aria-haspopup": "true" } });
-    setIcon(display.createSpan({ cls: "ogantt-opt-ico" }), "sliders-horizontal");
-    display.createSpan({ text: tr().optDisplay });
-    setIcon(display.createSpan({ cls: "ogantt-preset-caret" }), "chevron-down");
-    display.onclick = () => this.openDisplayMenu(display);
-    this.renderLegend();
-  }
-
-  // 表示メニュー：このボードの表示の切り替えと、表の列の出し分け / the Display menu: this board's display switches and the table's columns
+  // 表示メニュー：このボードの表示の切り替えと、表の列の出し分け。一度だけ作り、切り替えたら使える項目だけを更新する
+  // the Display menu: this board's display switches and the table's columns; built once, a switch only updates which items are available
   private openDisplayMenu(anchor: HTMLElement): void {
     openPopover(anchor, "ogantt-colmenu", (menu) => {
-      const paint = (focus?: string) => {
-        menu.empty();
-        // ロールアップと空フォルダはフォルダでグループ化しているときだけ（フラットでは無効）。消さずに無効で残し、理由を添える
-        // roll up and empty folders need folder grouping (not in flat); they stay, disabled, with the reason underneath
-        const folderOnly = this.groupBy !== "folder" || this.flat;
-        const toggle = (key: "showDeps" | "showTags" | "progressLine" | "flat" | "rollup" | "showEmptyFolders", label: string, disabled = false) => {
-          const item = menu.createEl("label", { cls: "ogantt-colmenu-item" });
-          const cb = item.createEl("input", { type: "checkbox", attr: { "data-key": key } });
-          cb.checked = this[key];
-          cb.disabled = disabled;
-          item.createSpan({ text: label });
-          cb.addEventListener("change", () => {
-            this[key] = cb.checked;
-            this.saveBoard();
-            this.rerender();
-            paint(key); // 使える項目が変わることがある / which items are available may change
-          });
-        };
-        toggle("showDeps", tr().optArrows);
-        toggle("showTags", tr().optTagLabels);
-        toggle("progressLine", tr().optProgressLine);
-        toggle("flat", tr().optFlat);
-        toggle("rollup", tr().optRollup, folderOnly);
-        toggle("showEmptyFolders", tr().optShowEmpty, folderOnly);
-        if (folderOnly) menu.createDiv({ cls: "ogantt-colmenu-note", text: tr().folderOnly });
-        menu.createDiv({ cls: "ogantt-preset-heading", text: tr().optColumns });
-        for (const col of this.columns().filter((c) => c.optional)) {
-          const item = menu.createEl("label", { cls: "ogantt-colmenu-item" });
-          const cb = item.createEl("input", { type: "checkbox" });
-          cb.checked = (this.plugin.settings.visibleColumns ?? []).includes(col.id);
-          item.createSpan({ text: col.label() });
-          cb.addEventListener("change", () => this.setColumnVisible(col.id, cb.checked));
-        }
-        if (focus) menu.querySelector<HTMLElement>(`input[data-key="${focus}"]`)?.focus();
+      const row = (label: string, checked: boolean, on: (v: boolean) => void): HTMLInputElement => {
+        const item = menu.createEl("label", { cls: "ogantt-colmenu-item" });
+        const cb = item.createEl("input", { type: "checkbox" });
+        cb.checked = checked;
+        item.createSpan({ text: label });
+        cb.addEventListener("change", () => on(cb.checked));
+        return cb;
       };
-      paint();
+      // ロールアップと空フォルダは、フォルダでグループ化してフラット表示でないときだけ。消さずに無効で残し、理由を添える
+      // roll up and empty folders need folder grouping with Flat off; they stay, disabled, with the reason underneath
+      const folderOnly: HTMLInputElement[] = [];
+      let note: HTMLElement | null = null;
+      const sync = () => {
+        const off = this.groupBy !== "folder" || this.flat;
+        folderOnly.forEach((cb) => (cb.disabled = off));
+        note?.toggle(off);
+      };
+      const toggle = (key: "showDeps" | "showTags" | "progressLine" | "flat" | "rollup" | "showEmptyFolders", label: string) =>
+        row(label, this[key], (v) => {
+          this[key] = v;
+          this.saveBoard();
+          this.rerender();
+          sync();
+        });
+      toggle("showDeps", tr().optArrows);
+      toggle("showTags", tr().optTagLabels);
+      toggle("progressLine", tr().optProgressLine);
+      toggle("flat", tr().optFlat);
+      folderOnly.push(toggle("rollup", tr().optRollup), toggle("showEmptyFolders", tr().optShowEmpty));
+      note = menu.createDiv({ cls: "ogantt-colmenu-note", text: tr().folderOnly });
+      sync();
+      menu.createDiv({ cls: "ogantt-preset-heading", text: tr().optColumns });
+      for (const col of this.columns().filter((c) => c.optional)) {
+        row(col.label(), (this.plugin.settings.visibleColumns ?? []).includes(col.id), (v) => this.setColumnVisible(col.id, v));
+      }
     });
   }
 
-  // 凡例（色分けの基準を説明）。ステータスはクリックでその場で編集でき、＋ で追加できる
-  // the legend explaining the current colours; a status chip opens its editor on click, and + adds one
+  // 色の凡例の中身。画面の凡例と書き出す PNG の両方がここから作る（ステータスは押すと編集、担当者は押すと色を選ぶ）
+  // the colour key's entries; both the on-screen legend and the exported PNG are built from them (a status opens its editor, a person their colour)
+  private colorKey(): { color: string; label: string; edit?: (chip: HTMLElement) => void }[] {
+    if (this.colorBy === "status") {
+      return this.plugin.settings.statuses.map((s) => ({ color: s.color, label: s.label, edit: (chip: HTMLElement) => this.openStatusEditor(chip, s) }));
+    }
+    const people: { color: string; label: string; edit?: (chip: HTMLElement) => void }[] = this.assigneeList().map((a) => ({
+      color: this.assigneeColor(a),
+      label: linkLabel(a),
+      edit: (chip: HTMLElement) => pickColor(chip, this.assigneeColor(a), (c) => this.setColorOverride("assignee", linkLabel(a), c)),
+    }));
+    if (this.tasks.some((t) => !t.assignees.length)) people.push({ color: FALLBACK_BAR, label: tr().noneLabel });
+    return people;
+  }
+
+  // 凡例（色分けの基準を説明）。ステータスなら ＋ で追加できる / the legend explaining the colours; with statuses, + adds one
   private renderLegend(): void {
     const legend = this.legendHost;
     legend.empty();
-    if (this.colorBy === "status") {
-      for (const s of this.plugin.settings.statuses) this.legendChip(legend, s.color, s.label, (chip) => this.openStatusEditor(chip, s));
-      const add = legend.createEl("button", { cls: "ogantt-legend-chip ogantt-legend-add clickable-icon", attr: { "aria-label": tr().setAddStatus } });
-      setIcon(add, "plus");
-      add.onclick = () => this.openStatusEditor(add);
-    } else {
-      for (const a of this.assigneeList()) {
-        this.legendChip(legend, this.assigneeColor(a), linkLabel(a), (chip) =>
-          pickColor(chip, this.assigneeColor(a), (c) => this.setColorOverride("assignee", linkLabel(a), c)));
-      }
-      if (this.tasks.some((t) => !t.assignees.length)) this.legendChip(legend, FALLBACK_BAR, tr().noneLabel);
-    }
-  }
-
-  // 色の凡例の中身（書き出す PNG 用）/ the colour key's entries (for the exported PNG)
-  private colorKey(): [string, string][] {
-    if (this.colorBy === "status") return this.plugin.settings.statuses.map((s) => [s.color, s.label]);
-    const people = this.assigneeList().map((a): [string, string] => [this.assigneeColor(a), linkLabel(a)]);
-    if (this.tasks.some((t) => !t.assignees.length)) people.push([FALLBACK_BAR, tr().noneLabel]);
-    return people;
+    for (const k of this.colorKey()) this.legendChip(legend, k.color, k.label, k.edit);
+    if (this.colorBy !== "status") return;
+    const add = legend.createEl("button", { cls: "ogantt-legend-chip ogantt-legend-add clickable-icon", attr: { "aria-label": tr().setAddStatus } });
+    setIcon(add, "plus");
+    add.onclick = () => this.openStatusEditor(add);
   }
 
   // 凡例のチップ。onClick があればボタン（キーボードでも開ける）/ a legend chip; a button when clickable, so the keyboard reaches it too
@@ -1217,9 +1220,13 @@ export class GanttView extends ItemView {
     if (onClick) chip.onclick = () => onClick(chip);
   }
 
-  // ボードの担当者（重複なし・並べ替え済み）/ the board's assignees, deduplicated and sorted
+  // ボードの担当者（重複なし・表示名順。表示名が同じなら元の文字列順で、選ばれる表記がいつも同じになる）。描き直しごとに 1 回だけ作る
+  // the board's assignees, deduplicated and sorted by display name (ties by the raw string, so the same spelling is always picked); built once per redraw
   private assigneeList(): string[] {
-    return [...new Set(this.tasks.flatMap((t) => t.assignees))].sort((a, b) => linkLabel(a).localeCompare(linkLabel(b))); // 表示名順 / by display name
+    return (this.assigneeCache ??= [...new Set(this.tasks.flatMap((t) => t.assignees))]
+      .map((a) => [linkLabel(a), a] as const)
+      .sort(([la, a], [lb, b]) => la.localeCompare(lb) || (a < b ? -1 : a > b ? 1 : 0))
+      .map(([, a]) => a));
   }
 
   // ステータスの編集ポップオーバー（名前・色・グループ・削除）。st が無ければ新規作成（名前を入れた時点で追加）
@@ -1290,8 +1297,11 @@ export class GanttView extends ItemView {
   }
 
   // タグ/フォルダの色（手動上書きがあればそれ、無ければ名前ハッシュで自動生成）/ tag/folder color (manual override, else auto from name)
+  // 既定色は CSS 変数を読むので、描き直しごとにタグ単位で覚える（札ごとにスタイルを読まない）/ the default colour reads a CSS variable, so it's kept per tag per redraw
   private tagColor(tag: string): string {
-    return resolveTagColor(this.plugin.settings.tagColors, this.plugin.settings.defaultTagColor, tag);
+    let c = this.tagColorCache.get(tag);
+    if (c === undefined) this.tagColorCache.set(tag, (c = resolveTagColor(this.plugin.settings.tagColors, this.plugin.settings.defaultTagColor, tag)));
+    return c;
   }
   private folderColor(name: string): string {
     return this.plugin.settings.folderColors.find((c) => c.name === name)?.color || hashColor(name);
@@ -1698,6 +1708,8 @@ export class GanttView extends ItemView {
     const handles = this.showDeps ? this.makeHandles(svg, layer("ogantt-handles-layer")) : NO_HANDLES;
     const fill = this.barFill(svg);
     const deps = this.showDeps ? this.depRows() : [];
+    // 矢印を隠しても、依存が守られていない後続はバーの赤い縁で分かる / with arrows hidden, a successor whose dependency is broken still gets a red outline
+    this.late = this.showDeps ? null : new Set(this.depRows().filter((d) => violated(d.t, d.pred, d.type)).map((d) => d.t.path));
 
     // 行かバーにマウスを載せると、同じタスクの行・バー・複製（担当者やタグごとの重複表示）をまとめて強調する
     // hovering a row or bar highlights every row, bar and copy of that task (copies come from grouping by assignee or tag)
@@ -1741,7 +1753,7 @@ export class GanttView extends ItemView {
     main.addEventListener("scroll", () => {
       if (ticking) return;
       ticking = true;
-      window.requestAnimationFrame(() => {
+      main.win.requestAnimationFrame(() => { // ビューの窓の（ポップアウトでも止まらない）/ the view's own window (keeps running in a popout)
         ticking = false;
         this.paintWindow?.();
       });
@@ -1854,7 +1866,7 @@ export class GanttView extends ItemView {
     const el = body.createDiv({ cls: "ogantt-tr", attr: { role: "treeitem", "aria-level": String(row.depth + 1), "data-index": String(i), tabindex: i === this.cursor ? "0" : "-1" } });
     el.style.top = `${i * ROW_H}px`;
     el.style.height = `${ROW_H}px`;
-    const indent = 8 + Math.min(row.depth, MAX_INDENT_DEPTH) * 16; // 入れ子インデント（上限あり）/ nesting indent (capped)
+    const indent = this.indentOf(row);
     if (row.kind === "group") {
       el.addClass("is-group");
       const isCollapsed = row.key != null && this.collapsed.has(row.key);
@@ -1959,6 +1971,11 @@ export class GanttView extends ItemView {
     }
   }
 
+  // 入れ子インデント（上限あり）。画面と書き出しで同じ / the nesting indent (capped), the same on screen and in the export
+  private indentOf(row: Row): number {
+    return 8 + Math.min(row.depth, MAX_INDENT_DEPTH) * 16;
+  }
+
   // 折りたたみの切り替え（表示だけの変更。ボードごとに覚える）/ toggle a group or parent (display only; remembered per board)
   private toggleCollapse(key?: string): void {
     if (key == null) return;
@@ -2038,7 +2055,7 @@ export class GanttView extends ItemView {
     }));
     m.addSeparator();
     m.addItem((i) => i.setTitle(tr().menuDelete).setIcon("trash-2").onClick(() => this.confirmDelete(t.path)));
-    if (at instanceof MouseEvent) m.showAtMouseEvent(at);
+    if ("clientX" in at) m.showAtMouseEvent(at); // instanceof はポップアウトの窓では成り立たない / instanceof fails across popout windows
     else {
       const r = at.getBoundingClientRect();
       m.showAtPosition({ x: r.left + 24, y: r.bottom });
@@ -2171,7 +2188,7 @@ export class GanttView extends ItemView {
     const aStart = anchorStart(t);
     if (!aStart) return;
     const x = this.xOf(aStart);
-    const g = this.svgEl("g", { class: "ogantt-bar-g" + (group === "cancelled" ? " is-cancelled" : ""), "data-path": t.path });
+    const g = this.svgEl("g", { class: "ogantt-bar-g" + (group === "cancelled" ? " is-cancelled" : "") + (this.late?.has(t.path) ? " is-late" : ""), "data-path": t.path });
     let lx = x; // 左端ハンドル位置 / left handle x
     let rx = x; // 右端ハンドル位置 / right handle x
     if (t.milestone) {
@@ -2266,7 +2283,7 @@ export class GanttView extends ItemView {
   // completed. What the heading already says isn't repeated: grouped by assignee, the heading's person is left out and the others follow a "+";
   // grouped by tag, the heading's tag is left out
   private drawLabel(g: SVGElement, t: Task, x: number, cy: number, group: StatusGroup | undefined, heading: string): void {
-    const people = this.groupBy === "assignee" ? t.assignees.filter((a) => linkLabel(a) !== heading) : t.assignees;
+    const people = besideHeading(t.assignees, "assignees", this.groupBy, heading);
     const shown = people.slice(0, MAX_AVATARS);
     shown.forEach((a, k) => {
       const c = this.assigneeColor(a);
@@ -2278,28 +2295,33 @@ export class GanttView extends ItemView {
     const plus = people.length < t.assignees.length ? "+ " : "";
     let text = people.length ? `${t.name} · ${plus}${people.map(linkLabel).join(", ")}` : t.name;
     if (group === "completed") text = `✓ ${text}`;
-    g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label" })).textContent = text;
+    g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label", "font-size": LABEL_PX })).textContent = text;
     // タグはラベルの後ろに小さな札で、タグの色で控えめに（表示メニューで隠せる）/ tags follow the label as small pills, quietly in their colour (hidden from the Display menu)
     if (!this.showTags) return;
-    const tags = this.groupBy === "tag" ? t.tags.filter((tag) => tag !== heading) : t.tags;
-    let px = x + this.textWidth(text, 11) + 8;
+    const tags = besideHeading(t.tags, "tags", this.groupBy, heading);
+    if (!tags.length) return;
+    let px = x + this.textWidth(text, LABEL_PX) + 8;
     for (const tag of tags.slice(0, MAX_PILLS)) {
-      const w = this.textWidth(tag, 9.5) + 12;
+      const w = this.textWidth(tag, PILL_PX) + 12;
       const c = this.tagColor(tag);
       const pill = g.appendChild(this.svgEl("g", { class: "ogantt-tag-pill" }));
       pill.appendChild(this.svgEl("rect", { x: px, y: cy - 5, width: w, height: 14, rx: 7, fill: c, stroke: c }));
-      pill.appendChild(this.svgEl("text", { x: px + w / 2, y: cy + 3, fill: c })).textContent = tag;
+      pill.appendChild(this.svgEl("text", { x: px + w / 2, y: cy + 3, fill: c, "font-size": PILL_PX })).textContent = tag;
       px += w + 4;
     }
-    if (tags.length > MAX_PILLS) g.appendChild(this.svgEl("text", { x: px, y: cy + 4, class: "ogantt-bar-label" })).textContent = `+${tags.length - MAX_PILLS}`;
+    if (tags.length > MAX_PILLS) g.appendChild(this.svgEl("text", { x: px, y: cy + 4, class: "ogantt-bar-label", "font-size": LABEL_PX })).textContent = `+${tags.length - MAX_PILLS}`;
   }
 
-  // 文字列の幅（キャンバスで測るので DOM のレイアウトを起こさない）/ a string's width, measured on a canvas (no DOM layout)
+  // 文字列の幅（キャンバスで測るので DOM のレイアウトを起こさない。描き直しのあいだは覚えておく）/ a string's width, measured on a canvas (no DOM layout), kept for the redraw
   private textWidth(text: string, px: number, weight = 400): number {
-    const ctx = (this.measureCtx ??= createEl("canvas").getContext("2d"));
-    if (!ctx) return text.length * px * 0.6;
-    ctx.font = `${weight} ${px}px ${this.fontFamily || "sans-serif"}`;
-    return ctx.measureText(text).width;
+    const font = `${weight} ${px}px ${this.fontFamily}`;
+    const key = `${font}|${text}`;
+    let w = this.widthCache.get(key);
+    if (w === undefined) {
+      this.measureCtx.font = font;
+      this.widthCache.set(key, (w = this.measureCtx.measureText(text).width));
+    }
+    return w;
   }
 
   // 色を等分した横縞のグラデーションを用意して fill の url を返す（共有タスクの担当者の色）
@@ -2500,13 +2522,11 @@ export class GanttView extends ItemView {
     let mxX: number;
     const mxY = mid;
     let arrowD: string;
-    let violation = false;
+    const violation = violated(t, pred, depType);
     if (depType === "FS") {
       // 先行の終了 → 後続の開始（左から差し込む）/ pred finish → succ start
       const sx0 = pRight;
       const tx = sLeft;
-      // FS は翌日以降が正常。先行end と同日以前は違反 / successor must start the day after; same day or earlier is a violation
-      violation = dayIndex(sStart) <= dayIndex(pEndD);
       if (tx - sx0 > GAP * 2) {
         const mx = sx0 + Math.max(GAP, (tx - sx0) / 2);
         d = `M ${sx0} ${py} L ${mx} ${py} L ${mx} ${sy} L ${tx} ${sy}`;
@@ -2522,7 +2542,6 @@ export class GanttView extends ItemView {
       // 先行の開始 → 後続の開始（左側を回る）/ pred start → succ start
       const sx0 = pLeft;
       const tx = sLeft;
-      violation = dayIndex(sStart) < dayIndex(pStartD);
       const leftMost = Math.min(sx0, tx) - GAP;
       d = `M ${sx0} ${py} L ${leftMost} ${py} L ${leftMost} ${sy} L ${tx} ${sy}`;
       mxX = leftMost;
@@ -2531,7 +2550,6 @@ export class GanttView extends ItemView {
       // FF: 先行の終了 → 後続の終了（右側を回る）/ pred finish → succ finish
       const sx0 = pRight;
       const tx = sRight;
-      violation = dayIndex(sEnd) < dayIndex(pEndD);
       const rightMost = Math.max(sx0, tx) + GAP;
       d = `M ${sx0} ${py} L ${rightMost} ${py} L ${rightMost} ${sy} L ${tx} ${sy}`;
       mxX = rightMost;
@@ -2936,8 +2954,7 @@ export class GanttView extends ItemView {
     if (t.cards) {
       // カードのあるカンバンは、チェックしたカードの割合が進捗（ボードでカードをチェックすると進む。ここでは編集しない）
       // a kanban with cards takes its progress from the share of checked cards (checking cards on the board moves it; not edited here)
-      progField.createDiv({ cls: "ogantt-meter" }).createDiv({ cls: "ogantt-meter-fill" }).style.width = `${t.progress ?? 0}%`;
-      progField.createSpan({ cls: "ogantt-progress-val", text: `${t.progress ?? 0}%` });
+      paintProgress(progField.createDiv(), t);
       progField.createDiv({ cls: "ogantt-progress-note", text: tr().kanbanProgress(t.cards.done, t.cards.total) });
     } else {
       const progRange = progField.createEl("input", { type: "range", attr: { "aria-label": tr().fieldProgress } });
@@ -3587,126 +3604,170 @@ export class GanttView extends ItemView {
   // a canvas and saves it where the vault keeps attachments. Bars and arrows use the screen's own drawing code and CSS, so the look
   // (theme colours, the Display menu's switches) carries over
   async exportPng(): Promise<void> {
-    if (!this.rows.length) return;
-    const PAD = 16;
-    const TITLE_H = 34;
-    const NAME_W = Math.max(200, this.colW("name"));
-    const width = (this.range.max - this.range.min + 1) * this.ppd;
-    const bodyH = this.rows.length * ROW_H;
-    const svg = this.svgEl("svg", {});
-    svg.appendChild(this.svgEl("style", {})).textContent = this.exportCss();
-    const bg = svg.appendChild(this.svgEl("rect", { class: "x-bg" }));
-    const text = (parent: SVGElement, x: number, y: number, cls: string, value: string) => {
-      parent.appendChild(this.svgEl("text", { x, y, class: cls })).textContent = value;
-    };
-    text(svg, PAD, PAD + 20, "x-title", `${this.folder || "(vault root)"} — ${formatDate(dayToStr(todayIndex()), this.plugin.settings.dateFormat)}`);
-    const top = PAD + TITLE_H;
-    // 日付軸 / the date axis
-    const zoom = this.tickZoom();
-    const { ticks, bands } = this.axisMarks(zoom);
-    const axis = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD + NAME_W},${top})` }));
-    for (const b of bands) text(axis, b.x + 4, 14, "x-band", b.label);
-    for (const tk of ticks) {
-      axis.appendChild(this.svgEl("line", { x1: tk.x, y1: HEAD_H / 2, x2: tk.x, y2: HEAD_H, class: "x-line" }));
-      text(axis, tk.x + 3, HEAD_H - 7, tk.major ? "x-tick is-major" : "x-tick", tk.label);
+    // 画面が空の状態（絞り込みで何も出ない・タスクが無い）なら書き出さず、そう伝える / while the board shows its empty state there is nothing to export: say so
+    if (!this.boardMain) return void new Notice(this.tasks.length ? tr().noMatches : tr().emptyMessage(this.folder || "vault"));
+    if (this.exporting) return; // 書き出しは一度に 1 つ / one export at a time
+    this.exporting = true;
+    // 名前は最初に決める（途中でボードを切り替えても、描いたボードの名前で保存する）/ named up front, so switching boards mid-export can't rename it
+    const name = `Gantt ${this.folder.split("/").pop() || "vault"} ${dayToStr(todayIndex())}.png`;
+    try {
+      const blob = await this.rasterise(this.exportSvg());
+      // 添付ファイルの置き場所へ。"/" を渡すと、相対の設定も適当なノートではなく Vault のルートから決まる
+      // where the vault keeps attachments; "/" makes a relative setting resolve from the vault root rather than from some note
+      const path = await this.app.fileManager.getAvailablePathForAttachment(name, "/");
+      this.exportedNotice(await this.app.vault.createBinary(path, await blob.arrayBuffer()));
+    } catch (e) {
+      console.error(e);
+      new Notice(tr().exportFailed);
+    } finally {
+      this.exporting = false;
     }
-    // 行：見出しの背景・区切り線・名前（名前の列の幅で切る）/ rows: heading backgrounds, separators and names (clipped to the name column)
-    const body = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD},${top + HEAD_H})` }));
-    this.defs(svg).appendChild(this.svgEl("clipPath", { id: "x-names" })).appendChild(this.svgEl("rect", { width: NAME_W - 8, height: bodyH }));
-    const names = this.svgEl("g", { "clip-path": "url(#x-names)" });
-    this.rows.forEach((row, i) => {
-      const y = i * ROW_H;
-      if (row.kind === "group") body.appendChild(this.svgEl("rect", { y, width: NAME_W + width, height: ROW_H, class: "ogantt-grid-group" }));
-      body.appendChild(this.svgEl("line", { x1: 0, y1: y + ROW_H - 0.5, x2: NAME_W + width, y2: y + ROW_H - 0.5, class: "x-line" }));
-      const indent = 8 + Math.min(row.depth, MAX_INDENT_DEPTH) * 16;
-      text(names, indent, y + ROW_H / 2 + 4, row.kind === "group" ? "x-name is-group" : "x-name", row.kind === "group" ? row.group : row.task!.name);
-    });
-    body.appendChild(names);
-    // 時間軸：休日の網掛け・今日の線・バー・矢印（画面と同じ描き方）/ the timeline: non-working days, today, bars and arrows, drawn as on screen
-    const tl = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD + NAME_W},${top + HEAD_H})` }));
-    tl.appendChild(this.svgEl("line", { x1: 0, y1: -HEAD_H, x2: 0, y2: bodyH, class: "x-line" }));
-    if (zoom !== "Month") {
-      const off = new Set(scheduleOptions(this.plugin.settings).cal.off);
-      for (let d = this.range.min; d <= this.range.max; d++) {
-        if (off.has(new Date(d * 864e5).getUTCDay())) tl.appendChild(this.svgEl("rect", { x: (d - this.range.min) * this.ppd, width: this.ppd, height: bodyH, class: "x-off" }));
+  }
+
+  // 書き出す SVG：ボード全体（画面外の行も）・名前の列・日付軸・色の凡例。バーと矢印は画面と同じ関数と CSS で描く。
+  // 文字は SVG 画像の中でも使えるシステムフォントにそろえ、幅も同じフォントで測る（ページの Web フォントは画像では使えない）
+  // the SVG to export: the whole board (off-screen rows too), name column, date axis and colour key. Bars and arrows use the screen's own
+  // drawing code and CSS. Text uses a system font that also exists inside an SVG image, and is measured in it (the page's web fonts don't)
+  private exportSvg(): SVGSVGElement {
+    const screenFont = this.fontFamily;
+    this.fontFamily = EXPORT_FONT;
+    try {
+      const PAD = 16;
+      const TITLE_H = 34;
+      const NAME_W = Math.max(200, this.colW("name"));
+      const width = (this.range.max - this.range.min + 1) * this.ppd;
+      const bodyH = this.rows.length * ROW_H;
+      const svg = this.svgEl("svg", { "font-family": EXPORT_FONT });
+      const bg = svg.appendChild(this.svgEl("rect", { class: "x-bg" }));
+      const text = (parent: SVGElement, x: number, y: number, cls: string, value: string) => {
+        parent.appendChild(this.svgEl("text", { x, y, class: cls })).textContent = value;
+      };
+      text(svg, PAD, PAD + 20, "x-title", `${this.folder || "(vault root)"} — ${formatDate(dayToStr(todayIndex()), this.plugin.settings.dateFormat)}`);
+      const top = PAD + TITLE_H;
+      // 日付軸 / the date axis
+      const zoom = this.tickZoom();
+      const { ticks, bands } = this.axisMarks(zoom);
+      const axis = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD + NAME_W},${top})` }));
+      for (const b of bands) text(axis, b.x + 4, 14, "x-band", b.label);
+      for (const tk of ticks) {
+        axis.appendChild(this.svgEl("line", { x1: tk.x, y1: HEAD_H / 2, x2: tk.x, y2: HEAD_H, class: "x-line" }));
+        text(axis, tk.x + 3, HEAD_H - 7, tk.major ? "x-tick is-major" : "x-tick", tk.label);
       }
-    }
-    this.drawToday(tl, width, bodyH);
-    this.drawCopyLinks(tl);
-    const depLayer = tl.appendChild(this.svgEl("g", {}));
-    const barLayer = tl.appendChild(this.svgEl("g", {}));
-    if (this.progressLine) this.drawProgressLine(tl, width, bodyH);
-    const fill = this.barFill(svg);
-    const scratch = this.svgEl("g", {}); // 見出しの背景は名前と一緒に描いた / heading backgrounds were drawn with the names
-    this.rows.forEach((row, i) => {
-      if (row.kind === "group") this.drawGroupRow(scratch, barLayer, row, i, width);
-      else this.drawBar(barLayer, svg, row, i, fill, NO_HANDLES);
-    });
-    if (this.showDeps) for (const dep of this.depRows()) this.drawDep(depLayer, dep);
-    // ラベルとタグは時間軸の右端より先まで伸びることがあるので、描いたものを測って画像の幅を決める
-    // labels and tags can run past the timeline's end, so measure what was drawn to size the image
-    const doc = this.contentEl.ownerDocument;
-    svg.setAttribute("style", "position: fixed; left: -100000px; top: 0; visibility: hidden");
-    doc.body.appendChild(svg);
-    const box = (tl as SVGGraphicsElement).getBBox();
-    svg.remove();
-    svg.removeAttribute("style");
-    const W = PAD * 2 + NAME_W + Math.max(width, Math.ceil(box.x + box.width));
-    // 色の凡例は画像の幅で折り返す / the colour key wraps to the image's width
-    const keyTitle = this.colorBy === "status" ? tr().fieldStatus : tr().fieldAssignee;
-    let kx = this.textWidth(keyTitle, 11, 600) + 14;
-    let ky = 0;
-    const key = this.colorKey().map(([color, label]) => {
-      const w = 32 + this.textWidth(label, 11);
-      if (kx + w > W - PAD * 2) {
-        kx = 0;
-        ky += 20;
+      // 行：名前の列の見出しの背景・区切り線・名前（名前の列の幅で切る）/ rows: heading backgrounds in the name column, separators, names (clipped to the column)
+      const body = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD},${top + HEAD_H})` }));
+      this.defs(svg).appendChild(this.svgEl("clipPath", { id: "x-names" })).appendChild(this.svgEl("rect", { width: NAME_W - 8, height: bodyH }));
+      const names = this.svgEl("g", { "clip-path": "url(#x-names)" });
+      this.rows.forEach((row, i) => {
+        const y = i * ROW_H;
+        if (row.kind === "group") body.appendChild(this.svgEl("rect", { y, width: NAME_W, height: ROW_H, class: "ogantt-grid-group" }));
+        body.appendChild(this.svgEl("line", { x1: 0, y1: y + ROW_H - 0.5, x2: NAME_W + width, y2: y + ROW_H - 0.5, class: "x-line" }));
+        // 名前は画面と同じ位置（タスクは開閉の印の枠のぶん右）/ names sit where they do on screen (a task after its chevron slot)
+        const x = this.indentOf(row) + (row.kind === "task" ? 16 : 0);
+        text(names, x, y + ROW_H / 2 + 4, row.kind === "group" ? "x-name is-group" : "x-name", row.kind === "group" ? row.group : row.task!.name);
+      });
+      body.appendChild(names);
+      // 時間軸：休日の網掛け・見出しの背景・今日の線・バー・矢印（画面と同じ重なり順）/ the timeline: non-working days, heading backgrounds, today, bars, arrows (stacked as on screen)
+      const tl = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD + NAME_W},${top + HEAD_H})` }));
+      tl.appendChild(this.svgEl("line", { x1: 0, y1: -HEAD_H, x2: 0, y2: bodyH, class: "x-line" }));
+      if (zoom !== "Month") {
+        const cal = scheduleOptions(this.plugin.settings).cal;
+        for (let d = this.range.min; d <= this.range.max; d++) {
+          if (!isWorkday(d, cal)) tl.appendChild(this.svgEl("rect", { x: (d - this.range.min) * this.ppd, width: this.ppd, height: bodyH, class: "x-off" }));
+        }
       }
-      const at = { color, label, x: kx, y: ky };
-      kx += w;
-      return at;
-    });
-    const H = PAD * 2 + TITLE_H + HEAD_H + bodyH + (key.length ? ky + 40 : 0);
-    for (const el of [svg, bg]) {
-      el.setAttribute("width", String(W));
-      el.setAttribute("height", String(H));
-    }
-    if (key.length) {
-      const g = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD},${top + HEAD_H + bodyH + 24})` }));
-      text(g, 0, 4, "x-key is-title", keyTitle);
-      for (const k of key) {
-        g.appendChild(this.svgEl("rect", { x: k.x, y: k.y - 6, width: 11, height: 11, rx: 3, fill: k.color }));
-        text(g, k.x + 16, k.y + 4, "x-key", k.label);
+      const groupBg = tl.appendChild(this.svgEl("g", {}));
+      this.drawToday(tl, width, bodyH);
+      this.drawCopyLinks(tl);
+      const depLayer = tl.appendChild(this.svgEl("g", {}));
+      const barLayer = tl.appendChild(this.svgEl("g", {}));
+      if (this.progressLine) this.drawProgressLine(tl, width, bodyH);
+      const fill = this.barFill(svg);
+      this.rows.forEach((row, i) => {
+        if (row.kind === "group") this.drawGroupRow(groupBg, barLayer, row, i, width);
+        else this.drawBar(barLayer, svg, row, i, fill, NO_HANDLES);
+      });
+      if (this.showDeps) for (const dep of this.depRows()) this.drawDep(depLayer, dep);
+      // ラベルとタグは時間軸の右端より先まで伸びることがあるので、描いたものを測って画像の幅を決める。
+      // 測るあいだは埋め込み CSS を入れない（ページには同じ CSS が既にあり、入れるとアプリ全体のスタイルを計算し直させる）
+      // labels and tags can run past the timeline's end, so measure what was drawn to size the image. The embedded CSS stays out while
+      // measuring (the page already has the same CSS, and inserting it would restyle the whole app)
+      const doc = this.contentEl.ownerDocument;
+      svg.setAttribute("style", "position: fixed; left: -100000px; top: 0; visibility: hidden");
+      doc.body.appendChild(svg);
+      const box = tl.getBBox();
+      svg.remove();
+      svg.removeAttribute("style");
+      const W = PAD * 2 + NAME_W + Math.max(width, Math.ceil(box.x + box.width));
+      // 色の凡例は画像の幅で折り返す / the colour key wraps to the image's width
+      const keyTitle = this.colorBy === "status" ? tr().fieldStatus : tr().fieldAssignee;
+      let kx = this.textWidth(keyTitle, 11, 600) + 14;
+      let ky = 0;
+      const key = this.colorKey().map(({ color, label }) => {
+        const w = 32 + this.textWidth(label, 11);
+        if (kx + w > W - PAD * 2) {
+          kx = 0;
+          ky += 20;
+        }
+        const at = { color, label, x: kx, y: ky };
+        kx += w;
+        return at;
+      });
+      const H = PAD * 2 + TITLE_H + HEAD_H + bodyH + (key.length ? ky + 40 : 0);
+      for (const el of [svg, bg]) {
+        el.setAttribute("width", String(W));
+        el.setAttribute("height", String(H));
       }
+      if (key.length) {
+        const g = svg.appendChild(this.svgEl("g", { transform: `translate(${PAD},${top + HEAD_H + bodyH + 24})` }));
+        text(g, 0, 4, "x-key is-title", keyTitle);
+        for (const k of key) {
+          g.appendChild(this.svgEl("rect", { x: k.x, y: k.y - 6, width: 11, height: 11, rx: 3, fill: k.color }));
+          text(g, k.x + 16, k.y + 4, "x-key", k.label);
+        }
+      }
+      svg.insertBefore(this.svgEl("style", {}), svg.firstChild).textContent = this.exportCss();
+      return svg;
+    } finally {
+      this.fontFamily = screenFont;
     }
-    // キャンバスで PNG に。キャンバスの上限（一辺・面積）に収まるよう縮める
-    // rasterise on a canvas, scaled to fit the canvas limits (side and area)
-    // ponytail: a very large board comes out below 1x; filter or collapse groups first for a sharper image
-    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" }));
+  }
+
+  // SVG を PNG に。キャンバスの上限（一辺・面積。スマホはずっと小さい）に収まるよう縮める
+  // turns the SVG into a PNG, scaled to fit the canvas limits (per side and in area; much smaller on phones)
+  // ponytail: a very large board comes out below 1x; filter or collapse groups first for a sharper image
+  private async rasterise(svg: SVGSVGElement): Promise<Blob> {
+    const W = Number(svg.getAttribute("width"));
+    const H = Number(svg.getAttribute("height"));
+    // XML として不正な制御文字（ファイル名などに紛れ込みうる）は画像の読み込みを壊すので除く / XML-invalid control characters (possible in file names) would break the image, so drop them
+    const xml = new XMLSerializer().serializeToString(svg).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, "");
+    const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml" }));
+    const canvas = createEl("canvas");
     try {
       const img = new Image();
       img.src = url;
       await img.decode();
-      const scale = Math.min(2, 16000 / W, 16000 / H, Math.sqrt(1.2e8 / (W * H)));
-      const canvas = createEl("canvas");
+      const scale = Math.min(2, 16384 / W, 16384 / H, Math.sqrt((Platform.isMobile ? 16e6 : 3e7) / (W * H)));
       canvas.width = Math.round(W * scale);
       canvas.height = Math.round(H * scale);
       const ctx = canvas.getContext("2d");
-      if (!ctx) return;
+      if (!ctx) throw new Error("no 2D canvas");
       ctx.scale(scale, scale);
       ctx.drawImage(img, 0, 0, W, H);
       const blob = await new Promise<Blob | null>((ok) => canvas.toBlob(ok, "image/png"));
-      if (!blob) return;
-      const name = `Gantt ${this.folder.split("/").pop() || "vault"} ${dayToStr(todayIndex())}.png`;
-      const path = await this.app.fileManager.getAvailablePathForAttachment(name, this.tasks[0]?.path);
-      const file = await this.app.vault.createBinary(path, await blob.arrayBuffer());
-      new Notice(createFragment((f) => {
-        f.appendText(`${tr().exportDone(file.path)} `);
-        f.createEl("button", { text: tr().exportOpen }).onclick = () => void this.app.workspace.getLeaf("tab").openFile(file);
-      }), 8000);
+      if (!blob) throw new Error("the canvas gave no PNG");
+      return blob;
     } finally {
       URL.revokeObjectURL(url);
+      canvas.width = canvas.height = 0; // 大きなキャンバスのメモリをすぐ手放す / release the big canvas right away
     }
+  }
+
+  // 書き出し完了の通知（開くボタン付き）/ the export-done notice, with an Open button
+  private exportedNotice(file: TFile): void {
+    new Notice(createFragment((f) => {
+      f.appendText(`${tr().exportDone(file.path)} `);
+      f.createEl("button", { text: tr().exportOpen }).onclick = () => void this.app.workspace.getLeaf("tab").openFile(file);
+    }), 8000);
   }
 
   // 書き出す SVG に埋め込む CSS：このプラグインのルールと、そこで使う CSS 変数の今の値（テーマの色）
@@ -3723,9 +3784,11 @@ export class GanttView extends ItemView {
       ".x-off { fill: var(--ogantt-offday); }",
       ".x-key { font-size: 11px; fill: var(--text-muted); }",
     ];
-    for (const sheet of Array.from(activeDocument.styleSheets)) {
+    // このビューの文書から（ポップアウトでもその窓の）.ogantt- のルールだけ。窓ごとに型が別なので instanceof では判定しない
+    // only the .ogantt- rules, from this view's own document (its own window when popped out); each window has its own types, so no instanceof
+    for (const sheet of Array.from(this.contentEl.ownerDocument.styleSheets)) {
       try {
-        for (const r of Array.from(sheet.cssRules)) if (r instanceof CSSStyleRule && r.selectorText.includes(".ogantt-")) rules.push(r.cssText);
+        for (const r of Array.from(sheet.cssRules)) if ((r as Partial<CSSStyleRule>).selectorText?.includes(".ogantt-")) rules.push(r.cssText);
       } catch {
         // 読めない（別オリジンの）シートは飛ばす / skip a sheet that can't be read (another origin)
       }
@@ -3733,7 +3796,7 @@ export class GanttView extends ItemView {
     const css = rules.join("\n");
     const cs = getComputedStyle(this.contentEl);
     const vars = [...new Set(css.match(/--[\w-]+/g) ?? [])].map((v) => `${v}: ${cs.getPropertyValue(v).trim() || "initial"};`).join(" ");
-    return `svg { ${vars} font-family: ${cs.fontFamily}; }\n${css}`;
+    return `svg { ${vars} }\n${css}`;
   }
 
   // SVG 要素生成ヘルパー（Obsidian の createSvg を使用）/ SVG element helper (uses Obsidian's createSvg)

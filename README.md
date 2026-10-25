@@ -37,7 +37,7 @@ The UI follows Obsidian's display language. Supported: English, Japanese, Korean
 
 The right end of the toolbar shapes how the board is displayed: **Group by**, **Color by**, and the **Display** menu. A thin legend under the toolbar explains the colors.
 
-**Group by** folder, status, assignee or tag, and **color by** status or assignee. **Display** holds what you switch less often: **Dependency arrows**, **Tags on bars**, **Progress line**, **Flat**, **Roll up**, **Show empty folders**, and which table **Columns** to show. Each board remembers all of this, plus which groups are collapsed. Rarer actions, **Export as PNG** and **Reload**, are in the view's **⋯** menu. Status never relies on color alone: completed tasks get a ✓ on their label, deferred ones are hatched, and cancelled ones are faded and struck through.
+**Group by** folder, status, assignee or tag, and **color by** status or assignee. **Display** holds what you switch less often: **Dependency arrows**, **Tags on bars**, **Progress line**, **Flat**, **Roll up**, **Show empty folders**, and which table **Columns** to show. Each board remembers all of this, plus which groups are collapsed. Rarer actions, **Export as PNG** and **Reload**, are in the view's **⋯** menu and the command palette. Status never relies on color alone: completed tasks get a ✓ on their label, deferred ones are hatched, and cancelled ones are faded and struck through.
 
 ![Grouping and color-by options with a legend](docs/images/grouping-en.webp)
 
@@ -121,7 +121,7 @@ Colors are picked from a palette of 17, plus a rainbow swatch that opens your sy
 
 ## Export as PNG
 
-Choose **Export as PNG** from the view's **⋯** menu, or run the command, to save the whole board as an image, including rows scrolled out of view. It keeps the current theme and the **Display** menu's choices, adds the board's name and date on top and a color key for the current **Color by** underneath, and goes wherever your vault keeps attachments. A notice links to the file.
+Choose **Export as PNG** from the view's **⋯** menu, or run the command, to save the whole board as an image, including rows scrolled out of view. It keeps the current theme and the **Display** menu's choices, adds the board's name and date on top and a color key for the current **Color by** underneath, and goes wherever your vault keeps attachments (a relative attachment setting is taken from the vault root, so nothing is added inside the board's folder). A notice links to the file, or says why nothing was saved.
 
 ## Creating tasks
 
@@ -132,7 +132,7 @@ Press **＋ New task** to create a dated note in the current folder and rename i
 A task is always a note — its frontmatter keeps the dates, status and the rest — but its content can be one of three kinds. Pick one from the **▾** next to **＋ New task**:
 
 - **Note** (the default): the body is the task's description.
-- **Kanban board**: the note is created in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s format, with one lane per status. The detail panel shows its lanes and cards in miniature; click them to open the board (as a board with the Kanban plugin installed, as Markdown otherwise). Its **progress is the share of checked cards**: check cards on the board and the bar fills (the panel shows, say, *2 of 5 cards done*). It isn't edited by hand while the board has cards.
+- **Kanban board**: the note is created in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s format, with one lane per status. The detail panel shows its lanes and cards in miniature; click them to open the board (as a board with the Kanban plugin installed, as Markdown otherwise). Its **progress is the share of checked cards**, counting every item in a lane as a card, as the board does: check cards on the board and the bar fills (the panel shows, say, *2 of 5 cards done*). It only reads 100% when every card is checked, and it isn't edited by hand while the board has cards.
 - **Canvas**: a same-named `.canvas` is created next to the note, linked from its `canvas` key and embedded in the body, so the detail panel shows the canvas. Deleting the task deletes that canvas too, and undo brings both back.
 
 The table marks Kanban and Canvas tasks with an icon. Any note counts as a Kanban task when its frontmatter has `kanban-plugin: board`, and as a Canvas task when its `canvas` key links to a `.canvas` file.
@@ -176,7 +176,7 @@ Sample data for a quick try lives in `examples/Cleaning Project お掃除プロ�
 
 ## Dependencies
 
-Drag from a bar's round handle to another bar to create a dependency, or use **Add dependency…** in the detail panel: pick the type, then the task this one waits on. The connected ends decide the type: **FS** (finish→start), **SS** (start→start), **FF** (finish→finish). SS/FF successors snap to their predecessor when you reschedule. An FS successor is **pushed later when its predecessor slips into it** — it moves to the next workday after the predecessor's due date and keeps its duration — and the push carries on down the chain. Moving a predecessor earlier never pulls its successors back, so gaps you left on purpose stay. Turn this off with **Push FS successors automatically** in settings. Milestones never move through dependencies. To remove a dependency, hover its line and click the **×** that appears, or use the × on it in the detail panel; a notice offers **Undo** (so do **Ctrl/Cmd+Z** and the undo button). Clicking the line itself does nothing, so a stray click can't break a link.
+Drag from a bar's round handle to another bar to create a dependency, or use **Add dependency…** in the detail panel: pick the type, then the task this one waits on. The connected ends decide the type: **FS** (finish→start), **SS** (start→start), **FF** (finish→finish). SS/FF successors snap to their predecessor when you reschedule. An FS successor is **pushed later when its predecessor slips into it** — it moves to the next workday after the predecessor's due date and keeps its duration — and the push carries on down the chain. Moving a predecessor earlier never pulls its successors back, so gaps you left on purpose stay. Turn this off with **Push FS successors automatically** in settings. Milestones never move through dependencies. To remove a dependency, hover its line and click the **×** that appears, or use the × on it in the detail panel; a notice offers **Undo** (so do **Ctrl/Cmd+Z** and the undo button). Clicking the line itself does nothing, so a stray click can't break a link. With **Display → Dependency arrows** off, a task whose dependency is broken still shows it with a red outline.
 
 ## Duration
 
@@ -330,7 +330,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ツールバーの右端の **グループ化**・**色分け**・**表示** メニューで、ボードの見せ方を調整できます。ツールバーの下の細い行は色の凡例です。
 
-**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者）。**表示** メニューには、ときどき切り替えるもの（**依存の矢印**・**バーのタグ**・**稲妻線**・**フラット表示**・**ロールアップ**・**空フォルダを表示**）と、表に出す**列**がまとまっています。これらと折りたたんだグループはボードごとに記憶されます。たまにしか使わない **PNG として書き出す** と **再読み込み** は、ビューの **⋯** メニューにあります。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
+**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者）。**表示** メニューには、ときどき切り替えるもの（**依存の矢印**・**バーのタグ**・**稲妻線**・**フラット表示**・**ロールアップ**・**空フォルダを表示**）と、表に出す**列**がまとまっています。これらと折りたたんだグループはボードごとに記憶されます。たまにしか使わない **PNG として書き出す** と **再読み込み** は、ビューの **⋯** メニューとコマンドパレットにあります。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
 
 ![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.webp)
 
@@ -414,7 +414,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ## PNG として書き出す
 
-ビューの **⋯** メニュー（またはコマンド）の **PNG として書き出す** で、画面外の行も含めたボード全体を画像として保存できます。今のテーマと **表示** メニューの設定のまま、上にボード名と日付、下に今の **色分け** の凡例が付き、Vault の添付ファイルの置き場所に保存されます。通知からファイルを開けます。
+ビューの **⋯** メニュー（またはコマンド）の **PNG として書き出す** で、画面外の行も含めたボード全体を画像として保存できます。今のテーマと **表示** メニューの設定のまま、上にボード名と日付、下に今の **色分け** の凡例が付き、Vault の添付ファイルの置き場所に保存されます（相対の設定は Vault のルートから決まるので、ボードのフォルダの中には何も増えません）。通知からファイルを開けるほか、保存できなかったときは通知でそう伝えます。
 
 ## タスクの作成
 
@@ -425,7 +425,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 タスクは常に 1 つのノートで、日付やステータスなどはフロントマターが持ちます。そのうえで中身を 3 種類から選べます。**＋ 新規タスク**の横の **▾** から選んでください：
 
 - **ノート**（既定）：本文がタスクの説明です。
-- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。**進捗はチェックしたカードの割合**で、ボードでカードをチェックするとバーが伸びます（パネルには *カード 5 枚中 2 枚が完了* のように出ます）。カードがある間は手で編集しません。
+- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。**進捗はチェックしたカードの割合**で、ボードと同じく列の中の項目はすべてカードとして数えます。ボードでカードをチェックするとバーが伸びます（パネルには *カード 5 枚中 2 枚が完了* のように出ます）。100% になるのは全部チェックしたときだけで、カードがある間は手で編集しません。
 - **キャンバス**：ノートと同じ名前の `.canvas` を隣に作り、`canvas` キーでリンクして本文に埋め込むので、詳細パネルにキャンバスが表示されます。タスクを削除するとそのキャンバスも削除され、取り消せば両方が戻ります。
 
 表では、カンバンとキャンバスのタスクにアイコンが付きます。フロントマターに `kanban-plugin: board` があるノートはカンバン、`canvas` キーが `.canvas` にリンクしているノートはキャンバスとして扱います。
@@ -469,7 +469,7 @@ after:
 
 ## 依存関係
 
-バーの丸ハンドルから別のバーへドラッグするか、詳細パネルの **先行タスクを追加…** で種類を選んでから先行タスクを選ぶと依存を作成します。つないだ端で種類が決まります：**FS**（終了→開始）・**SS**（開始→開始）・**FF**（終了→終了）。SS/FF の後続は、先行の日程変更に追従します。FS の後続は、**先行が遅れて重なったときに後ろへ押し出されます**。先行の期限日の次の稼働日へ移り、期間はそのまま保たれます。押し出しはその先の後続へも連鎖します。先行を前倒ししても後続は引き戻されないので、わざと空けた間隔は残ります。この動作は設定の **FS の後続を自動で押し出す** でオフにできます。マイルストーンは依存では動きません。依存を外すには、線にマウスを載せて出る **×** をクリックするか、詳細パネルの依存の × を押します。通知の **取り消し**（または **Ctrl/Cmd+Z**・取り消しボタン）で戻せます。線そのもののクリックでは外れないので、誤クリックで依存が消えることはありません。
+バーの丸ハンドルから別のバーへドラッグするか、詳細パネルの **先行タスクを追加…** で種類を選んでから先行タスクを選ぶと依存を作成します。つないだ端で種類が決まります：**FS**（終了→開始）・**SS**（開始→開始）・**FF**（終了→終了）。SS/FF の後続は、先行の日程変更に追従します。FS の後続は、**先行が遅れて重なったときに後ろへ押し出されます**。先行の期限日の次の稼働日へ移り、期間はそのまま保たれます。押し出しはその先の後続へも連鎖します。先行を前倒ししても後続は引き戻されないので、わざと空けた間隔は残ります。この動作は設定の **FS の後続を自動で押し出す** でオフにできます。マイルストーンは依存では動きません。依存を外すには、線にマウスを載せて出る **×** をクリックするか、詳細パネルの依存の × を押します。通知の **取り消し**（または **Ctrl/Cmd+Z**・取り消しボタン）で戻せます。線そのもののクリックでは外れないので、誤クリックで依存が消えることはありません。**表示 → 依存の矢印** をオフにしていても、依存が守られていないタスクは赤い縁で分かります。
 
 ## 期間（Duration）
 

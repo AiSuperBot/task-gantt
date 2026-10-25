@@ -1,6 +1,6 @@
 // buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
-import { buildRows, parseKanban, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput } from "./model.mjs";
+import { buildRows, parseKanban, cardProgress, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -13,6 +13,15 @@ function check(name, cond) {
     console.error("FAIL  -", name);
   }
 }
+
+// カンバンの進捗：100% は全部、0% は 1 枚も無いときだけ / kanban progress: 100% only when all are done, 0% only when none are
+check("cardProgress 199/200 は 99", cardProgress(199, 200) === 99);
+check("cardProgress 全部で 100", cardProgress(200, 200) === 100);
+check("cardProgress 1/201 は 1", cardProgress(1, 201) === 1);
+check("cardProgress 0 枚は 0", cardProgress(0, 5) === 0);
+// 列の中のどの箇条書きもカード（チェックの有無・記号を問わない）/ any bullet in a lane is a card, checkbox or not
+const looseLanes = parseKanban(["## Todo", "- idea", "+ [x] done", "1. [ ] numbered", "## Done", "- [x] shipped"].join("\n"));
+check("parseKanban: 箇条書きはすべてカード", looseLanes.map((l) => `${l.title}:${l.cards.length}:${l.cards.filter((c) => c.done).length}`).join() === "Todo:3:1,Done:1:1");
 
 // マイルストーンは end のみ → anchor は end / milestone collapses to its due date
 const ms = { milestone: true, end: "2026-02-10" };

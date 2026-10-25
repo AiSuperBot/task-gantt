@@ -293,10 +293,13 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
     const cv = fmText(fm[k.canvas]);
     const canvas = cv ? resolveLink(app, cv, file.path) : null;
     const kind: TaskKind = fm["kanban-plugin"] ? "kanban" : canvas?.extension === "canvas" ? "canvas" : "note";
-    // カンバンの進捗はチェックしたカードの割合（カード＝最上位のチェックリスト項目。カード内の入れ子のチェックは数えない）
-    // a kanban's progress is the share of checked cards (cards = top-level checklist items; checklists nested inside a card don't count)
-    const items = kind === "kanban" ? (cache?.listItems ?? []).filter((li) => li.task !== undefined && li.parent < 0) : [];
-    const cards = items.length ? { done: items.filter((li) => li.task !== " ").length, total: items.length } : undefined;
+    // カンバンの進捗はチェックしたカードの割合。カードはボードと同じ決まり（最初の列見出し ## より後の最上位のリスト項目。
+    // チェックボックスが無くてもカード、入れ子は数えない）で、詳細パネルの列の表示と数が合う
+    // a kanban's progress is the share of checked cards. Cards follow the board's own rule (top-level list items after the first ## lane
+    // heading, with or without a checkbox; nested items don't count), so the count matches the lanes in the detail panel
+    const lanes = cache?.headings?.find((hd) => hd.level === 2)?.position.start.line ?? Infinity;
+    const items = kind === "kanban" ? (cache?.listItems ?? []).filter((li) => li.parent < 0 && li.position.start.line > lanes) : [];
+    const cards = items.length ? { done: items.filter((li) => li.task !== undefined && li.task !== " ").length, total: items.length } : undefined;
     return {
       path: file.path,
       name: file.basename,
@@ -310,7 +313,7 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
       kind,
       canvas: kind === "canvas" ? canvas?.path : undefined,
       deps: [] as Dep[],
-      progress: cards ? Math.round((100 * cards.done) / cards.total) : fm[k.progress] != null ? Number(fm[k.progress]) : undefined,
+      progress: cards ? cardProgress(cards.done, cards.total) : fm[k.progress] != null ? Number(fm[k.progress]) : undefined,
       cards,
       milestone,
       parent: undefined,
@@ -596,12 +599,19 @@ export interface KanbanLane {
 
 // カンバン本文の列とカード（"## 列" の下の "- [ ] カード"。設定ブロック以降は読まない）
 // the lanes and cards of a kanban body ("- [ ] card" under "## lane"; stops at the settings block)
+// チェックしたカードの割合（%）。100% は全部、0% は 1 枚も無いときだけ（199/200 を 100% に丸めない）
+// the share of checked cards in %; 100% only when all are done and 0% only when none are (199/200 doesn't round up to 100%)
+export function cardProgress(done: number, total: number): number {
+  if (done === total) return 100;
+  return Math.min(99, Math.max(done ? 1 : 0, Math.round((100 * done) / total)));
+}
+
 export function parseKanban(body: string): KanbanLane[] {
   const lanes: KanbanLane[] = [];
   for (const line of body.split(/\r?\n/)) {
     if (line.startsWith("%% kanban:settings")) break;
     const h = line.match(/^##\s+(.+)$/);
-    const c = line.match(/^[-*] (?:\[(.)\] )?(.+)$/);
+    const c = line.match(/^(?:[-*+]|\d+[.)]) (?:\[(.)\] )?(.+)$/); // 進捗の数え方と同じく、どの箇条書きもカード / any bullet is a card, as when counting progress
     if (h) lanes.push({ title: h[1].trim(), cards: [] });
     else if (c && lanes.length) lanes[lanes.length - 1].cards.push({ text: c[2].trim(), done: c[1] != null && c[1] !== " " });
   }

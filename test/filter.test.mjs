@@ -1,6 +1,6 @@
 // フィルタ判定（matchFilter / applyFilters）とグループ再マッピング（regroup）の検証
 // Tests for filter matching (matchFilter / applyFilters) and group remapping (regroup)
-import { matchFilter, applyFilters, regroup } from "./filter.mjs";
+import { matchFilter, applyFilters, regroup, besideHeading } from "./filter.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -74,6 +74,12 @@ const f2 = cat("status", "is", ["done"]);
 check("AND (all)", names(applyFilters(ALL, [f1, f2], "all", STATUSES, TODAY)) === "Beta");
 check("OR (any)", names(applyFilters(ALL, [f1, f2], "any", STATUSES, TODAY)) === "Alpha Plan,Beta");
 check("no filters returns the input as is", applyFilters(ALL, [], "all", STATUSES, TODAY) === ALL);
+
+// ── besideHeading：見出しが示す値は行で繰り返さない / a row doesn't repeat its heading's value ──
+check("assignee heading drops that person (by display name)", besideHeading(["[[People/Ana]]", "Ben"], "assignees", "assignee", "Ana").join() === "Ben");
+check("tag heading drops that tag", besideHeading(["ux", "brand"], "tags", "tag", "ux").join() === "brand");
+check("other axes keep every value", besideHeading(["ux", "brand"], "tags", "assignee", "ux").join() === "ux,brand");
+check("flat rows (heading \"\") keep every value", besideHeading(["Ana"], "assignees", "assignee", "").join() === "Ana");
 
 // ── regroup ──
 const groupsOf = (list) => list.map((t) => `${t.name}:${t.groups[0]}`).join(",");

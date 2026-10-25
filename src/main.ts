@@ -47,6 +47,19 @@ export default class GanttPlugin extends Plugin {
       },
     });
 
+    // 開いているボードを読み直す（ツールバーから「⋯」メニューへ移したので、ホットキーも割り当てられるように）
+    // reload the board in front (moved from the toolbar to the "⋯" menu, so it can take a hotkey too)
+    this.addCommand({
+      id: "reload-board",
+      name: t().reloadAria,
+      checkCallback: (checking) => {
+        const view = this.app.workspace.getActiveViewOfType(GanttView);
+        if (!view) return false;
+        if (!checking) void view.refresh();
+        return true;
+      },
+    });
+
     // フォルダ右クリック → このフォルダを Gantt 表示 / folder context menu
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu: Menu, file: TAbstractFile) => {

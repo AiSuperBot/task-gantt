@@ -55,6 +55,15 @@ export function applyFilters(tasks: Task[], filters: Filter[], match: FilterMatc
 }
 
 // グループ化の軸に合わせて groups を合成グループへ差し替える / remap `groups` to synthetic groups for the chosen axis
+// 行の見出しが既に示している値（担当者・タグ）を除いた残り。見出しのキーは regroup と同じ作り方（担当者は表示名、タグはそのまま）。
+// フラット表示の行は見出しが "" なので何も除かない
+// the values left after dropping the one the row's heading already shows (an assignee or a tag); heading keys are built as in regroup
+// (display name for an assignee, the tag as it is). Flat rows have the heading "", so nothing is dropped
+export function besideHeading(values: string[], field: "assignees" | "tags", groupBy: GroupBy, heading: string): string[] {
+  if (!heading || groupBy !== (field === "assignees" ? "assignee" : "tag")) return values;
+  return values.filter((v) => (field === "assignees" ? linkLabel(v) : v) !== heading);
+}
+
 export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses: StatusDef[], noneLabel: string): Task[] {
   // フラットはグループを無視＝再マッピング不要（タグ複製で重複行が出るのも防ぐ）/ flat ignores groups: skip remap (also avoids tag-duplicated rows)
   if (groupBy === "folder" || flat) return tasks;

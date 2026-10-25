@@ -166,7 +166,6 @@ button.ogantt-opt-gear:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
-/* 列メニュー（ポップオーバー）/ column-visibility popover */
 /* ポップオーバー共通の外枠（列・フィルタ・タグ・カレンダー・時刻・色・アイコン・ステータス）
    shared popover chrome (columns, filters, tags, calendar, time, colour, icon, status) */
 .ogantt-popover {
@@ -177,6 +176,7 @@ button.ogantt-opt-gear:hover {
   border-radius: 6px;
   box-shadow: var(--shadow-s);
   padding: 8px;
+  overflow-y: auto; /* 高さは JS が窓に合わせて制限する / JS caps the height to the window */
 }
 .ogantt-colmenu {
   padding: 6px;
@@ -226,7 +226,7 @@ button.ogantt-opt-gear:hover {
 }
 
 /* ── 統合フィルタ（ステータス/担当者/タグ/開始日/期限日）/ unified filter ── */
-/* オプション行の下のフィルタ行 / the filter row below the options row */
+/* 凡例の下のフィルタ行 / the filter row under the legend */
 .ogantt-filterbar {
   display: flex;
   flex-wrap: wrap;
@@ -552,6 +552,10 @@ button.ogantt-preset-del {
   border-bottom: 1px solid var(--background-modifier-border);
   font-size: 0.85em;
   color: var(--text-muted);
+}
+/* 凡例が空のとき（担当者のいないボードを担当者で色分け）は行ごと隠す / an empty legend (colouring by assignee on a board with none) hides its row */
+.ogantt-legend:empty {
+  display: none;
 }
 .ogantt-legend-chip {
   display: inline-flex;
@@ -1051,8 +1055,8 @@ input.ogantt-cell-input[type="number"] {
   fill: var(--text-accent);
   opacity: 0.85;
 }
+/* 文字の大きさは描くときに付ける（札の位置を決める計測と同じ値）/ the font size is set when drawing (the same value used to place the pills) */
 .ogantt-bar-label {
-  font-size: 11px;
   fill: var(--text-muted);
   dominant-baseline: middle;
   pointer-events: none;
@@ -1080,7 +1084,6 @@ input.ogantt-cell-input[type="number"] {
   stroke-width: 1;
 }
 .ogantt-tag-pill text {
-  font-size: 9.5px;
   text-anchor: middle;
   dominant-baseline: middle;
 }
@@ -1857,4 +1860,14 @@ button.ogantt-dep-add {
   left: 0;
   visibility: hidden;
   pointer-events: none;
+}
+/* 矢印を隠しているとき、依存が守られていない後続のバーは赤い縁 / with arrows hidden, a successor whose dependency is broken gets a red outline */
+.ogantt-bar-g.is-late .ogantt-bar,
+.ogantt-bar-g.is-late .ogantt-milestone {
+  stroke: var(--color-red);
+  stroke-width: 1.5;
+}
+/* 詳細パネルのカンバンの進捗（表の進捗列と同じメーター）/ a kanban's progress in the detail panel (the Progress column's own meter) */
+.ogantt-progress-field .ogantt-td-progress {
+  flex: 1;
 }

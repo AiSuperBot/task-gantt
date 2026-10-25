@@ -13,6 +13,7 @@ import {
 import { formatDate, dayIndex, dayToStr, todayIndex } from "./timeline";
 import { endForDuration, parseDuration, scheduleOptions, taskDuration, workdaysBetween } from "./schedule";
 import { linkLabel } from "./links";
+import { besideHeading } from "./filter";
 import { handleLinkClick, renderLinkValue } from "./linkui";
 import { openPopover } from "./popover";
 import { t as tr } from "./i18n"; // tr() … ローカル変数 t（Task）との衝突回避 / aliased to avoid clashing with the `t` task var
@@ -206,7 +207,7 @@ export const BUILTIN_COLUMNS: ColumnDef[] = [
     width: 96,
     optional: true,
     sortKey: (t) => t.assignees.map(linkLabel).join(",").toLowerCase(),
-    paint: (ctx, td, row) => paintAssignee(ctx, td, row.task!, ctx.groupBy === "assignee" ? row.group : undefined),
+    paint: (ctx, td, row) => paintAssignee(ctx, td, row.task!, besideHeading(row.task!.assignees, "assignees", ctx.groupBy, row.group)),
     // 担当者は多値なので、タグと同じくチップ＋追加欄をポップオーバーで開く / multi-valued like tags, so it opens chips + an add field
     edit: (ctx, cell, row) => openListEditor(ctx, cell, row.task!, "assignees"),
     editAria: () => tr().editAssignee,
@@ -234,7 +235,7 @@ export const BUILTIN_COLUMNS: ColumnDef[] = [
     width: 140,
     optional: true,
     sortKey: (t) => t.tags.join(",").toLowerCase(),
-    paint: (ctx, td, row) => paintTags(ctx, td, row.task!, ctx.groupBy === "tag" ? row.group : undefined),
+    paint: (ctx, td, row) => paintTags(ctx, td, besideHeading(row.task!.tags, "tags", ctx.groupBy, row.group)),
     // タグは多値なので、セル内入力ではなく詳細パネルと同じチップ＋追加欄をポップオーバーで開く
     // tags are multi-valued, so the cell opens the panel's chips + add field in a popover
     edit: (ctx, cell, row) => openListEditor(ctx, cell, row.task!, "tags"),
@@ -368,7 +369,7 @@ function paintDuration(ctx: BoardContext, td: HTMLElement, t: Task): void {
 // 値の有無に関わらずダブルクリックできる場所だと分かるようにする
 // paint a progress cell (thin meter + %); unset still draws an empty meter and a dash,
 // so the cell reads as double-click editable whether or not it has a value
-function paintProgress(td: HTMLElement, t: Task): void {
+export function paintProgress(td: HTMLElement, t: Task): void {
   td.empty();
   td.addClass("ogantt-td-progress");
   const p = t.progress != null ? Math.max(0, Math.min(100, Math.round(t.progress))) : null;
@@ -391,10 +392,9 @@ async function commitProgress(ctx: BoardContext, t: Task, raw: string): Promise<
 // 担当者セル（アバター＋名前。wikilink ならクリックでノートを開く）。担当者でグループ化しているときは、見出しの人を繰り返さず
 // ほかの人だけを「+」付きで出す / assignee cell: avatars + names (a wikilink opens its note on click). When grouped by assignee,
 // the heading's person isn't repeated: only the others show, after a "+"
-function paintAssignee(ctx: BoardContext, td: HTMLElement, t: Task, heading?: string): void {
+function paintAssignee(ctx: BoardContext, td: HTMLElement, t: Task, people: string[]): void {
   td.empty();
   td.addClass("ogantt-td-people");
-  const people = heading ? t.assignees.filter((a) => linkLabel(a) !== heading) : t.assignees;
   for (const a of people) ctx.avatar(td, a);
   const names = td.createSpan({ cls: "ogantt-td-text" });
   if (people.length < t.assignees.length && people.length) names.appendText("+ ");
@@ -453,11 +453,10 @@ function editStatus(ctx: BoardContext, cell: HTMLElement, t: Task): void {
 }
 
 // タグセル（多値・チップ表示）/ tags cell (multi-valued chips)
-function paintTags(ctx: BoardContext, td: HTMLElement, t: Task, heading?: string): void {
+function paintTags(ctx: BoardContext, td: HTMLElement, tags: string[]): void {
   td.empty();
   td.addClass("ogantt-td-tags");
-  // タグでグループ化しているときは見出しのタグを繰り返さない / when grouped by tag, the heading's tag isn't repeated
-  for (const tag of t.tags.filter((x) => x !== heading)) {
+  for (const tag of tags) {
     const chip = td.createSpan({ cls: "ogantt-tag-chip", text: tag });
     ctx.paintTagChip(chip, tag);
     // タグチップを右クリック＝色を変更 / right-click a tag chip to change its color
