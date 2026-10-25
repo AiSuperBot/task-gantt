@@ -121,7 +121,7 @@ Colors are picked from a palette of 17, plus a rainbow swatch that opens your sy
 
 ## Export as PNG
 
-Choose **Export as PNG** from the view's **⋯** menu, or run the command, to save the whole board as an image, including rows scrolled out of view. It keeps the current theme and the **Display** menu's choices, adds the board's name and date on top and a color key for the current **Color by** underneath, and goes wherever your vault keeps attachments (a relative attachment setting is taken from the vault root, so nothing is added inside the board's folder). A notice links to the file, or says why nothing was saved.
+Choose **Export as PNG** from the view's **⋯** menu, or run the command, to save the whole board as an image, including rows scrolled out of view. It keeps the current theme and the **Display** menu's choices, adds the board's name and date on top and a color key for the current **Color by** underneath, and goes wherever your vault keeps attachments (a relative attachment setting is taken from the vault root, so nothing is added inside the board's folder). Each task is named once, in the image's left column (with a ✓ when it's completed, struck through when it's cancelled), so a bar is followed only by its people and tags; under a person's heading, only the other people on a shared task. A notice links to the file, or says why nothing was saved.
 
 ## Creating tasks
 
@@ -414,7 +414,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ## PNG として書き出す
 
-ビューの **⋯** メニュー（またはコマンド）の **PNG として書き出す** で、画面外の行も含めたボード全体を画像として保存できます。今のテーマと **表示** メニューの設定のまま、上にボード名と日付、下に今の **色分け** の凡例が付き、Vault の添付ファイルの置き場所に保存されます（相対の設定は Vault のルートから決まるので、ボードのフォルダの中には何も増えません）。通知からファイルを開けるほか、保存できなかったときは通知でそう伝えます。
+ビューの **⋯** メニュー（またはコマンド）の **PNG として書き出す** で、画面外の行も含めたボード全体を画像として保存できます。今のテーマと **表示** メニューの設定のまま、上にボード名と日付、下に今の **色分け** の凡例が付き、Vault の添付ファイルの置き場所に保存されます（相対の設定は Vault のルートから決まるので、ボードのフォルダの中には何も増えません）。タスク名は画像の左の列に 1 度だけ出し（完了は ✓ 付き、キャンセルは取り消し線）、バーの後ろには担当者とタグだけを出します。人の見出しの下では、共有タスクのほかの人だけです。通知からファイルを開けるほか、保存できなかったときは通知でそう伝えます。
 
 ## タスクの作成
 

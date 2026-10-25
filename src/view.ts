@@ -205,6 +205,7 @@ export class GanttView extends ItemView {
   private late: Set<string> | null = null; // 矢印を隠しているときの、依存が守られていない後続 / with arrows hidden, successors whose dependency is broken
   private exporting = false; // PNG の書き出し中 / a PNG export is running
   private fontFamily = ""; // バーの文字のフォント（計測用）/ the bars' font, for measuring
+  private bare = false; // 書き出しを描いている間：バーの後ろにタスク名を書かない（名前は左の列）/ while drawing an export: no task name after the bars (it's in the name column)
   private undoBtn: HTMLButtonElement | null = null;
   private redoBtn: HTMLButtonElement | null = null;
 
@@ -2275,10 +2276,11 @@ export class GanttView extends ItemView {
   }
 
   // バーの右に、担当者のアバター（頭文字の丸・共有タスクは重ねて並べる）、ラベル（タスク名・担当者）、タグの札を描く。完了は ✓ を前に付ける。
-  // 見出しが示している値は繰り返さない：担当者でグループ化しているときは見出しの人を省いてほかの人を「+」付きで、タグでグループ化しているときは見出しのタグを省く
+  // 見出しが示している値は繰り返さない：担当者でグループ化しているときは見出しの人を省いてほかの人を「+」付きで、タグでグループ化しているときは見出しのタグを省く。
+  // 書き出しではタスク名（と ✓）は左の列にあるので、バーの後ろは人とタグだけ
   // to the right of a bar: assignee avatars (initials; overlapping for a shared task), the label (task name, assignees) and tag pills; ✓ marks
   // completed. What the heading already says isn't repeated: grouped by assignee, the heading's person is left out and the others follow a "+";
-  // grouped by tag, the heading's tag is left out
+  // grouped by tag, the heading's tag is left out. In an export the task's name (and ✓) is in the name column, so only people and tags follow the bar
   private drawLabel(g: SVGElement, t: Task, x: number, cy: number, group: StatusGroup | undefined, heading: string): void {
     const people = besideHeading(t.assignees, "assignees", this.groupBy, heading);
     const shown = people.slice(0, MAX_AVATARS);
@@ -2289,15 +2291,16 @@ export class GanttView extends ItemView {
       av.appendChild(this.svgEl("text", { x: x + 7 + k * 10, y: cy + 3, fill: inkOn(c) })).textContent = initials(linkLabel(a));
     });
     if (shown.length) x += 18 + (shown.length - 1) * 10;
-    const sep = people.length < t.assignees.length ? " + " : " · ";
-    let text = people.length ? `${t.name}${sep}${people.map(linkLabel).join(", ")}` : t.name;
-    if (group === "completed") text = `✓ ${text}`;
-    g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label", "font-size": LABEL_PX })).textContent = text;
+    const others = people.length < t.assignees.length; // 見出しの人を省いた / the heading's person was left out
+    const who = people.map(linkLabel).join(", ");
+    let text = who && others ? `+ ${who}` : who;
+    if (!this.bare) text = `${group === "completed" ? "✓ " : ""}${t.name}${text ? (others ? " " : " · ") + text : ""}`;
+    if (text) g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label", "font-size": LABEL_PX })).textContent = text;
     // タグはラベルの後ろに小さな札で、タグの色で控えめに（表示メニューで隠せる）/ tags follow the label as small pills, quietly in their colour (hidden from the Display menu)
     if (!this.showTags) return;
     const tags = besideHeading(t.tags, "tags", this.groupBy, heading);
     if (!tags.length) return;
-    let px = x + this.textWidth(text, LABEL_PX) + 8;
+    let px = text ? x + this.textWidth(text, LABEL_PX) + 8 : x;
     for (const tag of tags.slice(0, MAX_PILLS)) {
       const w = this.textWidth(tag, PILL_PX) + 12;
       const c = this.tagColor(tag);
@@ -3621,6 +3624,7 @@ export class GanttView extends ItemView {
   private exportSvg(): SVGSVGElement {
     const screenFont = this.fontFamily;
     this.fontFamily = EXPORT_FONT;
+    this.bare = true;
     try {
       const PAD = 16;
       const TITLE_H = 34;
@@ -3651,9 +3655,16 @@ export class GanttView extends ItemView {
         const y = i * ROW_H;
         if (row.kind === "group") body.appendChild(this.svgEl("rect", { y, width: NAME_W, height: ROW_H, class: "ogantt-grid-group" }));
         body.appendChild(this.svgEl("line", { x1: 0, y1: y + ROW_H - 0.5, x2: NAME_W + width, y2: y + ROW_H - 0.5, class: "x-line" }));
-        // 名前は画面と同じ位置（タスクは開閉の印の枠のぶん右）/ names sit where they do on screen (a task after its chevron slot)
-        const x = this.indentOf(row) + (row.kind === "task" ? 16 : 0);
-        text(names, x, y + ROW_H / 2 + 4, row.kind === "group" ? "x-name is-group" : "x-name", row.kind === "group" ? row.group : row.task!.name);
+        // 名前は画面と同じ位置（タスクは開閉の印の枠のぶん右）。バーの後ろに名前を書かないので、完了の ✓ はその枠に、キャンセルは名前に取り消し線
+        // names sit where they do on screen (a task after its chevron slot); since no name follows the bar, a completed task's ✓ fills that slot and a cancelled one is struck through here
+        const x = this.indentOf(row);
+        const cy = y + ROW_H / 2 + 4;
+        if (row.kind === "group") text(names, x, cy, "x-name is-group", row.group);
+        else {
+          const st = statusGroupOf(this.plugin.settings.statuses, row.task!.status);
+          if (st === "completed") text(names, x, cy, "x-name", "✓");
+          text(names, x + 16, cy, st === "cancelled" ? "x-name is-cancelled" : "x-name", row.task!.name);
+        }
       });
       body.appendChild(names);
       // 時間軸：休日の網掛け・見出しの背景・今日の線・バー・矢印（画面と同じ重なり順）/ the timeline: non-working days, heading backgrounds, today, bars, arrows (stacked as on screen)
@@ -3719,6 +3730,7 @@ export class GanttView extends ItemView {
       return svg;
     } finally {
       this.fontFamily = screenFont;
+      this.bare = false;
     }
   }
 
@@ -3760,6 +3772,7 @@ export class GanttView extends ItemView {
       ".x-title { font-size: 15px; font-weight: 600; fill: var(--text-normal); }",
       ".x-name { font-size: 12px; fill: var(--text-normal); }",
       ".x-name.is-group, .x-key.is-title, .x-tick.is-major, .x-band { font-weight: 600; fill: var(--text-normal); }",
+      ".x-name.is-cancelled { text-decoration: line-through; opacity: 0.55; }",
       ".x-line { stroke: var(--background-modifier-border-hover); }",
       ".x-tick, .x-band { font-size: 10px; }",
       ".x-tick { fill: var(--text-muted); }",
