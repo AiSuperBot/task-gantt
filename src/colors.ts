@@ -23,11 +23,33 @@ export function hslToHex(h: number, s: number, l: number): string {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-// 名前から安定した色を生成（担当者/タグ/フォルダ共通・同じ名前は常に同じ色）/ deterministic color from any name
-export function hashColor(name: string): string {
+// 名前のハッシュ（0〜359）/ a name's hash (0-359)
+function hash(name: string): number {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
-  return hslToHex(h, 55, 55);
+  return h;
+}
+
+// 名前から安定した色を生成（タグ/フォルダ共通・同じ名前は常に同じ色）/ deterministic color from any name
+export function hashColor(name: string): string {
+  return hslToHex(hash(name), 55, 55);
+}
+
+// 担当者の自動色：色相も明るさも離れた 10 色（隣どうしは特に違う色）/ automatic assignee colours: 10 set apart in hue and lightness (neighbours most of all)
+const PEOPLE = ["#3b82f6", "#f97316", "#10b981", "#ec4899", "#eab308", "#8b5cf6", "#84cc16", "#ef4444", "#06b6d4", "#d946ef"];
+
+// 名前ごとに、ハッシュで選んだ色か、使用済みなら次の空いている色。10 人までは同じ色にならず、並び順が同じなら毎回同じ色
+// per name, its hashed colour or the next free one: up to 10 names never share a colour, and the same order always gives the same colours
+export function distinctColors(names: string[]): Map<string, string> {
+  const used = new Set<number>();
+  const out = new Map<string, string>();
+  for (const name of names) {
+    let k = hash(name) % PEOPLE.length;
+    for (let n = 0; n < PEOPLE.length && used.has(k); n++) k = (k + 1) % PEOPLE.length;
+    used.add(k);
+    out.set(name, PEOPLE[k]);
+  }
+  return out;
 }
 
 // Obsidian 本体のタグ色（テーマ追従）。テーマが変数を定義していない場合は既定の紫にフォールバック

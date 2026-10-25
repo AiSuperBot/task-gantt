@@ -146,6 +146,8 @@ interface Strings {
   optDisplay: string; // 表示メニュー / the Display menu
   optArrows: string; // 依存の矢印の表示 / show dependency arrows
   optTagLabels: string; // バーのタグの表示 / show tags on the bars
+  optTimeline: string; // 表示メニューの見出し：矢印・タグ・稲妻線 / Display menu heading: arrows, tags, progress line
+  optRows: string; // 表示メニューの見出し：フラット・ロールアップ・空フォルダ / Display menu heading: flat, roll up, empty folders
   exportPng: string;
   exportDone: (path: string) => string;
   exportOpen: string;
@@ -600,6 +602,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "表示",
     optArrows: "依存の矢印",
     optTagLabels: "バーのタグ",
+    optTimeline: "タイムライン",
+    optRows: "行の表示",
     exportPng: "PNG として書き出す",
     exportDone: (path) => `${path} に書き出しました`,
     exportOpen: "開く",
@@ -876,6 +880,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "Display",
     optArrows: "Dependency arrows",
     optTagLabels: "Tags on bars",
+    optTimeline: "Timeline",
+    optRows: "Rows",
     exportPng: "Export as PNG",
     exportDone: (path) => `Exported to ${path}`,
     exportOpen: "Open",
@@ -1152,6 +1158,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "显示",
     optArrows: "依赖箭头",
     optTagLabels: "条形上的标签",
+    optTimeline: "时间轴",
+    optRows: "行",
     exportPng: "导出为 PNG",
     exportDone: (path) => `已导出到 ${path}`,
     exportOpen: "打开",
@@ -1428,6 +1436,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "顯示",
     optArrows: "依賴箭頭",
     optTagLabels: "長條上的標籤",
+    optTimeline: "時間軸",
+    optRows: "列",
     exportPng: "匯出為 PNG",
     exportDone: (path) => `已匯出至 ${path}`,
     exportOpen: "開啟",
@@ -1704,6 +1714,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "표시",
     optArrows: "의존 관계 화살표",
     optTagLabels: "막대의 태그",
+    optTimeline: "타임라인",
+    optRows: "행",
     exportPng: "PNG로 내보내기",
     exportDone: (path) => `${path}(으)로 내보냈습니다`,
     exportOpen: "열기",
@@ -1980,6 +1992,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "Affichage",
     optArrows: "Flèches de dépendance",
     optTagLabels: "Tags sur les barres",
+    optTimeline: "Chronologie",
+    optRows: "Lignes",
     exportPng: "Exporter en PNG",
     exportDone: (path) => `Exporté vers ${path}`,
     exportOpen: "Ouvrir",
@@ -2256,6 +2270,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "Visualización",
     optArrows: "Flechas de dependencia",
     optTagLabels: "Etiquetas en las barras",
+    optTimeline: "Cronograma",
+    optRows: "Filas",
     exportPng: "Exportar como PNG",
     exportDone: (path) => `Exportado a ${path}`,
     exportOpen: "Abrir",
@@ -2532,6 +2548,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     optDisplay: "Вид",
     optArrows: "Стрелки зависимостей",
     optTagLabels: "Теги на полосах",
+    optTimeline: "Шкала времени",
+    optRows: "Строки",
     exportPng: "Экспорт в PNG",
     exportDone: (path) => `Экспортировано: ${path}`,
     exportOpen: "Открыть",

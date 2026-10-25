@@ -78,8 +78,11 @@ button.ogantt-title {
   border-radius: var(--button-radius, 6px);
   background: var(--background-modifier-hover);
 }
+/* 文字と高さはツールバーのほかのボタンにそろえる / text size and height match the toolbar's other buttons */
 .ogantt-seg button {
-  padding: 2px 10px;
+  height: calc(var(--input-height, 30px) - 4px);
+  padding: 0 10px;
+  font-size: var(--font-ui-small);
   color: var(--text-muted);
 }
 .ogantt-seg button:hover {
@@ -1338,6 +1341,7 @@ input.ogantt-cell-input[type="number"] {
 }
 .ogantt-detail-field {
   flex: 1;
+  min-width: 0; /* 中身が広くてもパネルからはみ出さない / wide content never pushes past the panel */
 }
 .ogantt-detail-field input,
 .ogantt-detail-field select {
@@ -1376,16 +1380,18 @@ input.ogantt-cell-input[type="number"] {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
-/* 日付チップ：開始・終了を横並び、クリックでカレンダー、×で個別クリア / date chips */
+/* 日付チップ：開始・終了を横並び（狭いパネルでは期限日が次の行へ。日付を省略記号で切らない）、クリックでカレンダー、×で個別クリア
+   date chips: start and due side by side (on a narrow panel the due date wraps below rather than being cut short); click for the calendar, × clears one */
 .ogantt-date-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 .ogantt-date-chip {
   display: flex;
   align-items: center;
   gap: 5px;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   padding: 4px 6px;
   border: 1px solid var(--background-modifier-border);

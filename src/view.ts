@@ -42,7 +42,7 @@ import {
   ProgressLineRow,
   Tick,
 } from "./timeline";
-import { PALETTE, hashColor, inkOn, resolveTagColor } from "./colors";
+import { PALETTE, distinctColors, hashColor, inkOn, resolveTagColor } from "./colors";
 import { openPopover, paletteInto, pickColor, pickIcon } from "./popover";
 import { ConfirmModal, PickModal } from "./modals";
 import { linkLabel } from "./links";
@@ -201,6 +201,7 @@ export class GanttView extends ItemView {
   private measureCtx = createEl("canvas").getContext("2d")!; // 文字幅を測る（DOM のレイアウトを起こさない）/ measures text without a DOM layout
   private tagColorCache = new Map<string, string>(); // タグの色（既定色は CSS を読むので、描き直しごとに 1 回）/ tag colours (the default reads CSS, so once per redraw)
   private assigneeCache: string[] | null = null; // ボードの担当者一覧（描き直しごとに作る）/ the board's assignees, built once per redraw
+  private peopleColors: Map<string, string> | null = null; // 担当者の自動の色（同上）/ the assignees' automatic colours (likewise)
   private late: Set<string> | null = null; // 矢印を隠しているときの、依存が守られていない後続 / with arrows hidden, successors whose dependency is broken
   private exporting = false; // PNG の書き出し中 / a PNG export is running
   private fontFamily = ""; // バーの文字のフォント（計測用）/ the bars' font, for measuring
@@ -454,7 +455,7 @@ export class GanttView extends ItemView {
   rerender(): void {
     if (!this.gridHost) this.buildSkeleton();
     this.hideCard(); // 下のバーが作り直される / the bar under it is about to be replaced
-    this.assigneeCache = null;
+    this.assigneeCache = this.peopleColors = null;
     this.tagColorCache.clear();
     this.renderLegend(); // 凡例はデータ（担当者）で変わる / the legend depends on the data (the assignees)
     this.renderFilterBar(); // 統合フィルタ行を最新データで更新 / refresh the unified filter row
@@ -1164,9 +1165,11 @@ export class GanttView extends ItemView {
           this.rerender();
           sync();
         });
+      menu.createDiv({ cls: "ogantt-preset-heading", text: tr().optTimeline });
       toggle("showDeps", tr().optArrows);
       toggle("showTags", tr().optTagLabels);
       toggle("progressLine", tr().optProgressLine);
+      menu.createDiv({ cls: "ogantt-preset-heading", text: tr().optRows });
       toggle("flat", tr().optFlat);
       folderOnly.push(toggle("rollup", tr().optRollup), toggle("showEmptyFolders", tr().optShowEmpty));
       note = menu.createDiv({ cls: "ogantt-colmenu-note", text: tr().folderOnly });
@@ -1298,10 +1301,12 @@ export class GanttView extends ItemView {
   private folderColor(name: string): string {
     return this.plugin.settings.folderColors.find((c) => c.name === name)?.color || hashColor(name);
   }
-  // 担当者の色（表示名ごとの上書き > 名前ハッシュ）。自動の色は似ることがあるので、共有タスクの帯を見分けられるよう選べる
-  // an assignee's colour (override by display name > name hash); the automatic hues can collide, so it can be picked to tell shared-task bands apart
+  // 担当者の色（表示名ごとの上書き > ボードの中で重ならない自動の色）。まだボードにいない人（追加した直後）は名前ハッシュ
+  // an assignee's colour (override by display name > an automatic colour no one else on the board has); someone not on the board yet (just added) gets the name hash
   private assigneeColor(who: string): string {
-    return this.plugin.settings.assigneeColors.find((c) => c.name === linkLabel(who))?.color || hashColor(who);
+    const name = linkLabel(who);
+    const own = this.plugin.settings.assigneeColors.find((c) => c.name === name)?.color;
+    return own || (this.peopleColors ??= distinctColors([...new Set(this.assigneeList().map(linkLabel))])).get(name) || hashColor(name);
   }
   // タグチップに色を塗る（枠＋淡い背景＋文字色。テーブル列/詳細パネル共通）/ paint a tag chip (border + faint bg + text)
   private paintTagChip(chip: HTMLElement, tag: string): void {
@@ -2284,8 +2289,8 @@ export class GanttView extends ItemView {
       av.appendChild(this.svgEl("text", { x: x + 7 + k * 10, y: cy + 3, fill: inkOn(c) })).textContent = initials(linkLabel(a));
     });
     if (shown.length) x += 18 + (shown.length - 1) * 10;
-    const plus = people.length < t.assignees.length ? "+ " : "";
-    let text = people.length ? `${t.name} · ${plus}${people.map(linkLabel).join(", ")}` : t.name;
+    const sep = people.length < t.assignees.length ? " + " : " · ";
+    let text = people.length ? `${t.name}${sep}${people.map(linkLabel).join(", ")}` : t.name;
     if (group === "completed") text = `✓ ${text}`;
     g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label", "font-size": LABEL_PX })).textContent = text;
     // タグはラベルの後ろに小さな札で、タグの色で控えめに（表示メニューで隠せる）/ tags follow the label as small pills, quietly in their colour (hidden from the Display menu)

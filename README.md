@@ -37,7 +37,7 @@ The UI follows Obsidian's display language. Supported: English, Japanese, Korean
 
 The right end of the toolbar shapes how the board is displayed: **Group by**, **Color by**, and the **Display** menu. A thin legend under the toolbar explains the colors.
 
-**Group by** folder, status, assignee or tag, and **color by** status or assignee. **Display** holds what you switch less often: **Dependency arrows**, **Tags on bars**, **Progress line**, **Flat**, **Roll up**, **Show empty folders**, and which table **Columns** to show. Each board remembers all of this, plus which groups are collapsed. Rarer actions, **Export as PNG** and **Reload**, are in the view's **⋯** menu and the command palette. Status never relies on color alone: completed tasks get a ✓ on their label, deferred ones are hatched, and cancelled ones are faded and struck through.
+**Group by** folder, status, assignee or tag, and **color by** status or assignee. **Display** holds what you switch less often, in three sections: **Timeline** (**Dependency arrows**, **Tags on bars**, **Progress line**), **Rows** (**Flat**, **Roll up**, **Show empty folders**) and which table **Columns** to show. Each board remembers all of this, plus which groups are collapsed. Rarer actions, **Export as PNG** and **Reload**, are in the view's **⋯** menu and the command palette. Status never relies on color alone: completed tasks get a ✓ on their label, deferred ones are hatched, and cancelled ones are faded and struck through.
 
 ![Grouping and color-by options with a legend](docs/images/grouping-en.webp)
 
@@ -105,7 +105,7 @@ Tasks use Obsidian's native `tags` (frontmatter `tags:` plus inline `#tag`), so 
 
 ## Shared tasks (several assignees)
 
-`assignee` can hold several people: write a list in the frontmatter, or add them one by one in the detail panel or the **Assignee** cell. A shared task shows a stacked avatar per person next to its bar and a people icon by its name, and **color by assignee** splits its bar into one band per person (click a person in the legend to pick their color if two automatic colors look alike). **Group by assignee** lists the task under each of its people; the copies are joined by a dotted line, and hovering one highlights them all. A row doesn't repeat its heading's person: under *Ana*, the label and the **Assignee** cell show only the others, after a plus (*Visual design · + Ben*), and a task Ana has alone shows just its name. Grouping by tag likewise leaves the heading's tag out of its rows. Drag a task onto a person's group to add them — the task keeps its other assignees. With one assignee the value stays a plain string, so existing notes keep their shape.
+`assignee` can hold several people: write a list in the frontmatter, or add them one by one in the detail panel or the **Assignee** cell. A shared task shows a stacked avatar per person next to its bar and a people icon by its name, and **color by assignee** splits its bar into one band per person (each person on the board gets a color of their own, and up to ten people never share one; click a person in the legend to pick another). **Group by assignee** lists the task under each of its people; the copies are joined by a dotted line, and hovering one highlights them all. A row doesn't repeat its heading's person: under *Ana*, the label and the **Assignee** cell show only the others, after a plus (*Visual design + Ben*), and a task Ana has alone shows just its name. Grouping by tag likewise leaves the heading's tag out of its rows. Drag a task onto a person's group to add them — the task keeps its other assignees. With one assignee the value stays a plain string, so existing notes keep their shape.
 
 ## Coloring tags and folders
 
@@ -330,7 +330,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ツールバーの右端の **グループ化**・**色分け**・**表示** メニューで、ボードの見せ方を調整できます。ツールバーの下の細い行は色の凡例です。
 
-**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者）。**表示** メニューには、ときどき切り替えるもの（**依存の矢印**・**バーのタグ**・**稲妻線**・**フラット表示**・**ロールアップ**・**空フォルダを表示**）と、表に出す**列**がまとまっています。これらと折りたたんだグループはボードごとに記憶されます。たまにしか使わない **PNG として書き出す** と **再読み込み** は、ビューの **⋯** メニューとコマンドパレットにあります。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
+**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者）。**表示** メニューには、ときどき切り替えるものが 3 つの区分にまとまっています：**タイムライン**（**依存の矢印**・**バーのタグ**・**稲妻線**）、**行の表示**（**フラット表示**・**ロールアップ**・**空フォルダを表示**）、表に出す**列**。これらと折りたたんだグループはボードごとに記憶されます。たまにしか使わない **PNG として書き出す** と **再読み込み** は、ビューの **⋯** メニューとコマンドパレットにあります。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
 
 ![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.webp)
 
@@ -398,7 +398,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 
 ## 共有タスク（複数の担当者）
 
-`assignee` には複数の人を入れられます。フロントマターにリストで書くか、詳細パネルや**担当者**セルで 1 人ずつ追加します。共有タスクはバーの横に人数分のアバターが重なって並び、名前の前に人のアイコンが付きます。**担当者で色分け**すると、バーが一人ひとりの色の帯に分かれます（自動の色が似ていて見分けにくいときは、凡例の人をクリックして色を選べます）。**担当者でグループ化**すると、そのタスクは担当者それぞれのグループに並び、同じタスクどうしは点線でつながり、どれかにマウスを載せるとまとめて強調されます。行では見出しの人を繰り返しません。*Ana* の下では、ラベルと**担当者**セルにほかの人だけが「+」付きで出て（*Visual design · + Ben*）、Ana だけのタスクは名前だけになります。タグでグループ化したときも、見出しのタグは行に出しません。タスクを人のグループへドラッグするとその人を追加します（ほかの担当者はそのまま）。担当者が 1 人のときは値は従来どおり文字列のままなので、既存のノートの書き方は変わりません。
+`assignee` には複数の人を入れられます。フロントマターにリストで書くか、詳細パネルや**担当者**セルで 1 人ずつ追加します。共有タスクはバーの横に人数分のアバターが重なって並び、名前の前に人のアイコンが付きます。**担当者で色分け**すると、バーが一人ひとりの色の帯に分かれます（ボードの一人ひとりに別の色が自動で付き、10 人までは同じ色になりません。凡例の人をクリックすれば別の色を選べます）。**担当者でグループ化**すると、そのタスクは担当者それぞれのグループに並び、同じタスクどうしは点線でつながり、どれかにマウスを載せるとまとめて強調されます。行では見出しの人を繰り返しません。*Ana* の下では、ラベルと**担当者**セルにほかの人だけが「+」付きで出て（*Visual design + Ben*）、Ana だけのタスクは名前だけになります。タグでグループ化したときも、見出しのタグは行に出しません。タスクを人のグループへドラッグするとその人を追加します（ほかの担当者はそのまま）。担当者が 1 人のときは値は従来どおり文字列のままなので、既存のノートの書き方は変わりません。
 
 ## タグ・フォルダの色
 
