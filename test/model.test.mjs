@@ -1,6 +1,6 @@
 // buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
-import { buildRows, parseKanban, cardProgress, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput } from "./model.mjs";
+import { buildRows, kanbanLanes, listWith, newStatus, moveCollapsed, cardProgress, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -19,9 +19,49 @@ check("cardProgress 199/200 は 99", cardProgress(199, 200) === 99);
 check("cardProgress 全部で 100", cardProgress(200, 200) === 100);
 check("cardProgress 1/201 は 1", cardProgress(1, 201) === 1);
 check("cardProgress 0 枚は 0", cardProgress(0, 5) === 0);
+// Obsidian のメタデータ（見出し・リスト項目・区切り線）を本文から作る小さな代役 / a small stand-in for Obsidian's metadata (headings, list items, thematic breaks)
+function fakeCache(text) {
+  const cache = { headings: [], listItems: [], sections: [] };
+  let offset = 0;
+  text.split("\n").forEach((line, i) => {
+    const position = { start: { line: i, col: 0, offset }, end: { line: i, col: line.length, offset: offset + line.length } };
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    const li = line.match(/^(\s*)(?:[-*+]|\d+[.)])\s+(?:\[(.)\]\s+)?/);
+    if (h) cache.headings.push({ level: h[1].length, heading: h[2], position });
+    else if (line.trim() === "***") cache.sections.push({ type: "thematicBreak", position });
+    else if (li) cache.listItems.push({ parent: li[1] ? i - 1 : -i, task: li[2], position });
+    offset += line.length + 1;
+  });
+  return [cache, text];
+}
+const lanesOf = (text) => kanbanLanes(...fakeCache(text)).map((l) => `${l.title}:${l.cards.map((c) => `${c.text}${c.done ? "✓" : ""}`).join("+")}`).join(" | ");
+
 // 列の中のどの箇条書きもカード（チェックの有無・記号を問わない）/ any bullet in a lane is a card, checkbox or not
-const looseLanes = parseKanban(["## Todo", "- idea", "+ [x] done", "1. [ ] numbered", "## Done", "- [x] shipped"].join("\n"));
-check("parseKanban: 箇条書きはすべてカード", looseLanes.map((l) => `${l.title}:${l.cards.length}:${l.cards.filter((c) => c.done).length}`).join() === "Todo:3:1,Done:1:1");
+check("kanbanLanes: 箇条書きはすべてカード", lanesOf(["## Todo", "- idea", "+ [x] done", "1. [ ] numbered", "## Done", "- [x] shipped"].join("\n")) === "Todo:idea+done✓+numbered | Done:shipped✓");
+// アーカイブ（*** の後の ## Archive）は列にも数にも入らない / the archive (## Archive after ***) is neither a lane nor counted
+const archived = ["## Doing", "- [ ] a", "- [ ] b", "## Done", "- [x] c", "", "***", "", "## Archive", "", "- [x] old 1", "- [x] old 2"].join("\n");
+check("kanbanLanes: アーカイブは数えない", lanesOf(archived) === "Doing:a+b | Done:c✓");
+check("kanbanLanes: 文字なしでも数は同じ", kanbanLanes(fakeCache(archived)[0]).flatMap((l) => l.cards).length === 3);
+
+// 担当者などの多値フィールドに 1 件足す・外す / adding or removing one entry of a multi-valued field
+check("listWith: 1 人に足すとリスト", JSON.stringify(listWith("Ana", "Ben", true)) === '["Ana","Ben"]');
+check("listWith: 同じ人（表示名が同じ）は足さない", listWith(["[[Ben]]"], "Ben", true) === undefined);
+check("listWith: 引用符なしの [[x]] は文字列にして残す", JSON.stringify(listWith([["Ana"]], "Ben", true)) === '["[[Ana]]","Ben"]');
+check("listWith: 外してもほかの値は書いたまま", JSON.stringify(listWith(["Ana", 7, "Ben"], "Ben", false)) === '["Ana",7]');
+check("listWith: リストはリストのまま", JSON.stringify(listWith(["Ana", "Ben"], "Ben", false)) === '["Ana"]');
+check("listWith: 最後の 1 人を外すと null（キーごと消す）", listWith("Ana", "Ana", false) === null);
+check("listWith: いない人は外せない（変更なし）", listWith("Ana", "Ben", false) === undefined);
+
+// フォルダの改名：畳んだ親タスク（パス）は追いかけ、見出しのキー（相対）とほかの軸はそのまま
+// a folder rename: collapsed parent tasks (paths) follow it, heading keys (relative) and other axes stay
+check("moveCollapsed", moveCollapsed(["folder:Proj/Launch.md", "folder:Design", "status:Done", "folder:Other/x.md"], "Proj", "Work").join() === "folder:Work/Launch.md,folder:Design,status:Done,folder:Other/x.md");
+
+// 新しいステータス：id は名前から連番、色は未使用のパレット色 / a new status: id from the label (numbered), an unused palette colour
+const st0 = [{ id: "todo", label: "To do", color: "#ef4444", group: "active" }];
+const st1 = newStatus(st0, "In review");
+check("newStatus: id は名前から", st1.id === "in-review" && st1.label === "In review" && st1.group === "active");
+check("newStatus: 使っていない色", st1.color !== "#ef4444");
+check("newStatus: 同じ名前は連番", newStatus([...st0, st1], "In review").id === "in-review-2");
 
 // マイルストーンは end のみ → anchor は end / milestone collapses to its due date
 const ms = { milestone: true, end: "2026-02-10" };
@@ -100,13 +140,8 @@ const mixed = buildRows([
 check("ルート直下のタスクがフォルダより先", mixed[0].kind === "task" && mixed[0].task.name === "Root task" && mixed[1].group === "A");
 
 // ----- カンバン本文 / kanban bodies -----
-const lanes = parseKanban(["## To do", "", "- [ ] Header", "- [ ] Footer", "", "## Done", "", "**Complete**", "- [x] Setup", "",
-  "%% kanban:settings", "```", "{}", "```", "%%", "- [ ] not a card"].join("\n"));
-check("カンバン: 列は 2 つ", lanes.length === 2 && lanes[0].title === "To do" && lanes[1].title === "Done");
-check("カンバン: カードと完了", lanes[0].cards.length === 2 && !lanes[0].cards[0].done && lanes[1].cards[0].text === "Setup" && lanes[1].cards[0].done);
-check("カンバン: 設定ブロック以降は読まない", lanes[1].cards.length === 1);
-const stray = parseKanban("- [ ] stray\n## L\n- card");
-check("カンバン: 列より前のリストは無視", stray.length === 1 && stray[0].cards.length === 1 && stray[0].cards[0].text === "card");
+check("カンバン: 列とカードと完了", lanesOf(["## To do", "", "- [ ] Header", "- [ ] Footer", "  - [x] nested, not a card", "", "## Done", "", "**Complete**", "- [x] Setup"].join("\n")) === "To do:Header+Footer | Done:Setup✓");
+check("カンバン: 列より前のリストは無視", lanesOf("- [ ] stray\n## L\n- card") === "L:card");
 
 // ----- サブタスク（parent ネスト）/ subtask nesting -----
 const sub = [

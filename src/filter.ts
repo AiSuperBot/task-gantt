@@ -35,12 +35,13 @@ export function matchFilter(t: Task, f: Filter, statuses: StatusDef[], today: nu
   const group = f.field === "statusGroup" ? statusGroupOf(statuses, t.status) : undefined;
   const vals = f.field === "status" ? (t.status ? [t.status] : [])
     : f.field === "statusGroup" ? (group ? [group] : [])
-      : f.field === "assignee" ? t.assignees
+      : f.field === "assignee" ? t.assignees.map(linkLabel)
         : t.tags;
   if (f.op === "empty") return vals.length === 0;
   if (f.op === "notEmpty") return vals.length > 0;
-  // 値 "" は「未設定」を表すセンチネル。フィールド内は OR / "" is the "unset" sentinel; OR within the field
-  const hit = f.values.some((v) => (v === "" ? vals.length === 0 : vals.includes(v)));
+  // 値 "" は「未設定」を表すセンチネル。フィールド内は OR。人は表示名で比べる（"Ben" と "[[Ben]]" は同じ人）
+  // "" is the "unset" sentinel; OR within the field. People compare by display name ("Ben" and "[[Ben]]" are one person)
+  const hit = f.values.some((v) => (v === "" ? vals.length === 0 : vals.includes(f.field === "assignee" ? linkLabel(v) : v)));
   return f.op === "isNot" ? !hit : hit;
 }
 

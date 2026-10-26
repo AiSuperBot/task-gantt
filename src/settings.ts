@@ -6,7 +6,7 @@ import { App, Notice, Platform, PluginSettingTab, Setting, TextComponent } from 
 import type { SettingDefinitionItem, SettingDefinitionList, SettingGroupItem } from "obsidian";
 import type GanttPlugin from "./main";
 import { StatusDef, StatusGroup, STATUS_GROUPS, ZoomMode, DateFormat, Filter, FilterMatch, FilterPreset, CustomField, CustomFieldType } from "./types";
-import { collectAllTags, customFieldIssues, filesWithFrontmatterKey, renameFrontmatterKey } from "./model";
+import { collectAllTags, customFieldIssues, filesWithFrontmatterKey, newStatus, renameFrontmatterKey } from "./model";
 import { ChoiceModal, ConfirmModal, PickModal } from "./modals";
 import { obsidianTagColor, toHex } from "./colors";
 import { pickColor } from "./popover";
@@ -845,9 +845,10 @@ export class GanttSettingTab extends PluginSettingTab {
         addItem: {
           name: tr().setAddStatus,
           action: () => {
-            s.statuses.push({ id: "new", label: "New", color: "#888888", group: "active" });
+            // 凡例からの追加と同じ決まり（重ならない id・まだ使っていない色）/ the same rule as adding from the legend (a unique id, an unused colour)
+            s.statuses.push(newStatus(s.statuses, "New"));
             this.save();
-            this.updateDeclarative();
+            this.redraw(); // 1.13 より前の設定画面も描き直す / the pre-1.13 settings tab redraws too
           },
         },
       },

@@ -12,6 +12,8 @@ import {
   keepDurationOnStartChange,
   successorClosure,
   cascadeDates,
+  depViolated,
+  wouldLoop,
   offDayGradient,
 } from "./schedule.mjs";
 import { dayIndex, dayToStr } from "./timeline.mjs";
@@ -141,11 +143,22 @@ const OPTS = { cal: CAL, fs: true };
   check("マイルストーンは依存で動かさない", !ch.has("MS"));
 }
 {
-  // 循環しても止まる / cycles terminate
+  // 依存が輪になっていると日付が決まらないので、何も動かさない（以前は 1000 回押し出して数十年先へ）
+  // dependencies in a loop have no answer, so nothing moves (this used to push them 1000 times, decades ahead)
   const a = mk("A", { start: "2026-08-17", end: "2026-08-18", deps: [{ path: "B", type: "FS" }] });
   const b = mk("B", { start: "2026-08-17", end: "2026-08-18", deps: [{ path: "A", type: "FS" }] });
-  const ch = cascadeDates([a, b], ["A"], OPTS);
-  check("循環でも終了する", ch.size <= 2);
+  check("循環なら null（何も動かさない）", cascadeDates([a, b], ["A"], OPTS) === null);
+  const c = mk("C", { start: "2026-08-10", end: "2026-08-11" });
+  check("wouldLoop: 後続から先行へたどれるなら輪", wouldLoop([a, b, c], "B", "A") && wouldLoop([a, b, c], "A", "A"));
+  check("wouldLoop: 無関係なら輪にならない", !wouldLoop([a, b, c], "C", "A"));
+}
+{
+  // 違反の判定は連動と同じ決まり：FS は先行の期限の翌稼働日から / violations follow the cascade's rule: FS from the workday after the due date
+  const p = mk("P", { start: "2026-08-10", end: "2026-08-14" }); // 金曜に終わる / ends on a Friday
+  const sat = mk("S", { start: "2026-08-15", end: "2026-08-17" });
+  const mon = mk("M", { start: "2026-08-17", end: "2026-08-18" });
+  check("depViolated FS: 土曜開始は違反（連動なら月曜へ押す）", depViolated(sat, p, "FS", CAL) && !depViolated(mon, p, "FS", CAL));
+  check("depViolated SS/FF", depViolated(mk("X", { start: "2026-08-09", end: "2026-08-20" }), p, "SS", CAL) && depViolated(mk("Y", { start: "2026-08-10", end: "2026-08-13" }), p, "FF", CAL));
 }
 
 // 休日の帯：左端が水曜（2026-10-21）なら土日は 4・5 日目 / non-working days: from a Wednesday, Sat and Sun are the 4th and 5th days

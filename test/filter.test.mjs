@@ -75,6 +75,12 @@ check("AND (all)", names(applyFilters(ALL, [f1, f2], "all", STATUSES, TODAY)) ==
 check("OR (any)", names(applyFilters(ALL, [f1, f2], "any", STATUSES, TODAY)) === "Alpha Plan,Beta");
 check("no filters returns the input as is", applyFilters(ALL, [], "all", STATUSES, TODAY) === ALL);
 
+// 人は表示名で比べる / people compare by display name
+{
+  const t = { path: "x.md", name: "x", groups: [], tags: [], assignees: ["[[People/Ben]]"], deps: [], milestone: false };
+  check("担当者フィルタ: \"Ben\" は \"[[People/Ben]]\" にも当たる", matchFilter(t, { kind: "category", field: "assignee", op: "is", values: ["Ben"] }, STATUSES, 0));
+}
+
 // ── besideHeading：見出しが示す値は行で繰り返さない / a row doesn't repeat its heading's value ──
 check("assignee heading drops that person (by display name)", besideHeading(["[[People/Ana]]", "Ben"], "assignees", "assignee", "Ana").join() === "Ben");
 check("tag heading drops that tag", besideHeading(["ux", "brand"], "tags", "tag", "ux").join() === "brand");

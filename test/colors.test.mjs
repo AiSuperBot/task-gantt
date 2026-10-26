@@ -22,6 +22,10 @@ check("the same order gives the same colours", JSON.stringify([...distinctColors
 const ten = Array.from({ length: 10 }, (_, i) => `Person ${i}`);
 check("10 people never share a colour", new Set(distinctColors(ten).values()).size === 10);
 check("an 11th person still gets a colour", distinctColors([...ten, "Extra"]).get("Extra")?.startsWith("#"));
+// 手で選んだ色はほかの人に回さない / a colour picked by hand isn't handed to anyone else
+const picked = [...colors.values()][0];
+check("a picked colour is never given to someone else", ![...distinctColors(["Ben", "Dana", "Kei"], [picked.toUpperCase()]).values()].includes(picked));
+check("the order names come in doesn't matter", JSON.stringify([...distinctColors([...team].reverse())].sort()) === JSON.stringify([...colors].sort()));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

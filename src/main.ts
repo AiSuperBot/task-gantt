@@ -3,8 +3,9 @@ import { GanttSettings, DEFAULT_SETTINGS, GanttSettingTab } from "./settings";
 import { GanttView } from "./view";
 import { VIEW_TYPE_GANTT, GanttViewState } from "./types";
 import { t } from "./i18n";
-import { inferStatusGroup } from "./model";
+import { inferStatusGroup, moveCollapsed } from "./model";
 import { checkNotifications } from "./notify";
+import { usePopoverKeys } from "./popover";
 import { migrateRenamedPath, schedulePush, syncGcal } from "./gcal/sync";
 import { isConnected } from "./gcal/auth";
 import { migrateLegacySecrets } from "./gcal/secrets";
@@ -19,6 +20,7 @@ export default class GanttPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    usePopoverKeys(this.app); // ポップオーバーの Esc を設定画面などより先に受ける / popovers take Esc before, say, the settings window
 
     this.registerView(VIEW_TYPE_GANTT, (leaf) => new GanttView(leaf, this));
     // 本文・担当者のリンクのホバーでページプレビューを出す / Page preview for links in the body and assignee
@@ -114,11 +116,17 @@ export default class GanttPlugin extends Plugin {
     });
   }
 
-  // フォルダ（と配下）のボード設定のキー "folder:<パス>" を付け替える / re-key the "folder:<path>" board setups of a renamed folder and its subfolders
+  // フォルダ（と配下）のボード設定のキー "folder:<パス>" を付け替え、どのボードでも畳んだ親タスク（パス）を追いかけさせる
+  // re-key the "folder:<path>" board setups of a renamed folder and its subfolders, and let collapsed parent tasks (paths) follow on every board
   private moveBoards(from: string, to: string): void {
     const boards = this.settings.boards;
     let moved = false;
     for (const key of Object.keys(boards)) {
+      const collapsed = moveCollapsed(boards[key].collapsed ?? [], from, to);
+      if (collapsed.some((k, i) => k !== boards[key].collapsed[i])) {
+        boards[key] = { ...boards[key], collapsed };
+        moved = true;
+      }
       const path = key.startsWith("folder:") ? key.slice(7) : null;
       if (path == null || (path !== from && !path.startsWith(from + "/"))) continue;
       boards[`folder:${to}${path.slice(from.length)}`] = boards[key];
@@ -191,6 +199,14 @@ export default class GanttPlugin extends Plugin {
     // 旧バージョンが平文で残した秘匿情報を SecretStorage へ移し、data.json から消す（Issue #6）
     // move secrets older versions left in plain text into SecretStorage and scrub data.json (issue #6)
     if (migrateLegacySecrets(this)) await this.saveData(this.settings);
+  }
+
+  // 見た目だけの設定（色・ステータス・アイコン・列幅）を保存し、開いているボードと設定画面を描き直す（タスクは読み直さない）
+  // save appearance-only settings (colours, statuses, icons, column widths) and redraw every open board and the settings tab, without re-reading tasks
+  async saveLook(): Promise<void> {
+    await this.saveData(this.settings);
+    this.settingTab?.refreshIfOpen();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)) if (leaf.view instanceof GanttView) leaf.view.rerender();
   }
 
   async saveSettings(): Promise<void> {

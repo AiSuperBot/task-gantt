@@ -38,12 +38,14 @@ export function hashColor(name: string): string {
 // 担当者の自動色：色相も明るさも離れた 10 色（隣どうしは特に違う色）/ automatic assignee colours: 10 set apart in hue and lightness (neighbours most of all)
 const PEOPLE = ["#3b82f6", "#f97316", "#10b981", "#ec4899", "#eab308", "#8b5cf6", "#84cc16", "#ef4444", "#06b6d4", "#d946ef"];
 
-// 名前ごとに、ハッシュで選んだ色か、使用済みなら次の空いている色。10 人までは同じ色にならず、並び順が同じなら毎回同じ色
-// per name, its hashed colour or the next free one: up to 10 names never share a colour, and the same order always gives the same colours
-export function distinctColors(names: string[]): Map<string, string> {
-  const used = new Set<number>();
+// 名前ごとに、ハッシュで選んだ色か、使用済みなら次の空いている色。taken（手で選んだ色）は使わない。10 人までは同じ色にならず、
+// 同じ顔ぶれなら毎回同じ色（並びは文字コード順なので、端末の言語設定でも変わらない）
+// per name, its hashed colour or the next free one, never one in `taken` (colours picked by hand): up to 10 names never share a colour,
+// and the same set of names always gets the same colours (they're taken in code-unit order, so the device's language can't change them)
+export function distinctColors(names: string[], taken: string[] = []): Map<string, string> {
+  const used = new Set(PEOPLE.flatMap((c, k) => (taken.some((t) => t.toLowerCase() === c) ? [k] : [])));
   const out = new Map<string, string>();
-  for (const name of names) {
+  for (const name of [...new Set(names)].sort()) {
     let k = hash(name) % PEOPLE.length;
     for (let n = 0; n < PEOPLE.length && used.has(k); n++) k = (k + 1) % PEOPLE.length;
     used.add(k);

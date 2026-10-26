@@ -331,9 +331,15 @@ export function columnWidth(def: ColumnDef, overrides: Record<string, number>): 
 export function taskComparator(defs: ColumnDef[], settings: GanttSettings): (a: Task, b: Task) => number {
   const def = defs.find((c) => c.id === settings.sortBy) ?? defs.find((c) => c.id === "start")!;
   const dir = settings.sortDir === "desc" ? -1 : 1;
+  // 並べ替えの間はタスクごとのキーを覚える（比較のたびに作り直さない）/ keep each task's key for the sort (not rebuilt on every comparison)
+  const keys = new Map<Task, ReturnType<ColumnDef["sortKey"]>>();
+  const key = (t: Task) => {
+    if (!keys.has(t)) keys.set(t, def.sortKey(t, settings));
+    return keys.get(t)!;
+  };
   return (a, b) => {
-    const ka = def.sortKey(a, settings);
-    const kb = def.sortKey(b, settings);
+    const ka = key(a);
+    const kb = key(b);
     const c = typeof ka === "number" && typeof kb === "number" ? ka - kb : String(ka).localeCompare(String(kb));
     return c * dir;
   };
@@ -369,10 +375,16 @@ function paintDuration(ctx: BoardContext, td: HTMLElement, t: Task): void {
 // 値の有無に関わらずダブルクリックできる場所だと分かるようにする
 // paint a progress cell (thin meter + %); unset still draws an empty meter and a dash,
 // so the cell reads as double-click editable whether or not it has a value
+// 表示する進捗（0〜100 の整数。未設定・数でない値は null）。表・パネル・ホバーカードで同じ値を出す
+// the progress to show (a whole number 0–100; unset or not a number is null), the same in the table, the panel and the hover card
+export function progressPct(t: Task): number | null {
+  return t.progress != null && Number.isFinite(t.progress) ? Math.max(0, Math.min(100, Math.round(t.progress))) : null;
+}
+
 export function paintProgress(td: HTMLElement, t: Task): void {
   td.empty();
   td.addClass("ogantt-td-progress");
-  const p = t.progress != null ? Math.max(0, Math.min(100, Math.round(t.progress))) : null;
+  const p = progressPct(t);
   td.toggleClass("is-empty", p == null);
   const track = td.createDiv({ cls: "ogantt-meter" });
   if (p != null) track.createDiv({ cls: "ogantt-meter-fill" }).style.width = `${p}%`;
@@ -420,6 +432,8 @@ function editStatus(ctx: BoardContext, cell: HTMLElement, t: Task): void {
   cell.empty();
   const sel = cell.createEl("select", { cls: "ogantt-cell-input", attr: { "aria-label": tr().fieldStatus } });
   sel.createEl("option", { text: "—", value: "" }); // 未設定に戻す / clear the status
+  // 一覧に無いステータス（消した・打ち間違い）もそのまま選んでおく（閉じただけで消さない）/ keep a status the list doesn't know selected, so closing the editor doesn't erase it
+  if (t.status && !ctx.settings.statuses.some((s) => s.id === t.status)) sel.createEl("option", { text: t.status, value: t.status }).selected = true;
   for (const s of ctx.settings.statuses) {
     const o = sel.createEl("option", { text: s.label, value: s.id });
     if (s.id === t.status) o.selected = true;

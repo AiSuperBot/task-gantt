@@ -1,6 +1,7 @@
-import { App, TFile, TFolder, getAllTags, normalizePath } from "obsidian";
+import { App, CachedMetadata, TFile, TFolder, getAllTags, normalizePath } from "obsidian";
 import { GanttSettings } from "./settings";
-import { fmList, fmText, isBareLink } from "./links";
+import { fmList, fmText, isBareLink, linkLabel } from "./links";
+import { PALETTE } from "./colors";
 import { Task, TaskKind, Row, Dep, DepType, StatusDef, StatusGroup, CustomField, CustomFieldType, CustomValue } from "./types";
 
 // ── ステータスグループ / status groups ──
@@ -293,13 +294,10 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
     const cv = fmText(fm[k.canvas]);
     const canvas = cv ? resolveLink(app, cv, file.path) : null;
     const kind: TaskKind = fm["kanban-plugin"] ? "kanban" : canvas?.extension === "canvas" ? "canvas" : "note";
-    // カンバンの進捗はチェックしたカードの割合。カードはボードと同じ決まり（最初の列見出し ## より後の最上位のリスト項目。
-    // チェックボックスが無くてもカード、入れ子は数えない）で、詳細パネルの列の表示と数が合う
-    // a kanban's progress is the share of checked cards. Cards follow the board's own rule (top-level list items after the first ## lane
-    // heading, with or without a checkbox; nested items don't count), so the count matches the lanes in the detail panel
-    const lanes = cache?.headings?.find((hd) => hd.level === 2)?.position.start.line ?? Infinity;
-    const items = kind === "kanban" ? (cache?.listItems ?? []).filter((li) => li.parent < 0 && li.position.start.line > lanes) : [];
-    const cards = items.length ? { done: items.filter((li) => li.task !== undefined && li.task !== " ").length, total: items.length } : undefined;
+    // カンバンの進捗はチェックしたカードの割合。カードは詳細パネルの列と同じ kanbanLanes の決まりで数える
+    // a kanban's progress is the share of checked cards, counted by kanbanLanes, the same rule the detail panel's lanes use
+    const all = kind === "kanban" ? kanbanLanes(cache).flatMap((l) => l.cards) : [];
+    const cards = all.length ? { done: all.filter((c) => c.done).length, total: all.length } : undefined;
     return {
       path: file.path,
       name: file.basename,
@@ -391,6 +389,17 @@ function spanOf(tasks: Task[]): { start: string; end: string } | undefined {
   return starts.length && ends.length ? { start: starts[0], end: ends[ends.length - 1] } : undefined;
 }
 
+// 改名・移動に合わせて折りたたみのキーを付け替える。追いかけるのは親タスクのキー（"folder:<タスクのパス>"）で、
+// フォルダの見出しのキーはボードからの相対なのでボードごと動いてもそのまま
+// re-point collapse keys after a rename or move: parent tasks' keys ("folder:<task path>") follow it, while folder heading keys are
+// relative to the board, so they stay valid when the whole board moves
+export function moveCollapsed(keys: string[], from: string, to: string): string[] {
+  return keys.map((k) => {
+    const p = k.startsWith("folder:") && k.endsWith(".md") ? k.slice(7) : null;
+    return p != null && (p === from || p.startsWith(from + "/")) ? `folder:${to}${p.slice(from.length)}` : k;
+  });
+}
+
 // フォルダ階層を入れ子の表示行へ展開（collapsed のフォルダは子を省く）
 // flatten the folder tree into nested rows (collapsed folders hide their children)
 // 既定のタスク比較＝開始日昇順（呼び出し側が指定しなければこれ）/ default task order = start ascending
@@ -480,7 +489,7 @@ export function buildRows(
     };
     for (const r of roots) emit(r, depth);
     // フォレストに到達できない＝循環で孤立したタスクだけトップレベルで出す / surface only cycle-orphaned tasks
-    for (const t of node.tasks.slice().sort(taskCompare)) if (!reachable.has(t.path)) emit(t, depth);
+    for (const t of node.tasks.filter((x) => !reachable.has(x.path)).sort(taskCompare)) emit(t, depth);
   };
   walk(root, 0, "");
   return rows;
@@ -531,21 +540,35 @@ export async function writeField(
 
 // 多値フィールド（担当者）を書く。0 件は削除、1 件は元がリストでなければ単一値のまま（既存の書き方を崩さない）
 // write a multi-valued field (assignees): none deletes it; a single value stays a plain value unless it was a list already
-export async function writeList(app: App, path: string, key: string, values: string[]): Promise<void> {
+export async function editListField(app: App, path: string, key: string, value: string, add: boolean): Promise<void> {
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) return;
   await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-    const wasList = Array.isArray(fm[key]) && !isBareLink(fm[key]);
-    if (values.length === 0) delete fm[key];
-    else fm[key] = values.length > 1 || wasList ? values : values[0];
+    const next = listWith(fm[key], value, add);
+    if (next === null) delete fm[key];
+    else if (next !== undefined) fm[key] = next;
   });
+}
+
+// 多値のフロントマター値に 1 件足す・外した後の値（変わらなければ undefined、空になれば null）。人は表示名で比べるので
+// "Ben" と "[[Ben]]" は同じ人。ほかの値は書かれたまま残し、リストだった値はリストのまま、1 件の値は 1 件のまま
+// the value after adding or removing one entry of a multi-valued property (undefined: no change, null: now empty). People compare by
+// display name, so "Ben" and "[[Ben]]" are one person. Other entries stay as written, a list stays a list and a single value stays single
+export function listWith(raw: unknown, value: string, add: boolean): unknown {
+  const wasList = Array.isArray(raw) && !isBareLink(raw);
+  // 引用符なしの [[x]] は YAML が入れ子の配列にするので、書き戻す前に "[[x]]" の文字列へ / an unquoted [[x]] is a nested array to YAML: write it back as "[[x]]"
+  const items = (raw == null || raw === "" ? [] : wasList ? (raw as unknown[]) : [raw]).map((x) => (isBareLink(x) ? fmText(x) : x));
+  const same = (x: unknown) => linkLabel(fmText(x)?.trim() ?? "") === linkLabel(value);
+  if (add === items.some(same)) return undefined;
+  const next = add ? [...items, value] : items.filter((x) => !same(x));
+  return next.length === 0 ? null : next.length > 1 || wasList ? next : next[0];
 }
 
 // 本文（フロントマターを除く）を取得 / read the body (without frontmatter)
 export async function readBody(app: App, path: string): Promise<string> {
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) return "";
-  const text = await app.vault.read(file);
+  const text = await app.vault.cachedRead(file);
   // 先頭の --- ... --- を除去 / strip leading frontmatter block
   return text.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, "").trim();
 }
@@ -592,13 +615,21 @@ export async function createTask(app: App, settings: GanttSettings, folderPath: 
   return [md, cv.path];
 }
 
+// 新しいステータス。id は名前から作り既存と重ならないよう連番、色はまだ使っていないパレットの色（設定画面と凡例で共通）
+// a new status: the id comes from the label, numbered to stay unique, and the colour is the first palette colour not yet used (settings and legend alike)
+export function newStatus(statuses: StatusDef[], label: string): StatusDef {
+  const base = label.trim().toLowerCase().replace(/\s+/g, "-") || "status";
+  let id = base;
+  for (let i = 2; statuses.some((x) => x.id === id); i++) id = `${base}-${i}`;
+  const used = new Set(statuses.map((x) => x.color.toLowerCase()));
+  return { id, label: label.trim(), color: PALETTE.find((c) => !used.has(c)) ?? PALETTE[0], group: "active" };
+}
+
 export interface KanbanLane {
   title: string;
   cards: { text: string; done: boolean }[];
 }
 
-// カンバン本文の列とカード（"## 列" の下の "- [ ] カード"。設定ブロック以降は読まない）
-// the lanes and cards of a kanban body ("- [ ] card" under "## lane"; stops at the settings block)
 // チェックしたカードの割合（%）。100% は全部、0% は 1 枚も無いときだけ（199/200 を 100% に丸めない）
 // the share of checked cards in %; 100% only when all are done and 0% only when none are (199/200 doesn't round up to 100%)
 export function cardProgress(done: number, total: number): number {
@@ -606,16 +637,24 @@ export function cardProgress(done: number, total: number): number {
   return Math.min(99, Math.max(done ? 1 : 0, Math.round((100 * done) / total)));
 }
 
-export function parseKanban(body: string): KanbanLane[] {
-  const lanes: KanbanLane[] = [];
-  for (const line of body.split(/\r?\n/)) {
-    if (line.startsWith("%% kanban:settings")) break;
-    const h = line.match(/^##\s+(.+)$/);
-    const c = line.match(/^(?:[-*+]|\d+[.)]) (?:\[(.)\] )?(.+)$/); // 進捗の数え方と同じく、どの箇条書きもカード / any bullet is a card, as when counting progress
-    if (h) lanes.push({ title: h[1].trim(), cards: [] });
-    else if (c && lanes.length) lanes[lanes.length - 1].cards.push({ text: c[2].trim(), done: c[1] != null && c[1] !== " " });
+// カンバンの列とカード。Kanban プラグインと同じ決まり：## 見出しが列、その下の最上位のリスト項目がカード（チェックボックスが無くても）。
+// 区切り線（***）から先はアーカイブなので数えない。進捗と詳細パネルの両方がこれを使うので数が必ず合う。text（ノート全文）を渡すとカードの文字も入る
+// a kanban's lanes and cards, by the Kanban plugin's rule: each ## heading is a lane and the top-level list items under it are cards (with or
+// without a checkbox). Everything from the thematic break (***) on is the archive and doesn't count. Progress and the detail panel both use
+// this, so their numbers always agree. Pass the note's full text to get the card text too
+export function kanbanLanes(cache: CachedMetadata | null, text = ""): KanbanLane[] {
+  const heads = (cache?.headings ?? []).filter((h) => h.level === 2);
+  if (!heads.length) return [];
+  const first = heads[0].position.start.line;
+  const end = cache?.sections?.find((x) => x.type === "thematicBreak" && x.position.start.line > first)?.position.start.line ?? Infinity;
+  const lanes = heads.filter((h) => h.position.start.line < end).map((h) => ({ line: h.position.start.line, title: h.heading.trim(), cards: [] as KanbanLane["cards"] }));
+  for (const li of cache?.listItems ?? []) {
+    const line = li.position.start.line;
+    if (li.parent >= 0 || line <= first || line >= end) continue;
+    const raw = text.slice(li.position.start.offset, li.position.end.offset).split("\n")[0];
+    lanes.filter((l) => l.line < line).pop()?.cards.push({ text: raw.replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[.\]\s+)?/, "").trim(), done: li.task !== undefined && li.task !== " " });
   }
-  return lanes;
+  return lanes.map(({ title, cards }) => ({ title, cards }));
 }
 
 // タスク（ファイル）をリネーム。リンクも更新される / rename the task file (updates links)

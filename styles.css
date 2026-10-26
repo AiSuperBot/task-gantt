@@ -1140,7 +1140,8 @@ input.ogantt-cell-input[type="number"] {
   pointer-events: none;
   cursor: pointer;
 }
-.ogantt-dep-g:hover .ogantt-dep-x {
+/* 矢印に載ると出る（× は最前面に 1 つで、載った矢印の中点へ動く）/ shown while an arrow is hovered (one × on top, moved to that arrow's midpoint) */
+.ogantt-dep-x.is-visible {
   opacity: 1;
   pointer-events: auto;
 }
@@ -1283,6 +1284,10 @@ input.ogantt-cell-input[type="number"] {
   max-width: none;
   z-index: 5;
 }
+/* 画面いっぱいのパネルに幅のつまみは要らない（端からのスワイプで縮んでしまう）/ a full-screen panel has no width grip (an edge swipe would shrink it) */
+.is-phone .ogantt-detail-resizer {
+  display: none;
+}
 /* 左端の幅リサイズハンドル / left-edge resize handle */
 .ogantt-detail-resizer {
   position: absolute;
@@ -1352,7 +1357,7 @@ input.ogantt-cell-input[type="number"] {
 /* "[[" のノート候補（body 直下・入力欄のカーソル位置に出す）/ "[[" note suggestions (on body, at the caret) */
 .ogantt-link-suggest {
   position: fixed;
-  z-index: var(--layer-popover);
+  z-index: calc(var(--layer-menu, 50) + 1); /* 表のポップオーバーの中で開いても上に出る / above a table popover it opens inside */
   max-height: 300px;
   width: 320px;
   overflow-y: auto;
@@ -1772,6 +1777,10 @@ button.ogantt-cal-title:hover {
   outline-offset: 1px;
   box-shadow: none;
 }
+/* ボード自体はフォーカスの受け皿なので輪郭を出さない / the board itself only holds focus, so it gets no outline */
+.ogantt-board:focus {
+  outline: none;
+}
 .ogantt-board .ogantt-tr:focus-visible {
   outline-offset: -2px;
 }
@@ -1823,7 +1832,7 @@ button.ogantt-dep-add {
   color: var(--text-muted);
 }
 
-/* 指で操作するとき：ハンドル・グリップを大きく、依存の × は常に出す / touch: larger handles and grips, the dependency × always shown */
+/* 指で操作するとき：ハンドル・グリップを大きく / touch: larger handles and grips */
 @media (pointer: coarse) {
   .ogantt-handle {
     r: 11px;
@@ -1831,10 +1840,6 @@ button.ogantt-dep-add {
   .ogantt-col-grip,
   .ogantt-detail-resizer {
     width: 14px;
-  }
-  .ogantt-dep-x {
-    opacity: 1;
-    pointer-events: auto;
   }
 }
 

@@ -1,7 +1,6 @@
 // ビューと部品（列定義など）の間で共有する型 / types shared between the view and its parts (column defs, etc.)
 import type { App } from "obsidian";
 import type { GanttSettings } from "./settings";
-import type { Task } from "./types";
 import type { GroupBy } from "./filter";
 
 // ファイルの移動・リネーム / a file move or rename
@@ -16,7 +15,6 @@ export type MutateResult = { moves?: Move[]; created?: string[]; deleted?: strin
 export interface BoardContext {
   readonly app: App;
   readonly settings: GanttSettings;
-  readonly tasks: Task[]; // 表示中のボードの全タスク（背景 refresh で作り替わる）/ the board's tasks (rebuilt by background refreshes)
   readonly rollup: boolean; // 親を子孫の範囲で描くか / whether parents are drawn as the span of their descendants
   readonly groupBy: GroupBy; // グループ化の軸（見出しと同じ値は行で繰り返さない）/ the grouping axis (rows don't repeat their heading's value)
   // 書き込みはすべてここを通す（取り消し可能になる）/ every write goes through here (makes it undoable)
@@ -26,7 +24,6 @@ export interface BoardContext {
   // the duration by moving the due date too. Returns the due date actually written
   reschedule(path: string, next: { start: string; end: string }, times?: { start?: string; end?: string }): Promise<string>;
   refresh(): Promise<void>; // ディスクから読み直して再描画 / reload from disk and re-render
-  rerender(): void; // メモリ上のタスクから再描画 / re-render from in-memory tasks
 
   // ----- セル編集の UI 部品 / UI helpers for in-cell editing -----
   // セルを入力欄に差し替える（Enter/blur で保存、Esc で取消、同値なら書かない）

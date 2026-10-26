@@ -132,7 +132,7 @@ Press **＋ New task** to create a dated note in the current folder and rename i
 A task is always a note — its frontmatter keeps the dates, status and the rest — but its content can be one of three kinds. Pick one from the **▾** next to **＋ New task**:
 
 - **Note** (the default): the body is the task's description.
-- **Kanban board**: the note is created in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s format, with one lane per status. The detail panel shows its lanes and cards in miniature; click them to open the board (as a board with the Kanban plugin installed, as Markdown otherwise). Its **progress is the share of checked cards**, counting every item in a lane as a card, as the board does: check cards on the board and the bar fills (the panel shows, say, *2 of 5 cards done*). It only reads 100% when every card is checked, and it isn't edited by hand while the board has cards.
+- **Kanban board**: the note is created in the [Kanban plugin](https://github.com/mgmeyers/obsidian-kanban)'s format, with one lane per status. The detail panel shows its lanes and cards in miniature; click them to open the board (as a board with the Kanban plugin installed, as Markdown otherwise). Its **progress is the share of checked cards**, counting every item in a lane as a card, as the board does: check cards on the board and the bar fills (the panel shows, say, *2 of 5 cards done*). Archived cards don't count. It only reads 100% when every card is checked, and it isn't edited by hand while the board has cards.
 - **Canvas**: a same-named `.canvas` is created next to the note, linked from its `canvas` key and embedded in the body, so the detail panel shows the canvas. Deleting the task deletes that canvas too, and undo brings both back.
 
 The table marks Kanban and Canvas tasks with an icon. Any note counts as a Kanban task when its frontmatter has `kanban-plugin: board`, and as a Canvas task when its `canvas` key links to a `.canvas` file.
@@ -176,7 +176,7 @@ Sample data for a quick try lives in `examples/Cleaning Project お掃除プロ�
 
 ## Dependencies
 
-Drag from a bar's round handle to another bar to create a dependency, or use **Add dependency…** in the detail panel: pick the type, then the task this one waits on. The connected ends decide the type: **FS** (finish→start), **SS** (start→start), **FF** (finish→finish). SS/FF successors snap to their predecessor when you reschedule. An FS successor is **pushed later when its predecessor slips into it** — it moves to the next workday after the predecessor's due date and keeps its duration — and the push carries on down the chain. Moving a predecessor earlier never pulls its successors back, so gaps you left on purpose stay. Turn this off with **Push FS successors automatically** in settings. Milestones never move through dependencies. To remove a dependency, hover its line and click the **×** that appears, or use the × on it in the detail panel; a notice offers **Undo** (so do **Ctrl/Cmd+Z** and the undo button). Clicking the line itself does nothing, so a stray click can't break a link. With **Display → Dependency arrows** off, a task whose dependency is broken still shows it with a red outline.
+Drag from a bar's round handle to another bar to create a dependency, or use **Add dependency…** in the detail panel: pick the type, then the task this one waits on. The connected ends decide the type: **FS** (finish→start), **SS** (start→start), **FF** (finish→finish). SS/FF successors snap to their predecessor when you reschedule. An FS successor is **pushed later when its predecessor slips into it** — it moves to the next workday after the predecessor's due date and keeps its duration — and the push carries on down the chain. Moving a predecessor earlier never pulls its successors back, so gaps you left on purpose stay. Turn this off with **Push FS successors automatically** in settings. Milestones never move through dependencies. A dependency that would close a loop (A waits on B, which waits on A) is refused; if notes already form one, nothing is pushed and a notice says why. To remove a dependency, hover its line and click the **×** that appears, or use the × on it in the detail panel; a notice offers **Undo** (so do **Ctrl/Cmd+Z** and the undo button). Clicking the line itself does nothing, so a stray click can't break a link. With **Display → Dependency arrows** off, a task whose dependency is broken still shows it with a red outline.
 
 ## Duration
 
@@ -188,7 +188,7 @@ The **Duration** column (turn it on from the **Display** menu) shows how many **
 
 ## Undo and redo
 
-Every change made on the board can be undone with **Ctrl/Cmd+Z** or the undo button, and redone with **Ctrl/Cmd+Shift+Z**, **Ctrl/Cmd+Y** or the redo button: cell edits, everything in the detail panel (including renames and body text), dragging bars, dependencies, moves and subtasks, tags, and creating or deleting a task. Undoing a delete re-creates the note in place. Successors that moved along with a task move back with it. While you are typing in a text field, the shortcuts undo your typing instead. Renaming or moving the board's tasks or folders from the file explorer joins the history too, so undo always walks back in the order things happened. The history lasts while the board is open.
+Every change made on the board can be undone with **Ctrl/Cmd+Z** or the undo button, and redone with **Ctrl/Cmd+Shift+Z**, **Ctrl/Cmd+Y** or the redo button: cell edits, everything in the detail panel (including renames and body text), dragging bars, dependencies, moves and subtasks, tags, and creating or deleting a task. Undoing a delete re-creates the note in place. Successors that moved along with a task move back with it. If a note has changed since (in another pane, or by sync), undo leaves it as it is and a notice offers **Undo anyway**. While you are typing in a text field, the shortcuts undo your typing instead. Renaming or moving the board's tasks or folders from the file explorer joins the history too, so undo always walks back in the order things happened. The history lasts while the board stays open on the same folder.
 
 Changes made **outside Obsidian** — renaming, moving or deleting notes in Windows Explorer or macOS Finder, or by a sync tool — are not part of the history: Obsidian only sees them as a file disappearing and another appearing. Undoing an earlier change to such a note does nothing, so rename and move tasks inside Obsidian (the title field, or Obsidian's own file explorer) if you want to be able to undo it.
 
@@ -425,7 +425,7 @@ UI 表示は Obsidian の表示言語に追従します。対応言語：英語�
 タスクは常に 1 つのノートで、日付やステータスなどはフロントマターが持ちます。そのうえで中身を 3 種類から選べます。**＋ 新規タスク**の横の **▾** から選んでください：
 
 - **ノート**（既定）：本文がタスクの説明です。
-- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。**進捗はチェックしたカードの割合**で、ボードと同じく列の中の項目はすべてカードとして数えます。ボードでカードをチェックするとバーが伸びます（パネルには *カード 5 枚中 2 枚が完了* のように出ます）。100% になるのは全部チェックしたときだけで、カードがある間は手で編集しません。
+- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。**進捗はチェックしたカードの割合**で、ボードと同じく列の中の項目はすべてカードとして数えます。ボードでカードをチェックするとバーが伸びます（パネルには *カード 5 枚中 2 枚が完了* のように出ます）。アーカイブしたカードは数えません。100% になるのは全部チェックしたときだけで、カードがある間は手で編集しません。
 - **キャンバス**：ノートと同じ名前の `.canvas` を隣に作り、`canvas` キーでリンクして本文に埋め込むので、詳細パネルにキャンバスが表示されます。タスクを削除するとそのキャンバスも削除され、取り消せば両方が戻ります。
 
 表では、カンバンとキャンバスのタスクにアイコンが付きます。フロントマターに `kanban-plugin: board` があるノートはカンバン、`canvas` キーが `.canvas` にリンクしているノートはキャンバスとして扱います。
@@ -469,7 +469,7 @@ after:
 
 ## 依存関係
 
-バーの丸ハンドルから別のバーへドラッグするか、詳細パネルの **先行タスクを追加…** で種類を選んでから先行タスクを選ぶと依存を作成します。つないだ端で種類が決まります：**FS**（終了→開始）・**SS**（開始→開始）・**FF**（終了→終了）。SS/FF の後続は、先行の日程変更に追従します。FS の後続は、**先行が遅れて重なったときに後ろへ押し出されます**。先行の期限日の次の稼働日へ移り、期間はそのまま保たれます。押し出しはその先の後続へも連鎖します。先行を前倒ししても後続は引き戻されないので、わざと空けた間隔は残ります。この動作は設定の **FS の後続を自動で押し出す** でオフにできます。マイルストーンは依存では動きません。依存を外すには、線にマウスを載せて出る **×** をクリックするか、詳細パネルの依存の × を押します。通知の **取り消し**（または **Ctrl/Cmd+Z**・取り消しボタン）で戻せます。線そのもののクリックでは外れないので、誤クリックで依存が消えることはありません。**表示 → 依存の矢印** をオフにしていても、依存が守られていないタスクは赤い縁で分かります。
+バーの丸ハンドルから別のバーへドラッグするか、詳細パネルの **先行タスクを追加…** で種類を選んでから先行タスクを選ぶと依存を作成します。つないだ端で種類が決まります：**FS**（終了→開始）・**SS**（開始→開始）・**FF**（終了→終了）。SS/FF の後続は、先行の日程変更に追従します。FS の後続は、**先行が遅れて重なったときに後ろへ押し出されます**。先行の期限日の次の稼働日へ移り、期間はそのまま保たれます。押し出しはその先の後続へも連鎖します。先行を前倒ししても後続は引き戻されないので、わざと空けた間隔は残ります。この動作は設定の **FS の後続を自動で押し出す** でオフにできます。マイルストーンは依存では動きません。輪になる依存（A が B を待ち、B が A を待つ）は作れません。ノートに既に輪があるときは何も押し出さず、通知で知らせます。依存を外すには、線にマウスを載せて出る **×** をクリックするか、詳細パネルの依存の × を押します。通知の **取り消し**（または **Ctrl/Cmd+Z**・取り消しボタン）で戻せます。線そのもののクリックでは外れないので、誤クリックで依存が消えることはありません。**表示 → 依存の矢印** をオフにしていても、依存が守られていないタスクは赤い縁で分かります。
 
 ## 期間（Duration）
 
@@ -481,7 +481,7 @@ after:
 
 ## 取り消し・やり直し
 
-ボード上の変更は、**Ctrl/Cmd+Z** または取り消しボタンで元に戻し、**Ctrl/Cmd+Shift+Z**・**Ctrl/Cmd+Y** またはやり直しボタンでやり直せます。対象はセルの編集、詳細パネルのすべての項目（名前の変更・本文を含む）、バーのドラッグ、依存、移動・サブタスク化、タグ、タスクの作成・削除です。削除を取り消すと、ノートが同じ場所に作り直されます。一緒に動いた後続も、まとめて元に戻ります。テキスト入力中は、ショートカットは入力内容の取り消しとして働きます。ファイルエクスプローラーでボードのタスクやフォルダをリネーム・移動した場合も履歴に入るので、取り消しは常に起きた順に遡ります。履歴はボードを開いている間保持されます。
+ボード上の変更は、**Ctrl/Cmd+Z** または取り消しボタンで元に戻し、**Ctrl/Cmd+Shift+Z**・**Ctrl/Cmd+Y** またはやり直しボタンでやり直せます。対象はセルの編集、詳細パネルのすべての項目（名前の変更・本文を含む）、バーのドラッグ、依存、移動・サブタスク化、タグ、タスクの作成・削除です。削除を取り消すと、ノートが同じ場所に作り直されます。一緒に動いた後続も、まとめて元に戻ります。その後でノートが書き換えられていたら（別のペインや同期で）、取り消しはそのノートに触れず、通知の **それでも取り消す** で戻せます。テキスト入力中は、ショートカットは入力内容の取り消しとして働きます。ファイルエクスプローラーでボードのタスクやフォルダをリネーム・移動した場合も履歴に入るので、取り消しは常に起きた順に遡ります。履歴は、ボードが同じフォルダを開いている間保持されます。
 
 **Obsidian の外**で行った変更（Windows のエクスプローラーや macOS の Finder、同期ツールでのノートのリネーム・移動・削除）は履歴に入りません。Obsidian からは「ファイルが消えて、別のファイルが現れた」としか見えないためです。そうしたノートに対するそれ以前の変更を取り消しても、何も起きません。取り消せるようにしたい場合は、リネームや移動を Obsidian の中（タイトル欄や Obsidian のファイルエクスプローラー）で行ってください。
 

@@ -22,3 +22,7 @@ export const Keymap = { isModEvent: () => false };
 export function prepareFuzzySearch() {
   return () => null;
 }
+// ポップオーバーの Esc（popover.ts）が参照する API のスタブ / stubs for the API popover.ts imports for its Esc binding
+export class Scope {
+  register() {}
+}

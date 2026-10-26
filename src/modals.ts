@@ -2,7 +2,7 @@
 // （settings.ts から view.ts を参照すると main.ts 経由で循環参照になるため）
 // confirm dialog for destructive actions, shared by the view and the settings tab; it lives in its
 // own module because importing it from view.ts would cycle back through main.ts into settings.ts
-import { App, Modal, SuggestModal } from "obsidian";
+import { App, FuzzySuggestModal, Modal } from "obsidian";
 
 export interface ConfirmOpts {
   title: string;
@@ -70,21 +70,22 @@ export class ChoiceModal extends Modal {
   }
 }
 
-// 候補一覧から1件選ばせる小さなピッカー（タグ・タスク・フォルダ）。名前を手入力させない（打ち間違いを避ける）
-// a small picker over a fixed list (tags, tasks, folders), so names never have to be typed by hand
-export class PickModal<T> extends SuggestModal<T> {
+// 候補一覧から1件選ばせる小さなピッカー（タグ・タスク・フォルダ）。名前を手入力させない（打ち間違いを避ける）。
+// Obsidian のあいまい検索で並べ、一致した文字を強調する（"dsgn rev" でも "Design review" が出る）
+// a small picker over a fixed list (tags, tasks, folders), so names never have to be typed by hand; Obsidian's fuzzy search ranks
+// the matches and highlights the matched letters ("dsgn rev" finds "Design review")
+export class PickModal<T> extends FuzzySuggestModal<T> {
   constructor(app: App, private choices: T[], private label: (item: T) => string, placeholder: string, private onPick: (item: T) => void) {
     super(app);
     this.setPlaceholder(placeholder);
   }
-  getSuggestions(query: string): T[] {
-    const q = query.trim().toLowerCase();
-    return q ? this.choices.filter((c) => this.label(c).toLowerCase().includes(q)) : this.choices;
+  getItems(): T[] {
+    return this.choices;
   }
-  renderSuggestion(item: T, el: HTMLElement): void {
-    el.setText(this.label(item));
+  getItemText(item: T): string {
+    return this.label(item);
   }
-  onChooseSuggestion(item: T): void {
+  onChooseItem(item: T): void {
     this.onPick(item);
   }
 }

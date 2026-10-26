@@ -153,6 +153,42 @@ function cascades(type: DepType, fs: boolean): boolean {
   return type === "SS" || type === "FF" || (type === "FS" && fs);
 }
 
+// 依存が守られていないか。連動（align）と同じ決まりで、FS は先行の期限の翌稼働日より前に始まると、SS は先行より前に始まると、FF は先行より前に終わると違反
+// whether a dependency is broken, by the cascade's own rule (align): FS starts before the workday after the predecessor's due date,
+// SS starts before the predecessor starts, FF ends before it ends
+export function depViolated(succ: Span & { milestone: boolean }, pred: Span & { milestone: boolean }, type: DepType, cal: WorkCalendar): boolean {
+  const ss = succ.milestone ? succ.end ?? succ.start : succ.start;
+  const se = succ.milestone ? succ.end ?? succ.start : succ.end ?? succ.start;
+  const ps = pred.milestone ? pred.end ?? pred.start : pred.start;
+  const pe = pred.milestone ? pred.end ?? pred.start : pred.end ?? pred.start;
+  if (!ss || !se || !ps || !pe) return false;
+  if (type === "FS") return dayIndex(ss) < nextWorkday(dayIndex(pe) + 1, cal);
+  if (type === "SS") return dayIndex(ss) < dayIndex(ps);
+  return dayIndex(se) < dayIndex(pe);
+}
+
+// pred → succ の依存を足すと循環になるか（succ から後続をたどって pred に着くなら輪になる）
+// whether adding pred → succ would close a loop (it does when pred can already be reached from succ)
+export function wouldLoop(tasks: Task[], predPath: string, succPath: string): boolean {
+  return predPath === succPath || successorClosure(tasks, succPath, true).includes(predPath);
+}
+
+// roots から連動する依存でたどれる範囲に循環があるか / whether a loop can be reached from the roots along dependencies that cascade
+function hasLoop(tasks: Task[], roots: string[], fs: boolean): boolean {
+  const next = new Map<string, string[]>();
+  for (const t of tasks) for (const d of t.deps) if (cascades(d.type, fs)) next.set(d.path, [...(next.get(d.path) ?? []), t.path]);
+  const state = new Map<string, "open" | "done">();
+  const visit = (p: string): boolean => {
+    if (state.get(p) === "open") return true;
+    if (state.get(p) === "done") return false;
+    state.set(p, "open");
+    if ((next.get(p) ?? []).some(visit)) return true;
+    state.set(p, "done");
+    return false;
+  };
+  return roots.some(visit);
+}
+
 // 連動しうる後続タスク（推移的・自分は含まない）。Undo のスナップショット対象を書き込み前に決めるために使う
 // successors that may be moved, transitively (excluding the root); used to pick undo snapshot targets before writing
 export function successorClosure(tasks: Task[], rootPath: string, fs = false): string[] {
@@ -207,11 +243,12 @@ function align(target: Span & { milestone: boolean }, pred: Span & { milestone: 
   return { start: dayToStr(next.start), end: dayToStr(next.end) };
 }
 
-// roots を起点に依存をたどり、動かすべき後続の新しい日付を求める（循環はガードで打ち切り）。
-// tasks は書き換えない。roots 自身の日付は呼び出し側で更新済みのものを使う
-// walk dependencies from the roots and work out new dates for successors that must move
-// (cycles stop at a guard). `tasks` isn't mutated; the roots' own dates are taken as already updated
-export function cascadeDates(tasks: Task[], roots: string[], opts: ScheduleOptions): Map<string, { start: string; end: string }> {
+// roots を起点に依存をたどり、動かすべき後続の新しい日付を求める。依存が輪になっていると日付が決まらない（回すほど先へ押し出す）ので、
+// その場合は null で何も動かさない。tasks は書き換えない。roots 自身の日付は呼び出し側で更新済みのものを使う
+// walk dependencies from the roots and work out new dates for successors that must move. Dependencies in a loop have no answer (each
+// pass pushes further), so a loop returns null and nothing moves. `tasks` isn't mutated; the roots' own dates are taken as already updated
+export function cascadeDates(tasks: Task[], roots: string[], opts: ScheduleOptions): Map<string, { start: string; end: string }> | null {
+  if (hasLoop(tasks, roots, opts.fs)) return null;
   const cur = new Map<string, Span & { milestone: boolean }>(tasks.map((t) => [t.path, { start: t.start, end: t.end, milestone: t.milestone }]));
   const changes = new Map<string, { start: string; end: string }>();
   const queue = [...roots];
