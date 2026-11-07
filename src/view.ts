@@ -30,6 +30,7 @@ import {
   kanbanStep,
   cardLabel,
   setCardDone,
+  withoutName,
   KanbanLane,
   newStatus,
   anchorStart,
@@ -816,7 +817,9 @@ export class GanttView extends ItemView {
   // ----- テーブル列 / table columns -----
   // 表示中の列（name は常時、その他は設定の visibleColumns に従い、columnOrder の順）/ visible columns (name always; the rest per settings, in columnOrder)
   private visibleColumns(): ColumnDef[] {
-    return visibleColumns(this.columns(), this.plugin.settings.visibleColumns ?? [], this.plugin.settings.columnOrder ?? []);
+    const cols = visibleColumns(this.columns(), this.plugin.settings.visibleColumns ?? [], this.plugin.settings.columnOrder ?? []);
+    // 詳細パネルを開いている間は名前の列だけ（パネルがタイムラインを押しつぶさない）/ while the panel is open, only the name column (so the panel doesn't crush the timeline)
+    return this.detailEl?.hasClass("is-open") && !Platform.isPhone ? cols.filter((c) => c.kind === "name") : cols;
   }
 
   // 設定タイムゾーンでの今日 / today in the configured timezone
@@ -1799,16 +1802,21 @@ export class GanttView extends ItemView {
   private scrollToToday(): void {
     // 今日が表示範囲の外なら、範囲をのばしてから（Fit はのばさない）/ when today is outside the shown range, grow it first (not in Fit)
     const today = this.today();
-    if (this.zoom !== "Fit" && this.boardMain && (today < this.range.min || today > this.range.max)) {
-      this.pad = padToCover(this.baseRange, this.pad, today, this.zoom);
-      this.rerender();
+    if (this.zoom !== "Fit" && this.boardMain) {
+      const pad = padToCover(this.baseRange, this.pad, today, this.zoom); // 今日の後ろにも余白を（端で止まらない）/ room after today too (so the scroll isn't stopped at the end)
+      if (pad.before !== this.pad.before || pad.after !== this.pad.after) {
+        this.pad = pad;
+        this.rerender();
+      }
     }
     const main = this.boardMain;
     const todayLine = main?.querySelector<SVGElement>(".ogantt-today");
     if (!main || !todayLine) return; // 今日が範囲外＝線が無い / no marker when today is out of range
     const mb = main.getBoundingClientRect();
     const tb = todayLine.getBoundingClientRect();
-    main.scrollLeft += tb.left - mb.left - (main.clientWidth + this.tableWidth()) / 2;
+    // 今日はタイムラインの 1/4 の位置（残りの 3/4 にこれからの仕事）/ today a quarter of the way in (the other three quarters show what's coming)
+    const tw = this.tableWidth();
+    main.scrollLeft += tb.left - mb.left - tw - (main.clientWidth - tw) / 4;
   }
 
   // ----- 取り消し・やり直し（Undo / Redo）-----
@@ -2065,7 +2073,9 @@ export class GanttView extends ItemView {
   // 詳細パネルを閉じて選択を外す。returnFocus なら元の行へフォーカスを戻す / close the detail panel and clear the selection; returnFocus puts focus back on the row
   private closeDetail(returnFocus = false): void {
     this.selectedPath = null;
+    const was = this.detailEl?.hasClass("is-open");
     this.detailEl?.removeClass("is-open");
+    if (was && !Platform.isPhone) this.rerender(); // 隠した列を戻す / bring the hidden columns back
     if (this.bodyOwner) this.removeChild(this.bodyOwner);
     this.bodyOwner = null;
     this.tbodyEl?.querySelectorAll(".ogantt-tr.is-selected").forEach((el) => el.removeClass("is-selected"));
@@ -2358,7 +2368,11 @@ export class GanttView extends ItemView {
       const startedId = autoStatusTargets(statuses, this.plugin.settings.autoStatus).started;
       const running = live.filter((t) => t.status === startedId).length;
       const blocked = live.filter((t) => statusGroupOf(statuses, t.status) === "deferred").length;
-      if (live.length) g.createSpan({ cls: "ogantt-group-count" + (late || hot ? " is-alert" : ""), text: tr().headingCount(live.length, running, blocked, late, hot) });
+      const sum = subtaskSummary((row.tasks ?? []).filter((t) => !this.disabled.has(t.path)), statuses);
+      if (sum.total) g.createSpan({ cls: "ogantt-subtask-sum", text: `${sum.done}/${sum.total}`, attr: { title: tr().execComplete(sum.done, sum.total) } });
+      // 担当者ごとなら、同時に 2 つ以上進めているのも知らせる（切り替えの負担）/ by assignee, two or more tasks under way at once is flagged too (switching cost)
+      const juggling = this.groupBy === "assignee" && running > 1;
+      if (live.length) g.createSpan({ cls: "ogantt-group-count" + (late || hot || juggling ? " is-alert" : ""), text: tr().headingCount(live.length, running, blocked, late, hot) });
       const next = nextToStart(live, today);
       // サブタスクなら親も添える（畳んだ親の中にあっても、どこを開けばいいか分かる）/ a subtask carries its parent, so a collapsed one can still be found
       const nextName = next ? (next.parent ? `${isolate(this.nameOf(next.parent))} › ` : "") + isolate(next.name) : "";
@@ -3227,9 +3241,7 @@ export class GanttView extends ItemView {
     // in the row only the board icon and the card text (readable when narrow); "Next card / Current card" goes into the tooltip and the label
     if (t.cards) cue.createSpan({ cls: "ogantt-board-cue-count", text: `${t.cards.done}/${t.cards.total}` });
     // カードが行の名前で始まるなら繰り返さない（「DB Adapter — 〜」→「〜」）/ a card starting with the row's own name doesn't repeat it ("DB Adapter — x" → "x")
-    const raw = say ? step!.card! : text;
-    const tail = raw.slice(t.name.length);
-    const card = (say && raw.toLowerCase().startsWith(t.name.toLowerCase()) && /^[\s:—–-]/.test(tail) && tail.replace(/^[\s:—–-]+/, "")) || raw;
+    const card = say ? withoutName(step!.card!, t.name) : text;
     cue.createSpan({ cls: "ogantt-board-cue-text", text: card, attr: { dir: "auto" } });
     cue.addEventListener("click", (e) => {
       e.stopPropagation(); // 行のクリック（詳細を開く）にしない / not the row's click (which opens the details)
@@ -3694,7 +3706,9 @@ export class GanttView extends ItemView {
 
     const k = this.plugin.settings.keys;
     d.empty();
+    const was = d.hasClass("is-open");
     d.addClass("is-open");
+    if (!was && !Platform.isPhone) this.rerender(); // 表を名前の列だけに / narrow the table to the name column
     // スマホではパネルが画面いっぱい（幅は CSS）/ on phones the panel fills the screen (width from CSS)
     if (!Platform.isPhone) d.style.width = `${this.plugin.settings.detailWidth}px`;
 
@@ -3733,6 +3747,7 @@ export class GanttView extends ItemView {
 
     if (this.readOnly(t.path)) d.createDiv({ cls: "ogantt-readonly", text: tr().readOnlyPanel, attr: { role: "note" } });
     this.buildAttention(d, t);
+    const execHost = d.createDiv(); // カンバンの「実行」は欄より先に（状態を先に読む）/ a kanban's Execution goes before the fields (state is read first)
     const meta = d.createDiv({ cls: "ogantt-detail-meta" });
     const fieldRow = (label: string): HTMLElement => {
       const r = meta.createDiv({ cls: "ogantt-detail-row" });
@@ -3874,13 +3889,13 @@ export class GanttView extends ItemView {
       // カンバンは実行の層：狭いパネルにボードを詰め込まず、短い要約と「ボードを開く」だけ。数と次のカードは確かに読めるときだけ
       // a kanban is the execution layer: no board squeezed into the narrow panel, just a short summary and "Open board"; counts and the next card only when they can be read for sure
       if (!(file instanceof TFile)) return;
-      d.createDiv({ cls: "ogantt-detail-label", text: tr().execution });
-      const ex = d.createDiv({ cls: "ogantt-exec" });
+      execHost.createDiv({ cls: "ogantt-detail-label", text: tr().execution });
+      const ex = execHost.createDiv({ cls: "ogantt-exec" });
       if (t.cards) ex.createDiv({ text: tr().cardsChecked(t.cards.done, t.cards.total) });
       const { statuses, autoStatus } = this.plugin.settings;
       const lanes = kanbanLanes(this.app.metadataCache.getFileCache(file), text);
       const step = kanbanStep(lanes, statuses, autoStatusTargets(statuses, autoStatus).started);
-      if (step.card) ex.createDiv({ cls: "ogantt-exec-card", text: (step.now ? tr().nowStep : tr().nextStep)(isolate(step.card)) });
+      if (step.card) ex.createDiv({ cls: "ogantt-exec-card", text: (step.now ? tr().nowStep : tr().nextStep)(isolate(withoutName(step.card, t.name))) });
       if (step.stage) ex.createDiv({ cls: "ogantt-exec-stage", text: step.stage, attr: { dir: "auto" } });
       // 中身を見たいとき：全部のカードを列ごとに。チェックはここで付け外しでき（取り消し可）、文字の編集と並べ替えはボードで
       // for the specifics: every card, lane by lane. A card can be checked here (undoable); editing its text and reordering happen on the board
@@ -4120,6 +4135,8 @@ export class GanttView extends ItemView {
     // time-of-day for start & end: manual typing at 1-minute precision, the clock icon opens
     // hour + minute (10-min steps) dropdowns (Chromium's native picker ignores `step`)
     const trow = meta.createDiv({ cls: "ogantt-detail-row" });
+    // 時刻を使っていないボードでは出さない（空の --:-- が並ぶだけ）/ hidden on a board that uses no times (it would only show empty --:--)
+    if (!this.tasks.some((x) => x.startTime || x.endTime)) trow.hide();
     trow.createSpan({ cls: "ogantt-detail-label", text: tr().fieldTime });
     const tfield = trow.createDiv({ cls: "ogantt-detail-field ogantt-time-inputs" });
     const makeTime = (which: "start" | "end"): void => {
