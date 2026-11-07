@@ -67,9 +67,10 @@ export function resolveDateValue(v: DateValue, today: number = todayIndex()): { 
       const n = (v.dir === "ago" ? -1 : 1) * v.amount;
       if (v.unit === "day") return { from: today + n };
       if (v.unit === "week") return { from: today + n * 7 };
-      // month は暦月で加減算（Date.UTC が桁上げを処理）/ month uses calendar arithmetic
+      // month は暦月で加減算。日はその月の末日で止める（1/31 + 1 か月 = 2/28）/ month uses calendar arithmetic, the day capped at the month's last day (Jan 31 + 1 month = Feb 28)
       const d = new Date(today * MS_PER_DAY);
-      return { from: Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, d.getUTCDate()) / MS_PER_DAY) };
+      const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n + 1, 0)).getUTCDate();
+      return { from: Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, Math.min(d.getUTCDate(), last)) / MS_PER_DAY) };
     }
     case "range":
       return { from: dayIndex(v.from), to: dayIndex(v.to) };

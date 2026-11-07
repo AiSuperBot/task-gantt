@@ -29,6 +29,7 @@ check("relative 2 week ago", resolveDateValue({ kind: "relative", amount: 2, uni
 check("relative 1 month fromNow = 8/19", resolveDateValue({ kind: "relative", amount: 1, unit: "month", dir: "fromNow" }, TODAY).from === idx("2026-08-19"));
 check("relative 1 month ago = 6/19", resolveDateValue({ kind: "relative", amount: 1, unit: "month", dir: "ago" }, TODAY).from === idx("2026-06-19"));
 // 暦月の桁上げ：2026-07-19 + 12 month = 2027-07-19 / month carries into next year
+check("relative 1 month from Jan 31 stays in Feb", resolveDateValue({ kind: "relative", amount: 1, unit: "month", dir: "fromNow" }, idx("2026-01-31")).from === idx("2026-02-28"));
 check("relative 12 month fromNow = 2027-07-19", resolveDateValue({ kind: "relative", amount: 12, unit: "month", dir: "fromNow" }, TODAY).from === idx("2027-07-19"));
 const range = resolveDateValue({ kind: "range", from: "2026-07-01", to: "2026-07-31" }, TODAY);
 check("range 両端", range.from === idx("2026-07-01") && range.to === idx("2026-07-31"));

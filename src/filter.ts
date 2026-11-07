@@ -37,12 +37,12 @@ export function matchFilter(t: Task, f: Filter, statuses: StatusDef[], today: nu
     : f.field === "status" ? (t.status ? [t.status] : [])
     : f.field === "statusGroup" ? (group ? [group] : [])
       : f.field === "assignee" ? t.assignees.map(linkLabel)
-        : t.tags;
+        : t.tags.map((x) => x.toLowerCase()); // タグは大文字小文字を区別しない（Obsidian と同じ）/ tags ignore case, as in Obsidian
   if (f.op === "empty") return vals.length === 0;
   if (f.op === "notEmpty") return vals.length > 0;
   // 値 "" は「未設定」を表すセンチネル。フィールド内は OR。人は表示名で比べる（"Ben" と "[[Ben]]" は同じ人）
   // "" is the "unset" sentinel; OR within the field. People compare by display name ("Ben" and "[[Ben]]" are one person)
-  const hit = f.values.some((v) => (v === "" ? vals.length === 0 : vals.includes(f.field === "assignee" ? linkLabel(v) : v)));
+  const hit = f.values.some((v) => (v === "" ? vals.length === 0 : vals.includes(f.field === "assignee" ? linkLabel(v) : f.field === "tag" ? v.toLowerCase() : v)));
   return f.op === "isNot" ? !hit : hit;
 }
 
@@ -134,10 +134,6 @@ export function runningWorkOf(u: Task, tasks: Task[], startedId: string | undefi
 // a row's exceptions, strongest first; the row shows the strongest plus how many more, the details show them all
 export type Exception = "urgent" | "overdue" | "blocked" | "dependency" | "interrupted" | "resume";
 export const EXCEPTIONS: Exception[] = ["urgent", "overdue", "blocked", "dependency", "interrupted", "resume"];
-// いちばん強い例外 / the strongest exception of several
-export function strongest(list: (Exception | undefined)[]): Exception | undefined {
-  return EXCEPTIONS.find((e) => list.includes(e));
-}
 export function exceptionsOf(t: Task, statuses: StatusDef[], today: number, conflicts: Set<string>, ints: Interruptions): Exception[] {
   if (!isOpen(t, statuses)) return [];
   const has: Record<Exception, () => boolean> = {
@@ -149,9 +145,6 @@ export function exceptionsOf(t: Task, statuses: StatusDef[], today: number, conf
     resume: () => ints.resume.has(t.path),
   };
   return EXCEPTIONS.filter((e) => has[e]());
-}
-export function exceptionOf(t: Task, statuses: StatusDef[], today: number, conflicts: Set<string>, ints: Interruptions): Exception | undefined {
-  return exceptionsOf(t, statuses, today, conflicts, ints)[0];
 }
 
 // 次に始まるタスク：今日より後に始まる一番早いもの（日付の無いものは入らない）/ the next task to start: the earliest one starting after today (undated ones don't count)
@@ -189,7 +182,7 @@ export function urgentFirst(statuses: StatusDef[], cmp: (a: Task, b: Task) => nu
 // (display name for an assignee, the tag as it is). Flat rows have the heading "", so nothing is dropped
 export function besideHeading(values: string[], field: "assignees" | "tags", groupBy: GroupBy, heading: string): string[] {
   if (!heading || groupBy !== (field === "assignees" ? "assignee" : "tag")) return values;
-  return values.filter((v) => (field === "assignees" ? linkLabel(v) : v) !== heading);
+  return values.filter((v) => (field === "assignees" ? linkLabel(v) : v.toLowerCase()) !== (field === "assignees" ? heading : heading.toLowerCase()));
 }
 
 export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses: StatusDef[], noneLabel: string): Task[] {
@@ -198,10 +191,13 @@ export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses
   // groups を合成グループへ差し替えて既存の buildRows を再利用。タグと担当者は多値なので、各グループへ複製する（無ければ (なし)）
   // remap groups to synthetic ones to reuse buildRows; tags and assignees are multi-valued, so a task is copied into each one's group
   const statusLabel = new Map(statuses.map((s) => [s.id, s.label]));
+  // タグの見出しは最初に出てきた綴りで 1 つ（#Work と #work は同じタグ）/ one tag heading per tag, in the first spelling seen (#Work and #work are one tag)
+  const spelling = new Map<string, string>();
+  for (const t of tasks) for (const x of t.tags) if (!spelling.has(x.toLowerCase())) spelling.set(x.toLowerCase(), x);
   return tasks.flatMap((t) => {
     const keys =
       groupBy === "status" ? (t.status ? [statusLabel.get(t.status) ?? t.status] : [])
-        : groupBy === "tag" ? t.tags
+        : groupBy === "tag" ? [...new Set(t.tags.map((x) => spelling.get(x.toLowerCase())!))]
           : [...new Set(t.assignees.map(linkLabel))];
     return (keys.length ? keys : [noneLabel]).map((key) => ({ ...t, groups: [key] }));
   });

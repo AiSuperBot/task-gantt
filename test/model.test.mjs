@@ -1,6 +1,6 @@
 // buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
-import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, moveCollapsed, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName } from "./model.mjs";
+import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -63,9 +63,6 @@ check("listWith: リストはリストのまま", JSON.stringify(listWith(["Ana"
 check("listWith: 最後の 1 人を外すと null（キーごと消す）", listWith("Ana", "Ana", false) === null);
 check("listWith: いない人は外せない（変更なし）", listWith("Ana", "Ben", false) === undefined);
 
-// フォルダの改名：畳んだ親タスク（パス）は追いかけ、見出しのキー（相対）とほかの軸はそのまま
-// a folder rename: collapsed parent tasks (paths) follow it, heading keys (relative) and other axes stay
-check("moveCollapsed", moveCollapsed(["folder:Proj/Launch.md", "folder:Design", "status:Done", "folder:Other/x.md"], "Proj", "Work").join() === "folder:Work/Launch.md,folder:Design,status:Done,folder:Other/x.md");
 
 // 新しいステータス：id は名前から連番、色は未使用のパレット色 / a new status: id from the label (numbered), an unused palette colour
 const st0 = [{ id: "todo", label: "To do", color: "#ef4444", group: "active" }];
@@ -247,6 +244,7 @@ check("statusGroupOf: 未定義 id は undefined", statusGroupOf(statusDefs, "gh
 check("bodyOf: 普通のフロントマター", bodyOf("---\na: 1\n---\nhello\n") === "hello");
 check("bodyOf: CRLF", bodyOf("---\r\na: 1\r\n---\r\nhello\r\n") === "hello");
 check("bodyOf: 中身の無い ---/--- は本文に出さない", bodyOf("---\n---\nhello") === "hello" && bodyOf("---\n---") === "");
+check("bodyOf: 先頭行の字下げは残す（空行だけ外す）", bodyOf("---\na: 1\n---\n\n    code\n    more\n") === "    code\n    more");
 check("bodyOf: フロントマター無し", bodyOf("hello\n---\nx") === "hello\n---\nx");
 check("withBody: フロントマターの直後に空行を足さない", withBody("---\na: 1\n---\nold\n", "new") === "---\na: 1\n---\nnew\n");
 check("withBody: CRLF のフロントマターはそのまま", withBody("---\r\na: 1\r\n---\r\nold", "new") === "---\r\na: 1\r\n---\r\nnew\n");

@@ -3,7 +3,7 @@ import { GanttSettings, DEFAULT_SETTINGS, GanttSettingTab } from "./settings";
 import { GanttView } from "./view";
 import { VIEW_TYPE_GANTT, GanttViewState } from "./types";
 import { t } from "./i18n";
-import { collectTasks, inferStatusGroup, moveCollapsed, movePaths } from "./model";
+import { collectTasks, inferStatusGroup, movePaths } from "./model";
 import { keepAutoFired, migrateAutoFired, moveAutoFired } from "./schedule";
 import { checkNotifications } from "./notify";
 import { usePopoverKeys } from "./popover";
@@ -125,13 +125,12 @@ export default class GanttPlugin extends Plugin {
     let moved = false;
     for (const key of Object.keys(boards)) {
       const b = boards[key];
-      const collapsed = moveCollapsed(b.collapsed ?? [], from, to);
-      // 手の並びと止めたタスク（キーはパス）も / the manual order and disabled tasks (keyed by path) too
+      // 手の並び・止めたタスク・開いた親（キーはパス）/ the manual order, disabled tasks and opened parents (keyed by path)
       const order = movePaths(b.order ?? [], from, to);
       const disabled = movePaths(b.disabled ?? [], from, to);
       const expanded = movePaths(b.expanded ?? [], from, to);
-      if (collapsed.some((k, i) => k !== b.collapsed[i]) || order.some((k, i) => k !== b.order?.[i]) || disabled.some((k, i) => k !== b.disabled?.[i]) || expanded.some((k, i) => k !== b.expanded?.[i])) {
-        boards[key] = { ...b, collapsed, order, disabled, expanded };
+      if (order.some((k, i) => k !== b.order?.[i]) || disabled.some((k, i) => k !== b.disabled?.[i]) || expanded.some((k, i) => k !== b.expanded?.[i])) {
+        boards[key] = { ...b, order, disabled, expanded };
         moved = true;
       }
       const path = key.startsWith("folder:") ? key.slice(7) : null;
@@ -253,6 +252,14 @@ export default class GanttPlugin extends Plugin {
     await this.saveData(this.settings);
     this.settingTab?.refreshIfOpen();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)) if (leaf.view instanceof GanttView) leaf.view.rerender();
+  }
+
+  // 別の端末で設定が変わった（同期）：読み直して開いているボードと設定画面へ（古い写しで上書きしない）
+  // settings changed on another device (sync): reload them into open boards and the settings tab, so this window's old copy never overwrites them
+  async onExternalSettingsChange(): Promise<void> {
+    await this.loadSettings();
+    this.settingTab?.refreshIfOpen();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)) if (leaf.view instanceof GanttView) void leaf.view.refresh();
   }
 
   // 保存してボードを読み直す。日付による自動ステータスはボードごとではなく、保存の後に 1 回だけ（打鍵が続くあいだは待つ）
