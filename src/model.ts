@@ -224,7 +224,13 @@ function normalizeTags(v: unknown): string[] {
 function resolveLink(app: App, raw: string, sourcePath: string): TFile | null {
   let inner = raw.trim();
   const md = inner.match(/\]\(([^)]+)\)/); // [text](path)
-  if (md) inner = decodeURIComponent(md[1]);
+  if (md) {
+    try {
+      inner = decodeURIComponent(md[1]);
+    } catch {
+      inner = md[1]; // 壊れた %-エスケープ（"50% plan"）はそのまま / a broken %-escape ("50% plan") is used as typed
+    }
+  }
   else inner = inner.replace(/^\[\[/, "").replace(/\]\]$/, "").split("|")[0];
   inner = inner.split("#")[0].trim();
   return app.metadataCache.getFirstLinkpathDest(inner, sourcePath);
@@ -309,7 +315,7 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
       kind,
       canvas: kind === "canvas" ? canvas?.path : undefined,
       deps: [] as Dep[],
-      progress: cards ? cardProgress(cards.done, cards.total) : fm[k.progress] != null ? parseFloat(String(fm[k.progress])) : undefined, // "50%" も 50 / "50%" reads as 50
+      progress: cards ? cardProgress(cards.done, cards.total) : finite(parseFloat(String(fm[k.progress] ?? ""))), // "50%" も 50、数でなければ無し / "50%" reads as 50; not a number reads as none
       cards,
       milestone,
       parent: undefined,
@@ -388,17 +394,6 @@ function spanOf(tasks: Task[]): { start: string; end: string } | undefined {
   const starts = tasks.map(anchorStart).filter((d): d is string => !!d).sort();
   const ends = tasks.map(anchorEnd).filter((d): d is string => !!d).sort();
   return starts.length && ends.length ? { start: starts[0], end: ends[ends.length - 1] } : undefined;
-}
-
-// 改名・移動に合わせて折りたたみのキーを付け替える。追いかけるのは親タスクのキー（"folder:<タスクのパス>"）で、
-// フォルダの見出しのキーはボードからの相対なのでボードごと動いてもそのまま
-// re-point collapse keys after a rename or move: parent tasks' keys ("folder:<task path>") follow it, while folder heading keys are
-// relative to the board, so they stay valid when the whole board moves
-export function moveCollapsed(keys: string[], from: string, to: string): string[] {
-  return keys.map((k) => {
-    const p = k.startsWith("folder:") && k.endsWith(".md") ? k.slice(7) : null;
-    return p != null && (p === from || p.startsWith(from + "/")) ? `folder:${to}${p.slice(from.length)}` : k;
-  });
 }
 
 // 改名・移動に合わせてパスの一覧を付け替える（フォルダなら配下ごと）/ re-point a list of paths after a rename or move (a folder takes its contents along)
@@ -516,8 +511,7 @@ export async function writeDates(
   end: string,
   milestone: boolean
 ): Promise<void> {
-  const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof TFile)) return;
+  const file = noteAt(app, path);
   const k = settings.keys;
   await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
     // 既存値に時刻が付いていたら表示時刻を新しい日付へ引き継ぐ（オフセットは設定タイムゾーンへ正規化）
@@ -543,8 +537,7 @@ export async function writeField(
   key: string,
   value: unknown
 ): Promise<void> {
-  const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof TFile)) return;
+  const file = noteAt(app, path);
   await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
     if (value == null || value === "") delete fm[key];
     else fm[key] = value;
@@ -585,7 +578,7 @@ export async function readBody(app: App, path: string): Promise<string> {
 
 // ノートの中身から本文だけ（先頭の --- ... --- を除去）/ a note's body: its text without the leading frontmatter block
 export function bodyOf(text: string): string {
-  return text.replace(FRONTMATTER, "").trim();
+  return text.replace(FRONTMATTER, "").replace(/^(?:[ \t]*\r?\n)+/, "").trimEnd();
 }
 
 // 先頭のフロントマター（中身の無い "---\n---" も）/ the leading frontmatter block (an empty "---\n---" too)
@@ -602,9 +595,29 @@ export function withBody(text: string, body: string): string {
 
 // 本文を書き戻す（フロントマターは保持）/ write back the body (keeping frontmatter)
 export async function writeBody(app: App, path: string, body: string): Promise<void> {
+  await app.vault.process(noteAt(app, path), (text) => withBody(text, body));
+}
+
+// 書き込み先のノート。無ければ例外（黙って書かずに済ませない：mutate が「書けなかった」と知らせる）
+// the note to write to; throws when it's gone (never a silent no-op: mutate then says the write failed)
+function noteAt(app: App, path: string): TFile {
   const file = app.vault.getAbstractFileByPath(path);
-  if (!(file instanceof TFile)) return;
-  await app.vault.process(file, (text) => withBody(text, body));
+  if (!(file instanceof TFile)) throw new Error(`Note not found: ${path}`);
+  return file;
+}
+
+// 数でなければ undefined / undefined when not a number
+const finite = (n: number): number | undefined => (Number.isFinite(n) ? n : undefined);
+
+// リンクの一覧（interrupts など）から target へのリンクだけを外す。解決できないリンク（まだ同期されていないノート）は残す
+// drop only the links to `target` from a link list (interrupts and the like); links that don't resolve (a note not synced yet) stay
+export async function removeLinkTo(app: App, path: string, key: string, target: string): Promise<void> {
+  await app.fileManager.processFrontMatter(noteAt(app, path), (fm: Record<string, unknown>) => {
+    if (fm[key] == null) return;
+    const rest = fmList(fm[key]).filter((raw) => resolveLink(app, raw, path)?.path !== target);
+    if (rest.length) fm[key] = rest;
+    else delete fm[key];
+  });
 }
 
 // 新規タスクをフォルダ直下に作り、作ったパスを返す（ノートが先頭）。名前が衝突したら連番を付ける。

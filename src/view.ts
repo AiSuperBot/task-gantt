@@ -5,7 +5,6 @@ import { Task, TaskKind, Row, ZoomMode, DepType, GanttViewState, VIEW_TYPE_GANTT
 import {
   collectTasks,
   collectFolders,
-  moveCollapsed,
   movePaths,
   buildRows,
   createTask,
@@ -31,6 +30,7 @@ import {
   cardLabel,
   setCardDone,
   withoutName,
+  removeLinkTo,
   KanbanLane,
   newStatus,
   anchorStart,
@@ -251,6 +251,7 @@ export class GanttView extends ItemView {
   private readOnlySeen = ""; // 読むだけのタスクの一覧（役割が変わったか見るため）/ the read-only tasks last seen (to tell when a role changed)
   private conflicts = new Set<string>(); // 依存が守られていない後続（表の札用・矢印の有無に関係なく）/ successors whose dependency is broken (for the table's tag, arrows or not)
   private ints: Interruptions = { interrupted: new Map(), resume: new Map() }; // 割り込みと再開待ち / interruptions and work waiting to be resumed
+  private kids = new Map<string, Task[]>(); // 親のパス → サブタスク（描き直しごと）/ parent path → its subtasks (per redraw)
   private cardFocus: string | null = null; // チェックしたカードの行（描き直した後もそこへフォーカスを戻す）/ the line of the card just ticked (focus goes back to it after the redraw)
   private cardsOpen = false; // パネルの「すべてのカード」を開いているか（チェックで描き直しても閉じない）/ whether the panel's card list is open (a tick's redraw keeps it open)
   // カンバンの今か次のカードと列。ファイルの更新時刻ごとに覚え、変わったボードだけ読み直す / each kanban's current or next card and lane, kept per file mtime so only changed boards are read again
@@ -337,15 +338,13 @@ export class GanttView extends ItemView {
         this.retitle();
         this.app.workspace.requestSaveLayout();
       }
-      // 畳んだ親タスク（キーはパス）も追いかける / collapsed parent tasks (keyed by path) follow too
-      const before = [...this.collapsed];
-      const collapsed = moveCollapsed(before, oldPath, file.path);
-      // 手の並びと止めたタスク（キーはパス）も / the manual order and disabled tasks (keyed by path) too
+      // 開いているパネルも改名を追いかける（入力中の本文が古いパスへ書かれて消えないように）/ the open panel follows the rename too (so text being typed isn't written to the old path and lost)
+      if (this.selectedPath) this.selectedPath = movePaths([this.selectedPath], oldPath, file.path)[0];
+      // 手の並び・止めたタスク・開いた親（キーはパス）/ the manual order, disabled tasks and opened parents (keyed by path)
       const order = movePaths(this.order, oldPath, file.path);
       const disabled = movePaths([...this.disabled], oldPath, file.path);
       const expanded = movePaths([...this.expanded], oldPath, file.path);
-      if (collapsed.some((k, i) => k !== before[i]) || order.some((k, i) => k !== this.order[i]) || disabled.some((k) => !this.disabled.has(k)) || expanded.some((k) => !this.expanded.has(k))) {
-        this.collapsed = new Set(collapsed);
+      if (order.some((k, i) => k !== this.order[i]) || disabled.some((k) => !this.disabled.has(k)) || expanded.some((k) => !this.expanded.has(k))) {
         this.order = order;
         this.disabled = new Set(disabled);
         this.expanded = new Set(expanded);
@@ -524,10 +523,11 @@ export class GanttView extends ItemView {
     // panel's own edit), and left alone while a field is being edited. Closed when its task is gone
     const path = this.selectedPath;
     if (!path || !this.detailEl.hasClass("is-open")) return;
+    const ae = activeDocument.activeElement;
+    // 入力中は閉じも描き直しもしない（打っている文字を消さない）/ while a field is being typed in, neither close nor redraw (never drop what's being typed)
+    if (ae && ae !== this.detailEl && this.detailEl.contains(ae) && ae.matches("input:not([type=checkbox]), textarea, select")) return; // a checkbox has already saved
     const t = this.tasks.find((x) => x.path === path);
     if (!t) return this.closeDetail();
-    const ae = activeDocument.activeElement;
-    if (ae && ae !== this.detailEl && this.detailEl.contains(ae) && ae.matches("input:not([type=checkbox]), textarea, select")) return; // a checkbox has already saved
     if (this.panelSig !== this.sigOf(t, await readBody(this.app, path))) await this.openDetail(path);
   }
 
@@ -673,6 +673,9 @@ export class GanttView extends ItemView {
     this.ints = interruptions(this.tasks, this.plugin.settings.statuses, this.today());
     this.watchRooms();
     this.readOnlySeen = this.tasks.filter((t) => this.readOnly(t.path)).map((t) => t.path).join("|");
+    // 親ごとのサブタスク（絞り込みに関係なく、止めたものは除く）。行ごとに全タスクを探さない / each parent's subtasks (filters aside, disabled ones left out), so rows don't scan every task
+    this.kids = new Map();
+    for (const x of this.tasks) if (x.parent && !this.disabled.has(x.path)) this.kids.set(x.parent, [...(this.kids.get(x.parent) ?? []), x]);
     const view = this.processTasks(); // フィルタ＋グループ適用後 / after filter + group remap
     const compare = this.comparator();
     if (this.flat) {
@@ -989,7 +992,7 @@ export class GanttView extends ItemView {
     else if (field === "statusGroup") base = STATUS_GROUPS.map((g) => [g, statusGroupLabel(g)] as [string, string]);
     else if (field === "attention") base = ATTENTION.map((a) => [a, this.catValueLabel("attention", a)] as [string, string]);
     else if (field === "assignee") base = this.assigneeList().map((a) => [a, linkLabel(a)] as [string, string]);
-    else base = [...new Set(this.tasks.flatMap((t) => t.tags))].sort().map((tg) => [tg, tg] as [string, string]);
+    else base = [...new Map(this.tasks.flatMap((t) => t.tags).reverse().map((tg) => [tg.toLowerCase(), tg] as [string, string])).values()].sort().map((tg) => [tg, tg] as [string, string]); // 大文字小文字違いは 1 つ（最初の綴り）/ one entry per tag whatever the case (its first spelling)
     return [...base, ["", tr().noneLabel]]; // 「未設定」を選べるように / allow filtering by "unset"
   }
 
@@ -2381,7 +2384,7 @@ export class GanttView extends ItemView {
       // 今：進行中（「始めた」ステータス）と止まっているもの。次：今日より後に始まる一番早いタスク（部長が「今」と「次」を一行で読めるように）
       // now: in progress (the started status) and blocked; next: the earliest task starting after today (so a section head reads "now" and "next" in one line)
       const startedId = autoStatusTargets(statuses, this.plugin.settings.autoStatus).started;
-      const running = live.filter((t) => t.status === startedId).length;
+      const running = startedId ? live.filter((t) => t.status === startedId).length : 0; // 「始めた」ステータスが無ければ 0 / none without a started status
       const blocked = live.filter((t) => statusGroupOf(statuses, t.status) === "deferred").length;
       const sum = subtaskSummary((row.tasks ?? []).filter((t) => !this.disabled.has(t.path)), statuses);
       if (sum.total) g.createSpan({ cls: "ogantt-subtask-sum", text: `${sum.done}/${sum.total}`, attr: { title: tr().execComplete(sum.done, sum.total) } });
@@ -2460,8 +2463,8 @@ export class GanttView extends ItemView {
       const { statuses } = this.plugin.settings;
       const excsOf = (x: Task) => (this.disabled.has(x.path) ? [] : exceptionsOf(x, statuses, today, this.conflicts, this.ints));
       // 要約と例外は絞り込みに関係なく全部のサブタスクから（並びは画面と同じ）/ the summary and exceptions come from every subtask, filters aside (in screen order)
-      const kids = row.hasChildren ? this.tasks.filter((x) => x.parent === t.path).sort(this.comparator()) : [];
-      const all = EXCEPTIONS.filter((e) => [...excsOf(t), ...(this.isCollapsed(row.key) ? kids.flatMap(excsOf) : [])].includes(e));
+      const kids = this.kids.get(t.path) ?? [];
+      const all = EXCEPTIONS.filter((e) => [...excsOf(t), ...(!row.hasChildren || this.isCollapsed(row.key) ? kids.flatMap(excsOf) : [])].includes(e));
       const said = statusGroupOf(statuses, t.status) === "deferred" && this.visibleColumns().some((c) => c.id === "status");
       const exc = all.find((e) => !(e === "blocked" && said));
       if (exc) {
@@ -3405,10 +3408,7 @@ export class GanttView extends ItemView {
     const from = this.ints.resume.get(target) ?? [];
     if (!from.length) return;
     const ok = await this.mutate(tr().resumeTask(this.nameOf(target)), from.map((u) => u.path), async () => {
-      for (const u of from) {
-        const rest = (u.interrupts ?? []).filter((p) => p !== target).map((p) => this.linkTo(p, u.path));
-        await writeField(this.app, u.path, this.plugin.settings.keys.interrupts, rest.length ? rest : undefined);
-      }
+      for (const u of from) await removeLinkTo(this.app, u.path, this.plugin.settings.keys.interrupts, target);
     });
     if (!ok) return;
     await this.refresh();

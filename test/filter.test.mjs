@@ -1,6 +1,6 @@
 // フィルタ判定（matchFilter / applyFilters）とグループ再マッピング（regroup）の検証
 // Tests for filter matching (matchFilter / applyFilters) and group remapping (regroup)
-import { matchFilter, applyFilters, regroup, besideHeading, isOverdue, isUrgent, interruptions, runningWorkOf, attentionOf, exceptionOf, exceptionsOf, nextToStart, subtaskSummary, urgentFirst, strongest } from "./filter.mjs";
+import { matchFilter, applyFilters, regroup, besideHeading, isOverdue, isUrgent, interruptions, runningWorkOf, attentionOf, exceptionsOf, nextToStart, subtaskSummary, urgentFirst } from "./filter.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -42,6 +42,9 @@ check("text empty query passes everything", ALL.every((t) => matchFilter(t, text
 
 // ── カテゴリ / category ──
 const cat = (field, op, values = []) => ({ kind: "category", field, op, values });
+const first = (...a) => exceptionsOf(...a)[0];
+// タグは大文字小文字を区別しない（Obsidian と同じ）/ tags ignore case, as in Obsidian
+check("tag filter ignores case", matchFilter(A, cat("tag", "is", ["Work"]), STATUSES, TODAY));
 check("status is (OR within field)", names(applyFilters(ALL, [cat("status", "is", ["todo", "done"])], "all", STATUSES, TODAY)) === "Alpha Plan,Beta");
 check("status is \"\" (unset sentinel)", names(applyFilters(ALL, [cat("status", "is", [""])], "all", STATUSES, TODAY)) === "Delta");
 check("status isNot excludes the listed values", names(applyFilters(ALL, [cat("status", "isNot", ["todo"])], "all", STATUSES, TODAY)) === "Beta,gamma,Delta");
@@ -90,6 +93,7 @@ check("flat rows (heading \"\") keep every value", besideHeading(["Ana"], "assig
 // ── regroup ──
 const groupsOf = (list) => list.map((t) => `${t.name}:${t.groups[0]}`).join(",");
 check("folder grouping is untouched", regroup(ALL, "folder", false, STATUSES, "(none)") === ALL);
+check("tag headings merge case", regroup([task({ name: "x", tags: ["Work"] }), task({ name: "y", tags: ["work"] })], "tag", false, STATUSES, "(none)").map((t) => t.groups[0]).join() === "Work,Work");
 check("flat skips remapping", regroup(ALL, "tag", true, STATUSES, "(none)") === ALL);
 check("tag grouping duplicates multi-tag tasks",
   groupsOf(regroup(ALL, "tag", false, STATUSES, "(none)")) === "Alpha Plan:work,Alpha Plan:urgent,Beta:work,gamma:(none),Delta:(none)");
@@ -153,14 +157,14 @@ check("overlapping: one urgent task done, another still running: interrupted, no
 const bothDone = interruptions([{ ...linked, status: "done" }, { ...second, status: "done" }, cur], ST, OCT1);
 check("overlapping: both done: resume, from both", by(bothDone.resume, "cur.md") === "hot.md,out.md");
 const late = U({ path: "late.md", status: "doing", end: "2024-09-01", priority: "urgent" });
-check("exception: urgent wins over overdue", exceptionOf(late, ST, OCT1, new Set(), NONE) === "urgent");
+check("exception: urgent wins over overdue", first(late, ST, OCT1, new Set(), NONE) === "urgent");
 check("exceptions: every reason, strongest first",
   exceptionsOf({ ...late, status: "hold", interrupts: undefined, path: "late.md" }, ST, OCT1, new Set(["late.md"]), NONE).join() === "urgent,overdue,blocked,dependency");
 check("exception: dependency, then interrupted, then resume",
-  exceptionOf(cur, ST, OCT1, new Set(["cur.md"]), ip) === "dependency" && exceptionOf(cur, ST, OCT1, new Set(), ip) === "interrupted"
-  && exceptionOf(cur, ST, OCT1, new Set(), after) === "resume");
+  first(cur, ST, OCT1, new Set(["cur.md"]), ip) === "dependency" && first(cur, ST, OCT1, new Set(), ip) === "interrupted"
+  && first(cur, ST, OCT1, new Set(), after) === "resume");
 check("exception: blocked work says so; finished work has none",
-  exceptionOf(held, ST, OCT1, new Set(), NONE) === "blocked" && exceptionOf({ ...late, status: "done" }, ST, OCT1, new Set(), NONE) === undefined);
+  first(held, ST, OCT1, new Set(), NONE) === "blocked" && first({ ...late, status: "done" }, ST, OCT1, new Set(), NONE) === undefined);
 check("attention: blocked, overdue and urgent; finished work needs none",
   attentionOf(held, ST, OCT1).join() === "blocked" && attentionOf(late, ST, OCT1).join() === "overdue,urgent" && attentionOf({ ...late, status: "done" }, ST, OCT1).length === 0 && attentionOf(cur, ST, OCT1).length === 0);
 check("attention filter: is blocked/overdue/urgent keeps only those",
@@ -170,7 +174,6 @@ const sum = subtaskSummary(kids, ST);
 check("subtask summary: done/total without cancelled, next = first outstanding in order", sum.done === 1 && sum.total === 3 && sum.next?.name === "c");
 check("subtask summary: no next when all are done", subtaskSummary([kids[0]], ST).next === undefined);
 const byName = (a, b) => a.name.localeCompare(b.name);
-check("strongest exception wins, none when none", strongest([undefined, "interrupted", "overdue"]) === "overdue" && strongest([undefined]) === undefined);
 check("urgent first among siblings; finished urgent work sorts normally",
   [U({ name: "b" }), U({ name: "z", priority: "urgent" }), U({ name: "a", priority: "urgent", status: "done" })].sort(urgentFirst(ST, byName)).map((t) => t.name).join() === "z,a,b");
 check("work waiting to be resumed comes right after urgent work",
