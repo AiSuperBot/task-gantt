@@ -759,9 +759,8 @@ button.ogantt-legend-chip {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  /* 狭いときは名前より先に縮み、印だけ残る（言葉は title に）/ when narrow it shrinks before the name, down to its icon (the word stays in the title) */
-  flex: 0 1000 auto;
-  min-width: 22px;
+  /* 言葉は縮めない（行で一番大事な語）。先にカンバンの目印が印だけまで縮む / its word keeps its width (the row's most important word); the board cue shrinks to its icon first */
+  flex: none;
   overflow: hidden;
   margin-left: 6px;
   padding: 0 5px;
@@ -2227,4 +2226,8 @@ button.ogantt-dep-add {
 /* 詳細パネルのカンバンの進捗（表の進捗列と同じメーター）/ a kanban's progress in the detail panel (the Progress column's own meter) */
 .ogantt-progress-field .ogantt-td-progress {
   flex: 1;
+}
+/* 見出しの「x/y 済み」は縮めない（部長がまず読む数）/ a heading's done count keeps its width (the first number a section head reads) */
+.ogantt-td-group .ogantt-subtask-sum {
+  flex: none;
 }

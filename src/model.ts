@@ -687,6 +687,12 @@ export function cardLabel(text: string): string {
   return text.replace(/@{1,2}(\{[^}]*\}|\[\[[^\]]*\]\])/g, "").replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, "$2").replace(/\s+/g, " ").trim();
 }
 
+// カードが行の名前で始まるなら、その名前と区切りを外す（「DB Adapter — x」→「x」）/ a card starting with its task's name loses it ("DB Adapter — x" → "x")
+export function withoutName(card: string, name: string): string {
+  const tail = card.slice(name.length);
+  return (card.toLowerCase().startsWith(name.toLowerCase()) && /^[\s:—–-]/.test(tail) && tail.replace(/^[\s:—–-]+/, "")) || card;
+}
+
 // チェックしたカードの割合（%）。100% は全部、0% は 1 枚も無いときだけ（199/200 を 100% に丸めない）
 // the share of checked cards in %; 100% only when all are done and 0% only when none are (199/200 doesn't round up to 100%)
 export function cardProgress(done: number, total: number): number {

@@ -1,6 +1,6 @@
 // buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
-import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, moveCollapsed, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone } from "./model.mjs";
+import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, moveCollapsed, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -49,6 +49,9 @@ const cardLine = (text) => kanbanLanes(...fakeCache(text)).flatMap((l) => l.card
 check("setCardDone: チェックを付ける", setCardDone(board, cardLine(board), "a [[x|y]]", true) === board.replace("- [ ] a", "- [x] a"));
 check("setCardDone: チェックの無いカードには付ける", setCardDone(board, 2, "b", true) === board.replace("- b", "- [x] b"));
 check("setCardDone: CRLF の行も外せる", setCardDone(board, 4, "c", false) === board.replace("- [x] c", "- [ ] c"));
+check("withoutName: 名前と区切りを外す", withoutName("DB Adapter — כתיבת מתאם", "DB Adapter") === "כתיבת מתאם");
+check("withoutName: 区切りが無ければそのまま", withoutName("DB Adaptery x", "DB Adapter") === "DB Adaptery x");
+check("withoutName: 名前だけのカードはそのまま", withoutName("DB Adapter", "DB Adapter") === "DB Adapter");
 check("setCardDone: 行が別のカードなら書かない", setCardDone(board, 2, "a [[x|y]]", true) === null);
 
 // 担当者などの多値フィールドに 1 件足す・外す / adding or removing one entry of a multi-valued field
