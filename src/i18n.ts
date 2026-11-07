@@ -145,6 +145,9 @@ interface Strings {
   setCardViewDesc: string;
   setCardViewList: string;
   setCardViewBoard: string;
+  setExecPositionName: string;
+  setExecPositionTop: string;
+  setExecPositionBottom: string;
   nextStep: (n: string) => string; // 親タスクの次のサブタスク / a parent's next subtask
   nowStep: (n: string) => string; // カンバンで今取り組んでいるカード / the kanban card being worked on now
   excResume: string;
@@ -681,6 +684,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "カードをチェックすると、カンバンのノートに書き込みます。",
     setCardViewList: "工程ごとのチェックリスト",
     setCardViewBoard: "Kanban と同じ横並びの列",
+    setExecPositionName: "詳細パネルでの「実行」の位置",
+    setExecPositionTop: "題名のすぐ下",
+    setExecPositionBottom: "欄の後",
     nextStep: (n) => `次のカード: ${n}`,
     nowStep: (n) => `進行中のカード: ${n}`,
     excResume: "再開",
@@ -1037,6 +1043,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "Checking a card there writes it to the Kanban note.",
     setCardViewList: "Checklist by lane",
     setCardViewBoard: "Side-by-side lanes, like Kanban",
+    setExecPositionName: "Execution in the details panel",
+    setExecPositionTop: "Right under the title",
+    setExecPositionBottom: "After the fields",
     nextStep: (n) => `Next card: ${n}`,
     nowStep: (n) => `Current card: ${n}`,
     excResume: "Resume",
@@ -1393,6 +1402,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "在此勾选卡片会写入看板笔记。",
     setCardViewList: "按列表分组的清单",
     setCardViewBoard: "与 Kanban 相同的并排列表",
+    setExecPositionName: "详情面板中“执行”的位置",
+    setExecPositionTop: "标题正下方",
+    setExecPositionBottom: "字段之后",
     nextStep: (n) => `下一张卡片：${n}`,
     nowStep: (n) => `当前卡片：${n}`,
     excResume: "恢复",
@@ -1749,6 +1761,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "在此勾選卡片會寫入看板筆記。",
     setCardViewList: "依列表分組的清單",
     setCardViewBoard: "與 Kanban 相同的並排列表",
+    setExecPositionName: "詳細面板中「執行」的位置",
+    setExecPositionTop: "標題正下方",
+    setExecPositionBottom: "欄位之後",
     nextStep: (n) => `下一張卡片：${n}`,
     nowStep: (n) => `目前卡片：${n}`,
     excResume: "恢復",
@@ -2105,6 +2120,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "여기서 카드를 체크하면 칸반 노트에 기록됩니다.",
     setCardViewList: "목록별 체크리스트",
     setCardViewBoard: "Kanban처럼 나란한 목록",
+    setExecPositionName: "세부 패널에서 '실행'의 위치",
+    setExecPositionTop: "제목 바로 아래",
+    setExecPositionBottom: "항목 다음",
     nextStep: (n) => `다음 카드: ${n}`,
     nowStep: (n) => `현재 카드: ${n}`,
     excResume: "재개",
@@ -2461,6 +2479,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "Cocher une carte ici l'écrit dans la note Kanban.",
     setCardViewList: "Liste à cocher par colonne",
     setCardViewBoard: "Colonnes côte à côte, comme Kanban",
+    setExecPositionName: "Position de « Exécution » dans le panneau de détails",
+    setExecPositionTop: "Juste sous le titre",
+    setExecPositionBottom: "Après les champs",
     nextStep: (n) => `Carte suivante : ${n}`,
     nowStep: (n) => `Carte en cours : ${n}`,
     excResume: "Reprendre",
@@ -2817,6 +2838,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "Marcar una tarjeta aquí lo escribe en la nota Kanban.",
     setCardViewList: "Lista de verificación por columna",
     setCardViewBoard: "Columnas lado a lado, como Kanban",
+    setExecPositionName: "Posición de «Ejecución» en el panel de detalles",
+    setExecPositionTop: "Justo debajo del título",
+    setExecPositionBottom: "Después de los campos",
     nextStep: (n) => `Siguiente tarjeta: ${n}`,
     nowStep: (n) => `Tarjeta actual: ${n}`,
     excResume: "Reanudar",
@@ -3173,6 +3197,9 @@ const STRINGS: Record<Lang, () => Strings> = {
     setCardViewDesc: "Отметка карточки здесь записывается в заметку Kanban.",
     setCardViewList: "Список по колонкам",
     setCardViewBoard: "Колонки рядом, как в Kanban",
+    setExecPositionName: "Положение «Выполнения» в панели сведений",
+    setExecPositionTop: "Сразу под названием",
+    setExecPositionBottom: "После полей",
     nextStep: (n) => `Следующая карточка: ${n}`,
     nowStep: (n) => `Текущая карточка: ${n}`,
     excResume: "Возобновить",

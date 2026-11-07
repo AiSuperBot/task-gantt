@@ -3747,7 +3747,7 @@ export class GanttView extends ItemView {
 
     if (this.readOnly(t.path)) d.createDiv({ cls: "ogantt-readonly", text: tr().readOnlyPanel, attr: { role: "note" } });
     this.buildAttention(d, t);
-    const execHost = d.createDiv(); // カンバンの「実行」は欄より先に（状態を先に読む）/ a kanban's Execution goes before the fields (state is read first)
+    const execHost = d.createDiv(); // カンバンの「実行」。設定で上なら欄より先に / a kanban's Execution; before the fields when the setting says top
     const meta = d.createDiv({ cls: "ogantt-detail-meta" });
     const fieldRow = (label: string): HTMLElement => {
       const r = meta.createDiv({ cls: "ogantt-detail-row" });
@@ -3889,6 +3889,7 @@ export class GanttView extends ItemView {
       // カンバンは実行の層：狭いパネルにボードを詰め込まず、短い要約と「ボードを開く」だけ。数と次のカードは確かに読めるときだけ
       // a kanban is the execution layer: no board squeezed into the narrow panel, just a short summary and "Open board"; counts and the next card only when they can be read for sure
       if (!(file instanceof TFile)) return;
+      if (this.plugin.settings.execPosition !== "top") d.appendChild(execHost); // 既定は欄の後 / after the fields by default
       execHost.createDiv({ cls: "ogantt-detail-label", text: tr().execution });
       const ex = execHost.createDiv({ cls: "ogantt-exec" });
       if (t.cards) ex.createDiv({ text: tr().cardsChecked(t.cards.done, t.cards.total) });
