@@ -190,7 +190,7 @@ export function tagSpelling(a: string | undefined, b: string): string {
   return a == null || b < a ? b : a;
 }
 
-export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses: StatusDef[], noneLabel: string): Task[] {
+export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses: StatusDef[], noneLabel: string, all: Task[] = tasks): Task[] {
   // フラットはグループを無視＝再マッピング不要（タグ複製で重複行が出るのも防ぐ）/ flat ignores groups: skip remap (also avoids tag-duplicated rows)
   if (groupBy === "folder" || flat) return tasks;
   // groups を合成グループへ差し替えて既存の buildRows を再利用。タグと担当者は多値なので、各グループへ複製する（無ければ (なし)）
@@ -198,7 +198,7 @@ export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses
   const statusLabel = new Map(statuses.map((s) => [s.id, s.label]));
   // タグの見出しは 1 つの綴りで（並びや絞り込みで変わらない）（#Work と #work は同じタグ）/ one tag heading per tag, in the first spelling seen (#Work and #work are one tag; the spelling doesn't depend on order or filters)
   const spelling = new Map<string, string>();
-  for (const t of tasks) for (const x of t.tags) spelling.set(x.toLowerCase(), tagSpelling(spelling.get(x.toLowerCase()), x));
+  for (const t of all) for (const x of t.tags) spelling.set(x.toLowerCase(), tagSpelling(spelling.get(x.toLowerCase()), x));
   return tasks.flatMap((t) => {
     const keys =
       groupBy === "status" ? (t.status ? [statusLabel.get(t.status) ?? t.status] : [])
