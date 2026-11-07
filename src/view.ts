@@ -4136,8 +4136,6 @@ export class GanttView extends ItemView {
     // time-of-day for start & end: manual typing at 1-minute precision, the clock icon opens
     // hour + minute (10-min steps) dropdowns (Chromium's native picker ignores `step`)
     const trow = meta.createDiv({ cls: "ogantt-detail-row" });
-    // 時刻を使っていないボードでは出さない（空の --:-- が並ぶだけ）/ hidden on a board that uses no times (it would only show empty --:--)
-    if (!this.tasks.some((x) => x.startTime || x.endTime)) trow.hide();
     trow.createSpan({ cls: "ogantt-detail-label", text: tr().fieldTime });
     const tfield = trow.createDiv({ cls: "ogantt-detail-field ogantt-time-inputs" });
     const makeTime = (which: "start" | "end"): void => {
