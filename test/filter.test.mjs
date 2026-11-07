@@ -1,6 +1,6 @@
 // フィルタ判定（matchFilter / applyFilters）とグループ再マッピング（regroup）の検証
 // Tests for filter matching (matchFilter / applyFilters) and group remapping (regroup)
-import { matchFilter, applyFilters, regroup, besideHeading, isOverdue, isUrgent, interruptions, runningWorkOf, attentionOf, exceptionsOf, nextToStart, subtaskSummary, urgentFirst } from "./filter.mjs";
+import { matchFilter, applyFilters, regroup, besideHeading, isOverdue, isUrgent, interruptions, runningWorkOf, attentionOf, exceptionsOf, nextToStart, subtaskSummary, urgentFirst, tagSpelling } from "./filter.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -93,6 +93,7 @@ check("flat rows (heading \"\") keep every value", besideHeading(["Ana"], "assig
 // ── regroup ──
 const groupsOf = (list) => list.map((t) => `${t.name}:${t.groups[0]}`).join(",");
 check("folder grouping is untouched", regroup(ALL, "folder", false, STATUSES, "(none)") === ALL);
+check("tag heading spelling ignores order", regroup([task({ name: "y", tags: ["work"] }), task({ name: "x", tags: ["Work"] })], "tag", false, STATUSES, "(none)").map((t) => t.groups[0]).join() === "Work,Work" && tagSpelling("work", "Work") === "Work" && tagSpelling(undefined, "a") === "a");
 check("tag headings merge case", regroup([task({ name: "x", tags: ["Work"] }), task({ name: "y", tags: ["work"] })], "tag", false, STATUSES, "(none)").map((t) => t.groups[0]).join() === "Work,Work");
 check("flat skips remapping", regroup(ALL, "tag", true, STATUSES, "(none)") === ALL);
 check("tag grouping duplicates multi-tag tasks",

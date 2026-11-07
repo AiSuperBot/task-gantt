@@ -65,7 +65,7 @@ import { attachLinkSuggest, handleLinkClick, renderLinkValue, wireLinkHover } fr
 import { t as tr, statusGroupLabel } from "./i18n"; // tr() … ローカル変数 t（Task）との衝突回避 / aliased to avoid clashing with the `t` task var
 import { schedulePush } from "./gcal/sync";
 import { isConnected } from "./gcal/auth";
-import { ATTENTION, EXCEPTIONS, applyFilters, besideHeading, exceptionsOf, interruptions, isOpen, isOverdue, isUrgent, nextToStart, regroup, runningWorkOf, subtaskSummary, urgentFirst, Exception, GroupBy, Interruptions } from "./filter";
+import { ATTENTION, EXCEPTIONS, applyFilters, tagSpelling, besideHeading, exceptionsOf, interruptions, isOpen, isOverdue, isUrgent, nextToStart, regroup, runningWorkOf, subtaskSummary, urgentFirst, Exception, GroupBy, Interruptions } from "./filter";
 import { BoardContext, Move, MutateResult, StatusChange } from "./board";
 import { CellColumn, ColumnDef, allColumns, columnList, columnWidth, disabledLast, manualComparator, moveColumn, paintProgress, progressPct, taskComparator, toggleColumn, visibleColumns } from "./columns";
 
@@ -494,7 +494,9 @@ export class GanttView extends ItemView {
     }
     // 書き込み・取り消し・ドラッグの最中は待つ（更新中のタスクを差し替えたり、掴んでいるバーを消したりしない）
     // wait while a write, an undo or a drag is under way (it would swap the tasks they update, or remove the bar being dragged)
-    if (this.historyBusy > 0 || this.dragging) return this.scheduleRefresh();
+    // 表のセルで入力中も待つ（作り直すと打った文字が消えるか、途中の名前で保存される）/ also while a table cell is being typed in (a rebuild would drop the text or save it half-typed)
+    const typing = this.tbodyEl?.contains(activeDocument.activeElement) && activeDocument.activeElement!.matches("input, select, textarea");
+    if (this.historyBusy > 0 || this.dragging || typing) return this.scheduleRefresh();
     // 別のボードに切り替わったら、そのボードの表示オプションを読み、スクロール位置と選択は引き継がない
     // switching to another board loads its view options; the scroll position and the selection don't carry over
     const opened = this.boardKey !== this.folder;
@@ -525,9 +527,14 @@ export class GanttView extends ItemView {
     if (!path || !this.detailEl.hasClass("is-open")) return;
     const ae = activeDocument.activeElement;
     // 入力中は閉じも描き直しもしない（打っている文字を消さない）/ while a field is being typed in, neither close nor redraw (never drop what's being typed)
-    if (ae && ae !== this.detailEl && this.detailEl.contains(ae) && ae.matches("input:not([type=checkbox]), textarea, select")) return; // a checkbox has already saved
+    if (ae && ae !== this.detailEl && this.detailEl.contains(ae) && ae.matches("input:not([type=checkbox]), textarea, select")) {
+      // ノートが消えていたら、欄を離れたときにもう一度見る（そこで閉じる）/ when the note is gone, look again once the field is left (and close then)
+      if (!this.tasks.some((x) => x.path === path)) ae.addEventListener("blur", () => void this.refresh(), { once: true });
+      return; // a checkbox has already saved
+    }
     const t = this.tasks.find((x) => x.path === path);
     if (!t) return this.closeDetail();
+    // (入力中の欄からフォーカスが外れたら上の行で閉じる / once the field is left, the line above closes it)
     if (this.panelSig !== this.sigOf(t, await readBody(this.app, path))) await this.openDetail(path);
   }
 
@@ -545,7 +552,7 @@ export class GanttView extends ItemView {
     const changes = [...autoStatusChanges(tasks, s.statuses, s.autoStatus, this.today())].filter(([p, c]) => {
       if (this.readOnly(p)) return false; // 読むだけの部屋のノートは自動でも書かない（戻されるだけ）/ never written automatically either (it would just be put back)
       if (c.status !== was.get(p)) return true;
-      s.autoStatus.fired[p] = { dates: c.dates, status: c.status };
+      this.plugin.settings.autoStatus.fired[p] = { dates: c.dates, status: c.status };
       return false;
     });
     if (!changes.length) return wrote;
@@ -559,7 +566,7 @@ export class GanttView extends ItemView {
         if (r.status !== "fulfilled" || !r.value) return;
         statuses.push({ path: p, from: was.get(p), to: c.status });
         wrote.set(p, c.status);
-        s.autoStatus.fired[p] = { dates: c.dates, status: c.status };
+        this.plugin.settings.autoStatus.fired[p] = { dates: c.dates, status: c.status }; // 今の設定へ（同期で差し替わっていても）/ into the current settings (even if a sync swapped them)
       });
       if (res.some((r) => r.status === "rejected")) new Notice(tr().writeFailed);
       return statuses.length ? { statuses } : false;
@@ -608,6 +615,13 @@ export class GanttView extends ItemView {
   // 詳細パネルが見せている内容の印（タスクのデータと本文）/ a fingerprint of what the detail panel shows (the task's data and its body)
   private sigOf(t: Task, body: string): string {
     return `${JSON.stringify(t)}\u0000${body}\u0000${(this.ints.interrupted.get(t.path) ?? []).map((u) => u.path).join()}|${(this.ints.resume.get(t.path) ?? []).map((u) => u.path).join()}|${this.readOnly(t.path)}`;
+  }
+
+  // 別の端末で設定が変わった：このボードの表示も読み直してから描き直す（古い表示で上書きしない）
+  // settings changed on another device: reload this board's own view setup, then redraw (so the old one isn't saved back)
+  reloadBoard(): void {
+    if (this.boardKey != null) this.loadBoard();
+    void this.refresh();
   }
 
   // ボードごとの表示オプション（グループ・色分け・表示切替・折りたたみ）を読む / load this board's view options (grouping, colour, toggles, collapsed rows)
@@ -992,7 +1006,12 @@ export class GanttView extends ItemView {
     else if (field === "statusGroup") base = STATUS_GROUPS.map((g) => [g, statusGroupLabel(g)] as [string, string]);
     else if (field === "attention") base = ATTENTION.map((a) => [a, this.catValueLabel("attention", a)] as [string, string]);
     else if (field === "assignee") base = this.assigneeList().map((a) => [a, linkLabel(a)] as [string, string]);
-    else base = [...new Map(this.tasks.flatMap((t) => t.tags).reverse().map((tg) => [tg.toLowerCase(), tg] as [string, string])).values()].sort().map((tg) => [tg, tg] as [string, string]); // 大文字小文字違いは 1 つ（最初の綴り）/ one entry per tag whatever the case (its first spelling)
+    else {
+      // 大文字小文字違いは 1 つ（見出しと同じ綴り）/ one entry per tag whatever the case (the headings' spelling)
+      const spelling = new Map<string, string>();
+      for (const tg of this.tasks.flatMap((t) => t.tags)) spelling.set(tg.toLowerCase(), tagSpelling(spelling.get(tg.toLowerCase()), tg));
+      base = [...spelling.values()].sort().map((tg) => [tg, tg] as [string, string]);
+    }
     return [...base, ["", tr().noneLabel]]; // 「未設定」を選べるように / allow filtering by "unset"
   }
 
@@ -1264,7 +1283,7 @@ export class GanttView extends ItemView {
         const item = listEl.createEl("label", { cls: "ogantt-datemenu-check" });
         const cb = item.createEl("input", { type: "checkbox" });
         // 人は表示名で比べる（"[[Ben]]" と "Ben" は同じ人。絞り込みと同じ決まり）/ people compare by display name ("[[Ben]]" and "Ben" are one person, as in the filter)
-        const same = (x: string): boolean => (f.field === "assignee" ? linkLabel(x) === linkLabel(val) : x === val);
+        const same = (x: string): boolean => (f.field === "assignee" ? linkLabel(x) === linkLabel(val) : f.field === "tag" ? x.toLowerCase() === val.toLowerCase() : x === val);
         cb.checked = f.values.some(same);
         item.createSpan({ text: label });
         cb.onchange = () => {
@@ -1701,7 +1720,7 @@ export class GanttView extends ItemView {
   private setColorOverride(kind: "tag" | "folder" | "assignee", name: string, color: string | null): void {
     const s = this.plugin.settings;
     const arr = kind === "tag" ? s.tagColors : kind === "folder" ? s.folderColors : s.assigneeColors;
-    const i = arr.findIndex((c) => c.name === name);
+    const i = arr.findIndex((c) => (kind === "tag" ? c.name.toLowerCase() === name.toLowerCase() : c.name === name));
     // 「一覧に載っている ⇔ 色を指定している」を不変条件にする。リセットは色指定の解除なので
     // 行ごと消す（色が空の行は、行が無い状態と見分けがつかず情報を持たないため）。
     // invariant: listed ⇔ has an explicit colour. A reset drops the entry outright, because a row with
@@ -2247,12 +2266,12 @@ export class GanttView extends ItemView {
       const all = corner.createEl("button", { cls: "clickable-icon ogantt-collapse-all", attr: { "aria-label": anyOpen ? tr().collapseAll : tr().expandAll } });
       setIcon(all, anyOpen ? "chevrons-down-up" : "chevrons-up-down");
       all.onclick = () => {
-        for (const k of heads) {
-          if (anyOpen) this.collapsed.add(k);
-          else this.collapsed.delete(k);
-        }
+        if (anyOpen) heads.forEach((k) => this.collapsed.add(k));
+        // 開くときは見えていない入れ子の見出しも / unfolding includes nested headings that aren't on screen
+        else for (const k of [...this.collapsed]) if (k.startsWith(`${this.groupBy}:`) && !k.endsWith(".md")) this.collapsed.delete(k);
         this.saveBoard();
         this.rerender();
+        this.contentEl.querySelector<HTMLElement>(".ogantt-collapse-all")?.focus(); // キーボードの位置を保つ / keep the keyboard's place
       };
     }
     for (const col of cols) {
@@ -2463,7 +2482,7 @@ export class GanttView extends ItemView {
       const { statuses } = this.plugin.settings;
       const excsOf = (x: Task) => (this.disabled.has(x.path) ? [] : exceptionsOf(x, statuses, today, this.conflicts, this.ints));
       // 要約と例外は絞り込みに関係なく全部のサブタスクから（並びは画面と同じ）/ the summary and exceptions come from every subtask, filters aside (in screen order)
-      const kids = this.kids.get(t.path) ?? [];
+      const kids = this.flat ? [] : this.kids.get(t.path) ?? []; // フラットではサブタスクも行に出ている / in flat view the subtasks are rows too
       const all = EXCEPTIONS.filter((e) => [...excsOf(t), ...(!row.hasChildren || this.isCollapsed(row.key) ? kids.flatMap(excsOf) : [])].includes(e));
       const said = statusGroupOf(statuses, t.status) === "deferred" && this.visibleColumns().some((c) => c.id === "status");
       const exc = all.find((e) => !(e === "blocked" && said));
@@ -2621,9 +2640,10 @@ export class GanttView extends ItemView {
       new PickModal(this.app, dirs, (d) => d || tr().vaultRoot, tr().menuMoveToFolder, (d) => void this.reparentTo(t.path, d, null)).open();
     }));
     // 兄弟の中で上・下へ（キーボードは Alt+↑/↓）/ up or down among its siblings (Alt+↑/↓ on the keyboard)
-    const i = this.rows[this.cursor]?.task?.path === t.path ? this.cursor : this.rows.findIndex((r) => r.task?.path === t.path);
-    m.addItem((it) => it.setTitle(tr().menuMoveUp).setIcon("arrow-up").onClick(() => this.moveRow(i, -1)));
-    m.addItem((it) => it.setTitle(tr().menuMoveDown).setIcon("arrow-down").onClick(() => this.moveRow(i, 1)));
+    // 押したときに行を探す（開いている間に同期で行がずれることがある）/ find the row when clicked (a sync may shift rows while the menu is open)
+    const rowAt = () => (this.rows[this.cursor]?.task?.path === t.path ? this.cursor : this.rows.findIndex((r) => r.task?.path === t.path));
+    m.addItem((it) => it.setTitle(tr().menuMoveUp).setIcon("arrow-up").onClick(() => this.moveRow(rowAt(), -1)));
+    m.addItem((it) => it.setTitle(tr().menuMoveDown).setIcon("arrow-down").onClick(() => this.moveRow(rowAt(), 1)));
     const off = this.disabled.has(t.path);
     m.addItem((it) => it.setTitle(off ? tr().menuEnable : tr().menuDisable).setIcon(off ? "circle-play" : "circle-off").onClick(() =>
       this.setDisabled([t.path], !off, off ? tr().menuEnable : tr().menuDisable)));
@@ -3487,7 +3507,7 @@ export class GanttView extends ItemView {
           // a row may hold a copy made for grouping (status, assignee, tag), so update the live task the cascade reads
           const live = this.tasks.find((x) => x.path === task.path) ?? task;
           await this.mutate(tr().undoReschedule(task.name), [task.path, ...this.cascadePaths(task.path)], async () => {
-            if (milestone) {
+            if (milestone && !task.start) {
               const nd = dayToStr(dayIndex(task.end ?? task.start!) + dxDays);
               await writeDates(this.app, this.plugin.settings, task.path, nd, nd, true);
               live.end = nd; // メモリ更新 / update in-memory
@@ -3639,7 +3659,7 @@ export class GanttView extends ItemView {
   private async editList(path: string, field: "tags" | "assignees", value: string, add: boolean): Promise<void> {
     const t = this.tasks.find((x) => x.path === path);
     // 人は表示名で比べる（"Ben" と "[[Ben]]" は同じ人）/ people compare by display name ("Ben" and "[[Ben]]" are one person)
-    const same = (v: string) => (field === "assignees" ? linkLabel(v) === linkLabel(value) : v === value);
+    const same = (v: string) => (field === "assignees" ? linkLabel(v) === linkLabel(value) : v.toLowerCase() === value.toLowerCase());
     if (!t || !value || add === t[field].some(same)) return;
     const next = add ? [...t[field], value] : t[field].filter((v) => !same(v));
     const label = field === "assignees" ? tr().undoEdit(t.name) : add ? tr().undoAddTag(t.name, value) : tr().undoRemoveTag(t.name, value);
@@ -3734,7 +3754,7 @@ export class GanttView extends ItemView {
 
     // ヘッダー: タイトル＝ファイル名（編集でリネーム）/ header: title input renames the file
     const header = d.createDiv({ cls: "ogantt-detail-head" });
-    const titleInput = header.createEl("input", { cls: "ogantt-detail-title", type: "text", attr: { "aria-label": tr().fieldName } });
+    const titleInput = header.createEl("input", { cls: "ogantt-detail-title", type: "text", attr: { "aria-label": tr().fieldName, dir: "auto" } });
     titleInput.value = t.name;
     // 変更できなかったとき（同名がある等）は欄を今の名前に戻す / when the rename didn't happen (name taken, …) the field goes back to the current name
     titleInput.addEventListener("change", () => void this.renameTaskTo(this.selectedPath!, t.name, titleInput.value).then(() => {
@@ -3981,7 +4001,7 @@ export class GanttView extends ItemView {
     d.createDiv({ cls: "ogantt-detail-label", text: tr().fieldBody });
     const bodyWrap = d.createDiv({ cls: "ogantt-detail-body" });
     const preview = bodyWrap.createDiv({ cls: "ogantt-detail-body-preview markdown-rendered" });
-    const bodyArea = bodyWrap.createEl("textarea", { cls: "ogantt-detail-body-edit", attr: { "aria-label": tr().fieldBody } });
+    const bodyArea = bodyWrap.createEl("textarea", { cls: "ogantt-detail-body-edit", attr: { "aria-label": tr().fieldBody, dir: "auto" } });
 
     const renderPreview = async (): Promise<void> => {
       if (seq !== this.detailSeq) return; // もう別のタスクを表示している / the panel shows another task by now
@@ -4014,6 +4034,12 @@ export class GanttView extends ItemView {
     attachLinkSuggest(this.app, bodyArea, t.path);
     bodyArea.addEventListener("blur", () => void (async () => {
       const path = this.selectedPath;
+      // 入力中にノートが消された：打った文字はクリップボードへ（黙って失わない）/ the note was deleted while typing: the text goes to the clipboard (never silently lost)
+      if (path && bodyArea.value !== bodyText && !this.app.vault.getAbstractFileByPath(path)) {
+        await navigator.clipboard.writeText(bodyArea.value).catch(() => undefined);
+        new Notice(tr().bodyKeptOnClipboard);
+        return;
+      }
       if (path && bodyArea.value !== bodyText) {
         // 編集している間にノートがほかで書き換えられていたら知らせる（取り消せばその版に戻る）/ say so when the note changed elsewhere meanwhile (Undo brings that version back)
         if ((await readBody(this.app, path)) !== bodyText) new Notice(tr().bodyChangedElsewhere);
@@ -4308,7 +4334,7 @@ export class GanttView extends ItemView {
   ): void {
     if (cell.querySelector("input, select")) return; // 編集中の二重起動を防ぐ / already editing
     cell.empty();
-    const inp = cell.createEl("input", { type: "text", cls: "ogantt-cell-input", attr: { "aria-label": cell.dataset.label ?? tr().fieldName } });
+    const inp = cell.createEl("input", { type: "text", cls: "ogantt-cell-input", attr: { "aria-label": cell.dataset.label ?? tr().fieldName, dir: "auto" } });
     inp.value = value;
     configure?.(inp);
     inp.focus();
@@ -4321,6 +4347,7 @@ export class GanttView extends ItemView {
       repaint();
     };
     const save = (): void => {
+      if (inp.validity.badInput) return cancel(); // 数として読めない入力は消去として保存しない / unreadable number input is never saved as a clear
       if (settled) return;
       settled = true;
       const v = inp.value.trim();

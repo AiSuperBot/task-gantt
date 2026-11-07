@@ -62,6 +62,27 @@ const TZ_CITIES: [string, string][] = [
 ];
 
 // プラグイン設定 / Plugin settings
+// ステータスの id を変えたら、保存した絞り込みとプリセットのステータスの値も付け替える / after a status id change, re-point the status values of the saved filters and presets
+export function renameStatusInFilters(s: GanttSettings, from: string, to: string): void {
+  for (const list of [s.filters, ...s.filterPresets.map((x) => x.filters)])
+    for (const f of list) if (f.kind === "category" && f.field === "status") f.values = f.values.map((v) => (v === from ? to : v));
+}
+
+// ステータスの id を変えたら、そのステータスのノートも書き換える。書いた数を返す / after a status id change, rewrite the notes holding it; returns how many were written
+export async function renameStatusInNotes(app: App, key: string, from: string, to: string): Promise<number> {
+  let n = 0;
+  for (const file of app.vault.getMarkdownFiles()) {
+    if (app.metadataCache.getFileCache(file)?.frontmatter?.[key] !== from) continue;
+    await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      if (fm[key] === from) {
+        fm[key] = to;
+        n++;
+      }
+    });
+  }
+  return n;
+}
+
 export interface GanttSettings {
   rootFolder: string; // 集計する親フォルダ / parent folder to aggregate
   recurse: boolean; // サブフォルダを再帰的に辿るか / recurse into subfolders
@@ -577,12 +598,20 @@ export class GanttSettingTab extends PluginSettingTab {
         // id は打ち終えたとき（確定時）にだけ変えて保存する（打ちかけの id で自動ステータスが動かないように）。自動ステータスの行き先・未着手の一覧もついて行く
         // the id changes and saves only on commit (so automatic status never runs on a half-typed id); the automatic-status targets follow it
         t.setPlaceholder(tr().setStatusId).setValue(st.id);
-        t.inputEl.addEventListener("change", () => {
+        t.inputEl.addEventListener("change", () => void (async () => {
           const was = st.id;
-          st.id = t.getValue().trim();
-          renameAutoStatusId(this.plugin.settings.autoStatus, was, st.id);
+          const id = t.getValue().trim();
+          // 空や他と同じ id は受け付けず元へ戻す / an empty or already-used id is refused and put back
+          if (!id || this.plugin.settings.statuses.some((o) => o !== st && o.id === id)) return void t.setValue(was);
+          if (id === was) return;
+          st.id = id;
+          renameAutoStatusId(this.plugin.settings.autoStatus, was, id);
+          renameStatusInFilters(this.plugin.settings, was, id);
           this.save();
-        });
+          // そのステータスのノートもついて行く（残すと終わった仕事が「未完了」に見える）/ the notes holding it follow (left behind, finished work would read as open)
+          const n = await renameStatusInNotes(this.app, this.plugin.settings.keys.status, was, id);
+          if (n) new Notice(tr().statusIdRenamed(n));
+        })());
       })
       .addText((t) => {
         t.setPlaceholder(tr().setStatusLabel).setValue(st.label).onChange((v) => { st.label = v; this.save(); });
@@ -829,7 +858,15 @@ export class GanttSettingTab extends PluginSettingTab {
 
   private ctlKeyRow(setting: Setting, k: keyof GanttSettings["keys"]): void {
     const s = this.plugin.settings;
-    setting.addText((t) => t.setValue(s.keys[k]).onChange((v) => { s.keys[k] = v.trim() || k; this.save(); }));
+    // 打ち終えたとき（確定時）にだけ保存する（打ちかけのキーで自動ステータスが全ノートを読み違えないように）/ saved on commit only, so automatic status never reads every note with a half-typed key
+    setting.addText((t) => {
+      t.setValue(s.keys[k]);
+      t.inputEl.addEventListener("change", () => {
+        s.keys[k] = t.getValue().trim() || k;
+        t.setValue(s.keys[k]);
+        this.save();
+      });
+    });
   }
 
   private ctlWebhook(setting: Setting, key: "discordWebhook" | "slackWebhook" | "teamsWebhook", placeholder: string): void {

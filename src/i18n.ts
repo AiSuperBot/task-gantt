@@ -379,6 +379,8 @@ interface Strings {
   cfRenameInNotes: string;
   cfRenameSettingOnly: string;
   cfRenamed: (count: number) => string;
+  statusIdRenamed: (count: number) => string;
+  bodyKeptOnClipboard: string;
   cfRenameSkipped: (count: number, key: string) => string;
   setDefaultTagColorName: string;
   setDefaultTagColorDesc: string;
@@ -595,6 +597,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "ノートも変更",
     cfRenameSettingOnly: "列の設定だけ変更",
     cfRenamed: (count) => `${count} 件のノートのプロパティ名を変更しました`,
+    statusIdRenamed: (count) => `${count} 件のノートのステータスを付け替えました`,
+    bodyKeptOnClipboard: "ノートは削除されていました。打った本文はクリップボードにあります。",
     cfRenameSkipped: (count, key) => `${count} 件は「${key}」に既に値があるため変更しませんでした`,
     setDefaultTagColorName: "タグの既定色",
     setDefaultTagColorDesc: "個別に色を指定していないタグすべてに使う色。リセットすると Obsidian 本体のタグ色に戻ります。",
@@ -956,6 +960,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "Rename in notes",
     cfRenameSettingOnly: "Only change the column",
     cfRenamed: (count) => `Renamed the property in ${count} notes`,
+    statusIdRenamed: (count) => `Updated the status in ${count} note${count === 1 ? "" : "s"}`,
+    bodyKeptOnClipboard: "The note was deleted. The text you typed is on the clipboard.",
     cfRenameSkipped: (count, key) => `${count} skipped: they already have a value under “${key}”`,
     setDefaultTagColorName: "Default tag color",
     setDefaultTagColorDesc: "Color used for every tag without a color of its own. Reset it to fall back to Obsidian's own tag color.",
@@ -1317,6 +1323,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "同时修改笔记",
     cfRenameSettingOnly: "仅修改列设置",
     cfRenamed: (count) => `已在 ${count} 篇笔记中重命名属性`,
+    statusIdRenamed: (count) => `已更新 ${count} 条笔记的状态`,
+    bodyKeptOnClipboard: "笔记已被删除。你输入的正文已复制到剪贴板。",
     cfRenameSkipped: (count, key) => `已跳过 ${count} 篇：它们在“${key}”下已有值`,
     setDefaultTagColorName: "标签默认颜色",
     setDefaultTagColorDesc: "用于所有未单独指定颜色的标签。重置后将回退到 Obsidian 自身的标签颜色。",
@@ -1678,6 +1686,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "同時修改筆記",
     cfRenameSettingOnly: "僅修改欄設定",
     cfRenamed: (count) => `已在 ${count} 篇筆記中重新命名屬性`,
+    statusIdRenamed: (count) => `已更新 ${count} 則筆記的狀態`,
+    bodyKeptOnClipboard: "筆記已被刪除。你輸入的內文已複製到剪貼簿。",
     cfRenameSkipped: (count, key) => `已略過 ${count} 篇：它們在「${key}」下已有值`,
     setDefaultTagColorName: "標籤預設顏色",
     setDefaultTagColorDesc: "用於所有未單獨指定顏色的標籤。重設後會回到 Obsidian 本身的標籤顏色。",
@@ -2039,6 +2049,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "노트도 변경",
     cfRenameSettingOnly: "열 설정만 변경",
     cfRenamed: (count) => `${count}개 노트의 속성 이름을 바꿨습니다`,
+    statusIdRenamed: (count) => `노트 ${count}개의 상태를 바꿨습니다`,
+    bodyKeptOnClipboard: "노트가 삭제되었습니다. 입력한 본문은 클립보드에 있습니다.",
     cfRenameSkipped: (count, key) => `${count}개는 “${key}”에 이미 값이 있어 바꾸지 않았습니다`,
     setDefaultTagColorName: "태그 기본 색상",
     setDefaultTagColorDesc: "개별 색상이 없는 모든 태그에 사용할 색상입니다. 초기화하면 Obsidian 자체 태그 색상으로 돌아갑니다.",
@@ -2400,6 +2412,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "Renommer dans les notes",
     cfRenameSettingOnly: "Modifier seulement la colonne",
     cfRenamed: (count) => `Propriété renommée dans ${count} notes`,
+    statusIdRenamed: (count) => `Statut mis à jour dans ${count} note${count === 1 ? "" : "s"}`,
+    bodyKeptOnClipboard: "La note a été supprimée. Le texte saisi est dans le presse-papiers.",
     cfRenameSkipped: (count, key) => `${count} ignorées : elles ont déjà une valeur sous « ${key} »`,
     setDefaultTagColorName: "Couleur d'étiquette par défaut",
     setDefaultTagColorDesc: "Couleur de toutes les étiquettes sans couleur propre. La réinitialiser revient à la couleur d'étiquette d'Obsidian.",
@@ -2761,6 +2775,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "Renombrar en las notas",
     cfRenameSettingOnly: "Cambiar solo la columna",
     cfRenamed: (count) => `Propiedad renombrada en ${count} notas`,
+    statusIdRenamed: (count) => `Estado actualizado en ${count} nota${count === 1 ? "" : "s"}`,
+    bodyKeptOnClipboard: "La nota se eliminó. El texto que escribiste está en el portapapeles.",
     cfRenameSkipped: (count, key) => `${count} omitidas: ya tienen un valor en «${key}»`,
     setDefaultTagColorName: "Color de etiqueta por defecto",
     setDefaultTagColorDesc: "Color de todas las etiquetas sin color propio. Al restablecerlo vuelve al color de etiqueta de Obsidian.",
@@ -3122,6 +3138,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     cfRenameInNotes: "Переименовать в заметках",
     cfRenameSettingOnly: "Изменить только столбец",
     cfRenamed: (count) => `Свойство переименовано в ${count} заметках`,
+    statusIdRenamed: (count) => `Статус обновлён в заметках: ${count}`,
+    bodyKeptOnClipboard: "Заметка была удалена. Введённый текст скопирован в буфер обмена.",
     cfRenameSkipped: (count, key) => `Пропущено ${count}: у «${key}» уже есть значение`,
     setDefaultTagColorName: "Цвет тега по умолчанию",
     setDefaultTagColorDesc: "Цвет для всех тегов без собственного цвета. Сброс возвращает цвет тега самого Obsidian.",

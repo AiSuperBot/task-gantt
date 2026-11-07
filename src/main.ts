@@ -123,6 +123,12 @@ export default class GanttPlugin extends Plugin {
   private moveBoards(from: string, to: string): void {
     const boards = this.settings.boards;
     let moved = false;
+    // 既定のフォルダもついて行く（古い名前のままだと自動ステータスが黙って止まる）/ the default folder follows too (left on the old name, automatic status silently stops)
+    const root = this.settings.rootFolder ?? "";
+    if (root && (root === from || root.startsWith(from + "/"))) {
+      this.settings.rootFolder = to + root.slice(from.length);
+      moved = true;
+    }
     for (const key of Object.keys(boards)) {
       const b = boards[key];
       // 手の並び・止めたタスク・開いた親（キーはパス）/ the manual order, disabled tasks and opened parents (keyed by path)
@@ -259,7 +265,7 @@ export default class GanttPlugin extends Plugin {
   async onExternalSettingsChange(): Promise<void> {
     await this.loadSettings();
     this.settingTab?.refreshIfOpen();
-    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)) if (leaf.view instanceof GanttView) void leaf.view.refresh();
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)) if (leaf.view instanceof GanttView) leaf.view.reloadBoard();
   }
 
   // 保存してボードを読み直す。日付による自動ステータスはボードごとではなく、保存の後に 1 回だけ（打鍵が続くあいだは待つ）
