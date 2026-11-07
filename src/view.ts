@@ -2237,6 +2237,21 @@ export class GanttView extends ItemView {
   private renderHeader(grid: HTMLElement, cols: ColumnDef[], colWidth: Map<string, number>, width: number): void {
     const corner = grid.createDiv({ cls: "ogantt-corner" });
     const s = this.plugin.settings;
+    // 見出しを全部たたむ・開く（1 行 1 プロジェクトの要約へ一押しで）/ fold or unfold every heading (one line per project, in one click)
+    const heads = this.rows.filter((r) => r.kind === "group" && r.key != null).map((r) => `${this.groupBy}:${r.key}`);
+    if (heads.length) {
+      const anyOpen = heads.some((k) => !this.collapsed.has(k));
+      const all = corner.createEl("button", { cls: "clickable-icon ogantt-collapse-all", attr: { "aria-label": anyOpen ? tr().collapseAll : tr().expandAll } });
+      setIcon(all, anyOpen ? "chevrons-down-up" : "chevrons-up-down");
+      all.onclick = () => {
+        for (const k of heads) {
+          if (anyOpen) this.collapsed.add(k);
+          else this.collapsed.delete(k);
+        }
+        this.saveBoard();
+        this.rerender();
+      };
+    }
     for (const col of cols) {
       const id = col.id;
       const sorted = s.sortBy === id;
@@ -2377,6 +2392,7 @@ export class GanttView extends ItemView {
       // サブタスクなら親も添える（畳んだ親の中にあっても、どこを開けばいいか分かる）/ a subtask carries its parent, so a collapsed one can still be found
       const nextName = next ? (next.parent ? `${isolate(this.nameOf(next.parent))} › ` : "") + isolate(next.name) : "";
       if (next) g.createSpan({ cls: "ogantt-group-next", text: tr().nextUp(nextName, formatDate(anchorStart(next)!, this.plugin.settings.dateFormat)) });
+      g.setAttr("title", Array.from(g.querySelectorAll("span:not([aria-hidden])")).map((x) => x.textContent).filter(Boolean).join(" · ")); // 狭い表で切れた行を全部読めるように / the whole line on hover when a narrow table cuts it
       // 見出しを右クリック＝色・アイコンを変更（(なし) は除く）/ right-click a heading to change its colour or icon (not "(none)")
       if (!none) g.addEventListener("contextmenu", (e) => this.openStyleMenu(e, this.groupBy, row.group, this.headingKey(row)));
       el.onclick = () => {

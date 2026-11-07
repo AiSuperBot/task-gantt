@@ -204,6 +204,8 @@ interface Strings {
   next: string;
   expand: string;
   collapse: string;
+  collapseAll: string;
+  expandAll: string;
   folderOnly: string; // フォルダでグループ化したときだけ使える / only when grouped by folder
   optDisplay: string; // 表示メニュー / the Display menu
   optArrows: string; // 依存の矢印の表示 / show dependency arrows
@@ -743,6 +745,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "次へ",
     expand: "展開",
     collapse: "折りたたむ",
+    collapseAll: "見出しをすべてたたむ",
+    expandAll: "見出しをすべて開く",
     folderOnly: "フォルダでグループ化し、フラット表示がオフのときに使えます",
     optDisplay: "表示",
     optArrows: "依存の矢印",
@@ -1102,6 +1106,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "Next",
     expand: "Expand",
     collapse: "Collapse",
+    collapseAll: "Collapse all headings",
+    expandAll: "Expand all headings",
     folderOnly: "Available when grouped by folder, with Flat off",
     optDisplay: "Display",
     optArrows: "Dependency arrows",
@@ -1461,6 +1467,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "下一个",
     expand: "展开",
     collapse: "折叠",
+    collapseAll: "折叠所有标题",
+    expandAll: "展开所有标题",
     folderOnly: "按文件夹分组且关闭平铺时可用",
     optDisplay: "显示",
     optArrows: "依赖箭头",
@@ -1820,6 +1828,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "下一個",
     expand: "展開",
     collapse: "摺疊",
+    collapseAll: "摺疊所有標題",
+    expandAll: "展開所有標題",
     folderOnly: "依資料夾分組且關閉平面時可用",
     optDisplay: "顯示",
     optArrows: "依賴箭頭",
@@ -2179,6 +2189,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "다음",
     expand: "펼치기",
     collapse: "접기",
+    collapseAll: "모든 제목 접기",
+    expandAll: "모든 제목 펼치기",
     folderOnly: "폴더로 그룹화하고 평면을 끈 상태에서 사용할 수 있습니다",
     optDisplay: "표시",
     optArrows: "의존 관계 화살표",
@@ -2538,6 +2550,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "Suivant",
     expand: "Déplier",
     collapse: "Replier",
+    collapseAll: "Replier tous les titres",
+    expandAll: "Déplier tous les titres",
     folderOnly: "Disponible en groupant par dossier, avec « À plat » désactivé",
     optDisplay: "Affichage",
     optArrows: "Flèches de dépendance",
@@ -2897,6 +2911,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "Siguiente",
     expand: "Expandir",
     collapse: "Contraer",
+    collapseAll: "Contraer todos los encabezados",
+    expandAll: "Expandir todos los encabezados",
     folderOnly: "Disponible al agrupar por carpeta, con «Plano» desactivado",
     optDisplay: "Visualización",
     optArrows: "Flechas de dependencia",
@@ -3256,6 +3272,8 @@ const STRINGS: Record<Lang, () => Strings> = {
     next: "Вперёд",
     expand: "Развернуть",
     collapse: "Свернуть",
+    collapseAll: "Свернуть все заголовки",
+    expandAll: "Развернуть все заголовки",
     folderOnly: "Доступно при группировке по папкам, когда плоский список выключен",
     optDisplay: "Вид",
     optArrows: "Стрелки зависимостей",
