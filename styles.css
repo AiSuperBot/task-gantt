@@ -642,6 +642,10 @@ button.ogantt-legend-chip {
   /* columns/rows are set inline from JS */
 }
 
+.ogantt-collapse-all {
+  flex: none;
+  margin-left: 4px;
+}
 .ogantt-corner {
   position: sticky;
   top: 0;
