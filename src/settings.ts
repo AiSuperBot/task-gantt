@@ -85,6 +85,8 @@ export interface GanttSettings {
   // 詳細パネルでのカンバンのカード：工程ごとのチェックリスト（既定）か、Kanban と同じ横並びの列か
   // a kanban's cards in the detail panel: a checklist by lane (default) or side-by-side lanes like the Kanban plugin
   cardView: "list" | "board";
+  // 詳細パネルでの「実行」の位置：欄の後（既定）か、題名のすぐ下 / where Execution sits in the detail panel: after the fields (default) or right under the title
+  execPosition: "top" | "bottom";
   visibleColumns: string[]; // 表示する任意列（name は常時表示）/ optional columns shown (name is always shown)
   // 任意列の並び（列 id。無い列は定義順で後ろ）/ the optional columns' order (column ids; missing ones follow in definition order)
   columnOrder: string[];
@@ -203,6 +205,7 @@ export const DEFAULT_SETTINGS: GanttSettings = {
   autoScheduleFS: true,
   autoStatus: { enabled: false, started: "", finished: "", notStarted: [], fired: {} },
   detailWidth: 380,
+  execPosition: "bottom",
   cardView: "list", // 狭いパネルでも横スクロールなしで上から順に読める / reads top to bottom in a narrow panel, no sideways scrolling
   // 一目で要るもの：担当・ステータス・進捗・期限（開始はバーが示す）/ what a glance needs: assignee, status, progress, due (the bar shows the start)
   visibleColumns: ["assignee", "status", "end"], // 進捗はカンバンの目印に出るので既定では出さない（タイムラインを広く）/ Progress is off by default (a kanban's count is in its cue), leaving the timeline wider
@@ -523,6 +526,16 @@ export class GanttSettingTab extends PluginSettingTab {
     setting.addDropdown((d) =>
       d.addOptions({ list: tr().setCardViewList, board: tr().setCardViewBoard }).setValue(s.cardView).onChange((v) => {
         s.cardView = v === "board" ? "board" : "list";
+        this.save();
+      })
+    );
+  }
+
+  private ctlExecPosition(setting: Setting): void {
+    const s = this.plugin.settings;
+    setting.addDropdown((d) =>
+      d.addOptions({ bottom: tr().setExecPositionBottom, top: tr().setExecPositionTop }).setValue(s.execPosition).onChange((v) => {
+        s.execPosition = v === "top" ? "top" : "bottom";
         this.save();
       })
     );
@@ -989,6 +1002,7 @@ export class GanttSettingTab extends PluginSettingTab {
       { name: tr().setNonWorkingDaysName, desc: tr().setNonWorkingDaysDesc, render: (x) => this.ctlNonWorkingDays(x) },
       { name: tr().setAutoScheduleFSName, desc: tr().setAutoScheduleFSDesc, render: (x) => this.ctlAutoScheduleFS(x) },
       { name: tr().setCardViewName, desc: tr().setCardViewDesc, render: (x) => this.ctlCardView(x) },
+      { name: tr().setExecPositionName, render: (x) => this.ctlExecPosition(x) },
       {
         name: tr().setProgressLineColorName,
         desc: tr().setProgressLineColorDesc,
