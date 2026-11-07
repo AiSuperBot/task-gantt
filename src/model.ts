@@ -795,7 +795,7 @@ export async function addTag(app: App, path: string, tag: string): Promise<boole
   let changed = false;
   await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
     const cur = normalizeTags(fm.tags);
-    if (!cur.includes(clean)) {
+    if (!cur.some((x) => x.toLowerCase() === clean.toLowerCase())) {
       cur.push(clean);
       fm.tags = cur;
       changed = true;
@@ -810,7 +810,7 @@ export async function removeTag(app: App, path: string, tag: string): Promise<vo
   if (!(file instanceof TFile)) return;
   const clean = tag.replace(/^#/, "").trim();
   await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-    const cur = normalizeTags(fm.tags).filter((x) => x !== clean);
+    const cur = normalizeTags(fm.tags).filter((x) => x.toLowerCase() !== clean.toLowerCase());
     if (cur.length) fm.tags = cur;
     else delete fm.tags;
   });

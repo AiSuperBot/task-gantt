@@ -89,5 +89,5 @@ export function inkOn(fill: string): string {
 // resolve a tag's effective color: per-tag override > configured default > Obsidian's own tag color.
 // An entry kept in the list with an empty color means "follow the default".
 export function resolveTagColor(overrides: { name: string; color: string }[], defaultColor: string, tag: string): string {
-  return overrides.find((c) => c.name === tag)?.color || defaultColor || obsidianTagColor();
+  return overrides.find((c) => c.name.toLowerCase() === tag.toLowerCase())?.color || defaultColor || obsidianTagColor();
 }

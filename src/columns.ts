@@ -462,8 +462,8 @@ export function paintProgress(td: HTMLElement, t: Task): void {
   td.toggleClass("is-empty", p == null);
   if (p == null) return;
   const track = td.createDiv({ cls: "ogantt-meter" });
-  if (p != null) track.createDiv({ cls: "ogantt-meter-fill" }).style.width = `${p}%`;
-  td.createSpan({ cls: "ogantt-meter-num", text: p != null ? `${p}%` : "—" });
+  track.createDiv({ cls: "ogantt-meter-fill" }).style.width = `${p}%`;
+  td.createSpan({ cls: "ogantt-meter-num", text: `${p}%` });
 }
 
 // 進捗の保存。0%・空欄は未設定として削除（詳細パネルのスライダーと同じ規則）
