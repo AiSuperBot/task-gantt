@@ -68,19 +68,34 @@ export function renameStatusInFilters(s: GanttSettings, from: string, to: string
     for (const f of list) if (f.kind === "category" && f.field === "status") f.values = f.values.map((v) => (v === from ? to : v));
 }
 
-// ステータスの id を変えたら、そのステータスのノートも書き換える。書いた数を返す / after a status id change, rewrite the notes holding it; returns how many were written
-export async function renameStatusInNotes(app: App, key: string, from: string, to: string): Promise<number> {
-  let n = 0;
-  for (const file of app.vault.getMarkdownFiles()) {
-    if (app.metadataCache.getFileCache(file)?.frontmatter?.[key] !== from) continue;
-    await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-      if (fm[key] === from) {
-        fm[key] = to;
-        n++;
-      }
-    });
-  }
-  return n;
+// 直前の付け替えで書いたステータス（メタデータの更新を待たずに次の付け替えが見つけられるように）/ statuses the last renames wrote, so the next rename finds them before the metadata cache catches up
+const written = new Map<string, string>();
+let renaming: Promise<unknown> = Promise.resolve();
+
+// ステータスの id を変えたら、既定のフォルダ配下のそのステータスのノートも書き換える。書いた数を返す。読むだけの部屋のノートは書かない。
+// 続けて変えても 1 つずつ順に（途中のノートを古い id に取り残さない）。Ctrl+Z では戻らない
+// after a status id change, rewrite the notes holding it under the default folder; returns how many were written. Notes in a read-only
+// room aren't written. Back-to-back renames run one after another (no note is left on a dead id). Not undoable with Ctrl+Z
+export function renameStatusInNotes(app: App, root: string, key: string, from: string, to: string): Promise<number> {
+  const run = renaming.then(async () => {
+    const rooms = (app as unknown as { plugins?: { plugins?: Record<string, { canWrite?: (path: string) => boolean | null }> } }).plugins?.plugins?.["vault-rooms"];
+    let n = 0;
+    for (const file of app.vault.getMarkdownFiles()) {
+      if (root && !file.path.startsWith(root + "/")) continue;
+      if ((written.get(file.path) ?? app.metadataCache.getFileCache(file)?.frontmatter?.[key]) !== from) continue;
+      if (rooms?.canWrite?.(file.path) === false) continue;
+      await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+        if (fm[key] === from) {
+          fm[key] = to;
+          written.set(file.path, to);
+          n++;
+        }
+      });
+    }
+    return n;
+  });
+  renaming = run.catch(() => undefined);
+  return run;
 }
 
 export interface GanttSettings {
@@ -609,7 +624,7 @@ export class GanttSettingTab extends PluginSettingTab {
           renameStatusInFilters(this.plugin.settings, was, id);
           this.save();
           // そのステータスのノートもついて行く（残すと終わった仕事が「未完了」に見える）/ the notes holding it follow (left behind, finished work would read as open)
-          const n = await renameStatusInNotes(this.app, this.plugin.settings.keys.status, was, id);
+          const n = await renameStatusInNotes(this.app, this.plugin.settings.rootFolder ?? "", this.plugin.settings.keys.status, was, id);
           if (n) new Notice(tr().statusIdRenamed(n));
         })());
       })
@@ -829,8 +844,8 @@ export class GanttSettingTab extends PluginSettingTab {
   // pick the tag to colour from the vault's own list; typing it by hand invites a silent typo
   private pickTagToColor(): void {
     const s = this.plugin.settings;
-    const taken = new Set(s.tagColors.map((c) => c.name));
-    const choices = collectAllTags(this.plugin.app).filter((tag) => !taken.has(tag));
+    const taken = new Set(s.tagColors.map((c) => c.name.toLowerCase()));
+    const choices = collectAllTags(this.plugin.app).filter((tag) => !taken.has(tag.toLowerCase()));
     if (choices.length === 0) {
       new Notice(tr().setNoTagsToColor);
       return;

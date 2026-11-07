@@ -380,6 +380,8 @@ export function renameAutoStatusId(cfg: AutoStatusConfig, from: string, to: stri
   if (cfg.started === from) cfg.started = to ?? "";
   if (cfg.finished === from) cfg.finished = to ?? "";
   cfg.notStarted = cfg.notStarted.flatMap((id) => (id !== from ? [id] : to ? [to] : []));
+  // 記録も（古い id のままだと「手で変えた」と読まれ、そのノートだけ自動で動かなくなる）/ the records too (left on the old id they read as hand edits, and those notes stop moving)
+  for (const r of Object.values(cfg.fired ?? {})) if ("status" in r && r.status === from) r.status = to ?? "";
 }
 
 // 当たった記録のうち、ノートが残っている分だけ（日付が変わった記録は効かないが、日付を戻したときのために残す）

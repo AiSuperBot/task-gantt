@@ -535,6 +535,7 @@ function editStatus(ctx: BoardContext, cell: HTMLElement, t: Task): void {
   const finish = (save: boolean): void => {
     if (settled) return;
     settled = true;
+    sel.dataset.done = "1"; // 終わった編集はボードの読み直しを止めない / a finished edit doesn't hold the board's reload
     if (!save || sel.value === (t.status ?? "")) {
       paintStatus(ctx, cell, t);
       return;

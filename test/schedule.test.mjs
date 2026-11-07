@@ -214,6 +214,9 @@ check("休日の帯: 休日なしは none", offDayGradient(0, { off: [] }, 10, "
   renameAutoStatusId(cfgR, "todo", "backlog");
   renameAutoStatusId(cfgR, "done", null);
   check("自動: ステータスの id の変更・削除が設定についていく", cfgR.notStarted.join() === "backlog,review" && cfgR.finished === "");
+  const cfgF = { started: "doing", finished: "done", notStarted: [], fired: { "a.md": { dates: "x|y", status: "doing" }, "b.md": { pin: {} } } };
+  renameAutoStatusId(cfgF, "doing", "active");
+  check("自動: id の変更は記録にもついていく", cfgF.fired["a.md"].status === "active" && "pin" in cfgF.fired["b.md"]);
   check("自動: 開始後は未着手に数えない", autoStatusTargets(ST, { started: "in-progress", finished: "", notStarted: ["in-progress", "todo"] }).notStarted.join() === "todo");
 }
 

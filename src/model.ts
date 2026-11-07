@@ -627,10 +627,11 @@ export async function removeLinkTo(app: App, path: string, key: string, target: 
 export async function createTask(app: App, settings: GanttSettings, folderPath: string, baseName: string, kind: TaskKind = "note"): Promise<string[]> {
   const dir = normalizePath(folderPath || "/");
   const prefix = dir === "/" ? "" : dir + "/";
-  const taken = (n: string) => !!app.vault.getAbstractFileByPath(`${prefix}${n}.md`) || (kind === "canvas" && !!app.vault.getAbstractFileByPath(`${prefix}${n}.canvas`));
+  // ファイルシステムに聞く（Windows は大文字小文字を区別しない）/ ask the file system (Windows ignores case)
+  const taken = async (n: string) => (await app.vault.adapter.exists(`${prefix}${n}.md`)) || (kind === "canvas" && (await app.vault.adapter.exists(`${prefix}${n}.canvas`)));
   let name = baseName;
   let i = 1;
-  while (taken(name)) name = `${baseName} ${++i}`;
+  while (await taken(name)) name = `${baseName} ${++i}`;
   const md = `${prefix}${name}.md`;
   // 開始/終了は呼び出し側（view）が今日で埋める / caller fills start/end
   if (kind === "kanban") {
@@ -750,12 +751,15 @@ export async function renameTask(app: App, path: string, newName: string): Promi
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) return null;
   // ファイル名に使えない文字と、リンクを壊す #^[]| を除く / drop characters a file name can't hold, and #^[]| which break links
-  const safe = newName.replace(/[\\/:*?"<>|#^[\]]/g, "").trim();
-  if (!safe) return null;
+  // 制御文字と見えない向きの印も（貼り付けで混ざると、手で打ったリンクが解決しない）。Windows の予約名は使わない
+  // control characters and invisible direction marks too (pasted in, they keep typed links from resolving); Windows' reserved names are refused
+  const safe = newName.replace(/[\\/:*?"<>|#^[\]\u0000-\u001f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "").trim();
+  if (!safe || /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(safe)) return null;
   const dir = file.parent && file.parent.path !== "/" ? file.parent.path + "/" : "";
   const newPath = `${dir}${safe}.md`;
   if (newPath === path) return path;
-  if (app.vault.getAbstractFileByPath(newPath)) return "taken";
+  // 大文字小文字だけの改名は通す。ほかはファイルシステムに聞く（Windows は区別しない）/ a case-only rename goes through; otherwise ask the file system (Windows ignores case)
+  if (newPath.toLowerCase() !== path.toLowerCase() && (await app.vault.adapter.exists(newPath))) return "taken";
   await app.fileManager.renameFile(file, newPath);
   return newPath;
 }
@@ -860,7 +864,7 @@ export async function reparentTask(
     if (normalizePath(f.parent?.path ?? "/") === dir) continue; // 既に dest / already there
     let name = f.basename;
     let i = 1;
-    while (app.vault.getAbstractFileByPath(`${prefix}${name}.md`)) name = `${f.basename} ${++i}`;
+    while (await app.vault.adapter.exists(`${prefix}${name}.md`)) name = `${f.basename} ${++i}`; // Windows は大文字小文字を区別しない / Windows ignores case
     const np = `${prefix}${name}.md`;
     await app.fileManager.renameFile(f, np); // リンクは Obsidian が更新 / Obsidian updates links
     moves.push({ from: p, to: np });
