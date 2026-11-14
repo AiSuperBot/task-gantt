@@ -921,6 +921,7 @@ export class GanttView extends ItemView {
     const cells = ids.map((id) => sorted.filter((t) => (t.status || null) === id));
     const started = autoStatusTargets(statuses, autoStatus).started;
     const today = this.today();
+    // shortcut: every card is drawn at once (the Timeline virtualizes its rows); fine for hundreds of tasks, virtualize if boards reach thousands
     const board = main.createDiv({ cls: "ogantt-kb" });
     ids.forEach((id, i) => {
       const s = kept.find((x) => x.id === id);
