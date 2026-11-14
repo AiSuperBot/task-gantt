@@ -156,10 +156,17 @@ export interface Row {
   hasChildren?: boolean; // 親タスク行（子サブタスクを持つ）/ a parent task row (has subtasks)
 }
 
-// 専用ビューに渡す状態 / state passed to the dedicated view
+// 専用ビューに渡す状態（タブごと）/ state passed to the dedicated view (one per tab)
 export interface GanttViewState {
   folder: string; // 表示対象フォルダのパス / scoped folder path ("" = vault root)
+  layout?: Layout; // 見せ方（無ければタイムライン）/ how the tab shows the board (timeline when absent)
+  filters?: Filter[]; // このタブの絞り込み（無ければ前の版の全体の絞り込み）/ this tab's filters (absent: the global ones of earlier versions)
+  filterMatch?: FilterMatch;
 }
+
+// タイムライン（表＋ガント）・ボード（ステータスの列のカード）・チーム（人ごとのカード）
+// the timeline (table + Gantt), the board (cards in one column per status) or the team (one card per person)
+export type Layout = "timeline" | "board" | "team";
 
 export const VIEW_TYPE_GANTT = "task-gantt-view";
 // Fit = ペイン幅に収まるよう自動スケール / Fit = auto-scale to the pane width

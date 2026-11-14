@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, TFolder, TFile, Menu, TAbstractFile } from "obsidian";
+import { Plugin, WorkspaceLeaf, TFolder, TFile, Menu, TAbstractFile, normalizePath } from "obsidian";
 import { GanttSettings, DEFAULT_SETTINGS, GanttSettingTab } from "./settings";
 import { GanttView } from "./view";
 import { VIEW_TYPE_GANTT, GanttViewState } from "./types";
@@ -192,18 +192,20 @@ export default class GanttPlugin extends Plugin {
     return this.settings.rootFolder ?? "";
   }
 
-  // 指定フォルダにスコープして専用ビューを開く / open the view scoped to a folder
+  // フォルダのボードを開く：そのフォルダを見せているタブがあればそこへ、無ければ新しいタブで（ほかのボードは開いたまま）
+  // open a folder's board: the tab already showing that folder comes forward, else a new tab opens (other boards stay open)
   async activateView(folderPath: string): Promise<void> {
-    const state: GanttViewState = { folder: folderPath };
-    // 既存ビューがあれば再利用してスコープだけ差し替え / reuse an existing view, just re-scope it
-    const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)[0];
-    const leaf = existing ?? this.app.workspace.getLeaf("tab");
-    await leaf.setViewState({
-      type: VIEW_TYPE_GANTT,
-      active: true,
-      state: state as unknown as Record<string, unknown>,
-    });
+    const folder = normalizePath(folderPath) === "/" ? "" : normalizePath(folderPath);
+    const open = this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT).find((l) => l.getViewState().state?.folder === folder);
+    const leaf = open ?? this.app.workspace.getLeaf("tab");
+    if (!open) await leaf.setViewState({ type: VIEW_TYPE_GANTT, active: true, state: { folder, filters: [] } satisfies GanttViewState });
     await this.app.workspace.revealLeaf(leaf);
+    this.app.workspace.setActiveLeaf(leaf, { focus: true });
+  }
+
+  // ステータスの id を変えたら、開いているタブの絞り込みも付け替える / after a status id change, the open tabs' filters follow it
+  renameStatusInTabs(from: string, to: string): void {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)) if (leaf.view instanceof GanttView) leaf.view.renameStatusFilter(from, to);
   }
 
   async loadSettings(): Promise<void> {

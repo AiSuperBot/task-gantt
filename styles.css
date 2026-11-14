@@ -2235,3 +2235,259 @@ button.ogantt-dep-add {
 .ogantt-td-group .ogantt-subtask-sum {
   flex: none;
 }
+
+/* ===== 見せ方の切り替えと、ボード・チーム（カード）/ the layout switch, and the board and team layouts (cards) ===== */
+.ogantt-layout button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* カードの見せ方では、タイムライン専用の操作（今日・縮尺・グループ化・色分け・表示・凡例）を隠す
+   in the card layouts, the Timeline-only controls (Today, zoom, group, colour, Display, legend) are hidden */
+.ogantt-board.is-cards .ogantt-today-btn,
+.ogantt-board.is-cards .ogantt-seg:not(.ogantt-layout),
+.ogantt-board.is-cards .ogantt-options,
+.ogantt-board.is-cards .ogantt-legend {
+  display: none;
+}
+.ogantt-cards {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px 16px;
+}
+/* 右から左の表示言語では、列と人のカードも右から並ぶ（タイムラインは左から右のまま）
+   under a right-to-left interface the columns and person cards run from the right too (the timeline stays left to right) */
+.mod-rtl .ogantt-cards {
+  direction: rtl;
+}
+/* 今のスプリントの 1 行（押すとそのノート）/ the current sprint's line (a click opens its note) */
+button.ogantt-sprint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  margin-bottom: 10px;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+button.ogantt-sprint:hover {
+  background: var(--background-modifier-hover);
+}
+.ogantt-sprint-name {
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+/* ボード：ステータスごとの列 / the board: one column per status */
+.ogantt-kb {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ogantt-kb-col {
+  position: relative;
+  flex: 0 0 264px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 120px;
+  padding: 6px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+/* 設定に無いステータスの列（ほかの端末で足したもの）。落とし先にはならない / a column for a status these settings lack (added on another computer); it takes no drops */
+.ogantt-kb-col.is-unknown {
+  background: none;
+  border: 1px dashed var(--background-modifier-border);
+}
+.ogantt-kb-col.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--interactive-accent);
+}
+.ogantt-kb-col.is-drop-target::after {
+  content: attr(data-drop-label);
+  position: absolute;
+  bottom: 6px;
+  inset-inline-end: 6px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: var(--font-smallest);
+}
+.ogantt-kb-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 4px;
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+.ogantt-kb-count {
+  margin-inline-start: auto;
+  font-weight: 400;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+button.ogantt-kb-more {
+  align-self: flex-start;
+  height: auto;
+  padding: 2px 6px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+button.ogantt-kb-more:hover {
+  color: var(--text-normal);
+  text-decoration: underline;
+}
+/* カード（ボードとチームで同じ）/ a card (the same on the board and the team view) */
+.ogantt-kcard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  cursor: pointer;
+}
+.ogantt-kcard:hover {
+  border-color: var(--background-modifier-border-hover);
+}
+.ogantt-kcard:focus-visible,
+.ogantt-kcard.is-selected {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -1px;
+}
+.ogantt-kcard.is-done .ogantt-kcard-parent:hover {
+  color: var(--text-normal);
+  text-decoration: underline;
+}
+.ogantt-kcard-title {
+  color: var(--text-muted);
+}
+.ogantt-kcard.is-disabled {
+  opacity: 0.55;
+}
+.ogantt-kcard.is-dragging {
+  opacity: 0.4;
+}
+/* プロジェクト › 親（親は押すと開く）/ project › parent (the parent opens on a click) */
+.ogantt-kcard-crumb {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+/* 名前は 2 行まで。揃えは画面の向き、文字の向きは名前ごと / the name takes two lines at most, aligned with the interface, each in its own direction */
+.ogantt-kcard-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--font-ui-small);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.ogantt-kcard-title .ogantt-name-icon {
+  margin-inline-end: 4px;
+  vertical-align: -2px;
+}
+.ogantt-kcard-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  min-height: 0;
+  font-size: var(--font-smallest);
+  color: var(--text-muted);
+}
+.ogantt-kcard-foot:empty {
+  display: none;
+}
+/* 行の中の札とカンバンの目印をカードではそのまま並べる（行の余白と縮み方は使わない）/ the row's tag and board cue sit plainly in a card (without the row's margins and shrinking) */
+.ogantt-kcard-foot .ogantt-exc,
+.ogantt-kcard-foot .ogantt-board-cue,
+.ogantt-kcard-foot .ogantt-subtask-sum {
+  margin: 0;
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+.ogantt-kcard-foot .ogantt-board-cue {
+  min-height: 20px;
+  padding: 0 4px;
+}
+.ogantt-kcard-linked {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.ogantt-kcard-linked .svg-icon {
+  width: 12px;
+  height: 12px;
+  color: var(--interactive-accent);
+}
+.ogantt-kcard-people {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: auto;
+}
+.ogantt-kcard-people .ogantt-avatar + .ogantt-avatar {
+  margin-inline-start: -5px;
+}
+.ogantt-kcard-more {
+  margin-inline-start: 3px;
+}
+/* チーム：人ごとのカードを並べる / the team: person cards side by side */
+.ogantt-team {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+.ogantt-pcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.ogantt-pcard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ogantt-pcard-head .ogantt-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+.ogantt-pcard-icon .svg-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text-faint);
+}
+.ogantt-pcard-name {
+  font-weight: var(--font-semibold);
+  unicode-bidi: plaintext;
+}
+.ogantt-pcard-label {
+  margin-top: 4px;
+  font-size: var(--font-smallest);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.ogantt-pcard-idle {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
