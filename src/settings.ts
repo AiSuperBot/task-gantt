@@ -622,6 +622,7 @@ export class GanttSettingTab extends PluginSettingTab {
           st.id = id;
           renameAutoStatusId(this.plugin.settings.autoStatus, was, id);
           renameStatusInFilters(this.plugin.settings, was, id);
+          this.plugin.renameStatusInTabs(was, id);
           this.save();
           // そのステータスのノートもついて行く（残すと終わった仕事が「未完了」に見える）/ the notes holding it follow (left behind, finished work would read as open)
           const n = await renameStatusInNotes(this.app, this.plugin.settings.rootFolder ?? "", this.plugin.settings.keys.status, was, id);
