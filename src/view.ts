@@ -892,7 +892,9 @@ export class GanttView extends ItemView {
     this.projects = new Set(cards.map((t) => this.projectOf(t))).size > 1;
     this.gridHost.empty();
     this.boardMain = null;
-    if (!cards.length && this.layout === "board") return this.renderEmpty(this.tasks.some((t) => !isSprint(t)));
+    // 何も無いときは理由と次の一手を（チームは、絞り込みが無ければ仕事の無い人のカードを出す）/ nothing to show: say why and what next (the team, unfiltered, still shows idle people)
+    const idle = this.layout === "team" && !this.filters.length && this.tasks.some((t) => t.assignees.length && !isSprint(t));
+    if (!cards.length && !idle) return this.renderEmpty(this.tasks.some((t) => !isSprint(t)));
     const main = this.gridHost.createDiv({ cls: "ogantt-cards" });
     this.boardMain = main;
     this.sprintLine(main);
