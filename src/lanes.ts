@@ -39,13 +39,14 @@ export function isSprint(t: Task): boolean {
   return t.tags.some((x) => /^sprint(\/|$)/i.test(x));
 }
 
-// ボードでのカードの時期：終わった仕事は期限が days 日より前（か期限なし）なら older、残っている仕事は始まりが days 日より先なら later、ほかは now。
-// どの端末でも同じになるよう、ノートの日付だけで決める（ファイルの更新日時は、同期で届いた時刻になるので使わない）
-// when a card sits on the board: finished work due more than `days` ago (or undated) is "older", open work starting more than `days` ahead is
-// "later", the rest "now". Only the note's dates decide, so every computer agrees (a file's modified time is when sync delivered it)
+// ボードでのカードの時期：終わった仕事は終えた日（記録が無ければ期限）が days 日より前（か日付なし）なら older、残っている仕事は始まりが
+// days 日より先なら later、ほかは now。どの端末でも同じになるよう、ノートの日付だけで決める（ファイルの更新日時は同期で届いた時刻なので使わない）
+// when a card sits on the board: finished work done (else due, when no day was recorded) more than `days` ago, or undated, is "older"; open
+// work starting more than `days` ahead is "later"; the rest "now". Only the note's dates decide, so every computer agrees (a file's
+// modified time is when sync delivered it)
 export function boardWhen(t: Task, finished: boolean, today: number, days: number): "older" | "later" | "now" {
   if (finished) {
-    const end = anchorEnd(t);
+    const end = t.completed ?? anchorEnd(t);
     return !end || dayIndex(end) < today - days ? "older" : "now";
   }
   const start = anchorStart(t);

@@ -2429,6 +2429,17 @@ button.ogantt-kb-more:hover {
   align-items: center;
   gap: 2px;
 }
+/* 前回のデイリースクラムから終わったもの（終えた曜日か、チェックしたカードの数）/ done since the last daily scrum (the weekday it was done, or how many cards were checked) */
+.ogantt-kcard-fresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-normal);
+}
+.ogantt-kcard-fresh .ogantt-exc-icon,
+.ogantt-pcard-done .ogantt-exc-icon {
+  color: var(--color-green);
+}
 .ogantt-kcard-linked .svg-icon {
   width: 12px;
   height: 12px;
@@ -2486,6 +2497,52 @@ button.ogantt-kb-more:hover {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
+}
+/* 「どの人があなたですか」/ "Which one is you?" */
+.ogantt-whoami {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  font-size: var(--font-ui-small);
+}
+button.ogantt-whoami-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ogantt-whoami .clickable-icon {
+  margin-inline-start: auto;
+}
+.ogantt-pcard-done {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+}
+.ogantt-pcard-done:hover,
+.ogantt-pcard-done:focus-visible {
+  background: var(--background-modifier-hover);
+}
+.ogantt-pcard-done .ogantt-exc-icon {
+  align-self: center;
+}
+.ogantt-pcard-sep {
+  color: var(--text-faint);
+}
+.ogantt-pcard-steps {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
 }
 .ogantt-pcard-idle {
   font-size: var(--font-ui-smaller);

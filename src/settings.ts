@@ -192,6 +192,7 @@ export interface GanttSettings {
     canvas: string; // キャンバス型タスクの .canvas へのリンク / a canvas task's link to its .canvas
     priority: string; // 優先度（urgent で割り込みの急ぎ仕事）/ priority (urgent marks interrupting work)
     interrupts: string; // 急ぎ仕事が割り込んだタスクへのリンク / links from urgent work to the tasks it interrupted
+    completed: string; // 完了のグループに入った日（このプラグインがステータスと一緒に書く）/ the day the task entered the Completed group (written with the status)
   };
 }
 
@@ -299,6 +300,7 @@ export const DEFAULT_SETTINGS: GanttSettings = {
     canvas: "canvas",
     priority: "priority",
     interrupts: "interrupts",
+    completed: "completed",
   },
 };
 

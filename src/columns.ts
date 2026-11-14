@@ -8,6 +8,7 @@ import {
   anchorStart,
   anchorEnd,
   writeField,
+  writeStatus,
   validCustomFields,
   customValueText,
   parseCustomInput,
@@ -542,7 +543,7 @@ function editStatus(ctx: BoardContext, cell: HTMLElement, t: Task): void {
     }
     void (async () => {
       await ctx.mutate(tr().undoEdit(t.name), [t.path], () =>
-        writeField(ctx.app, t.path, ctx.settings.keys.status, sel.value || undefined)
+        writeStatus(ctx.app, t.path, ctx.settings, sel.value || undefined, dayToStr(todayIndex(undefined, ctx.settings.tz)))
       );
       await ctx.refresh();
     })();

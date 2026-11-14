@@ -46,6 +46,7 @@ export interface Task {
   interrupts?: string[]; // 急ぎ仕事が割り込んだタスク（解決済みパス・「急ぎにする」で書く）/ tasks this urgent work interrupted (resolved paths; written by "Mark as urgent")
   priority?: string; // 優先度（urgent / expedite / דחוף なら割り込みの急ぎ仕事）/ priority (urgent / expedite / דחוף = urgent interrupting work)
   status?: string; // StatusDef.id を参照
+  completed?: string; // 完了のグループに入った日 YYYY-MM-DD（無ければ不明）/ the day it entered the Completed group, YYYY-MM-DD (absent: unknown)
   // 担当者（多値・フロントマターは単一値でもリストでも可）/ assignees (multi-valued; frontmatter may hold one value or a list)
   assignees: string[];
   kind: TaskKind; // ノート / カンバン / キャンバス / note, kanban or canvas

@@ -29,6 +29,9 @@ import {
   kanbanStep,
   cardLabel,
   setCardDone,
+  cardDoneOn,
+  applyStatus,
+  writeStatus,
   withoutName,
   removeLinkTo,
   KanbanLane,
@@ -37,7 +40,7 @@ import {
   anchorEnd,
   statusGroupOf,
 } from "./model";
-import { autoStatusChanges, autoStatusTargets, renameAutoStatusId, cascadeDates, depViolated, endForDuration, isWorkday, keepDurationOnStartChange, offDayGradient, parseDuration, scheduleOptions, successorClosure, taskDuration, wouldLoop } from "./schedule";
+import { autoStatusChanges, autoStatusTargets, renameAutoStatusId, cascadeDates, depViolated, endForDuration, isWorkday, keepDurationOnStartChange, offDayGradient, parseDuration, prevWorkday, scheduleOptions, successorClosure, taskDuration, wouldLoop } from "./schedule";
 import {
   DateRange,
   computeRange,
@@ -111,6 +114,10 @@ const EXC_TEXT: Record<Exception, () => string> = { urgent: () => tr().excUrgent
 // isolate a name or card text from what surrounds it (FSI … PDI), so Hebrew and other right-to-left text doesn't reorder the sentence
 const isolate = (text: string): string => `\u2068${text}\u2069`;
 type CardStep = { card?: string; stage?: string; now?: boolean };
+// チェックして日付（✅）のあるカード / a checked card with its done date (✅)
+type CardDone = { card: string; on: string };
+// 「誰ですか」を閉じたことを覚える（この端末だけ）/ remembers that "Which one is you?" was closed (this device only)
+const ASKED_KEY = "task-gantt-me-asked";
 
 // 名前の頭文字（アバター用・最大 2 文字）/ initials of a name for an avatar (up to two letters)
 function initials(name: string): string {
@@ -148,6 +155,9 @@ interface Handles {
 
 // 表示言語の日付書式（UTC）。moment のロケール名には Intl が知らないもの（"x-pseudo" など）があり、そのときは既定の言語で
 // a date format in the UI language (UTC); some moment locale names ("x-pseudo", …) are unknown to Intl, which then gets the default language
+// 日付の曜日（表示言語で「金」「Fri」）/ a date's weekday in the UI language ("Fri")
+const weekdayOf = (iso: string): string => dateFormat({ weekday: "short" }).format(new Date(`${iso}T00:00:00Z`));
+
 function dateFormat(o: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   try {
     return new Intl.DateTimeFormat(moment.locale(), { ...o, timeZone: "UTC" });
@@ -270,7 +280,7 @@ export class GanttView extends ItemView {
   private cardFocus: string | null = null; // チェックしたカードの行（描き直した後もそこへフォーカスを戻す）/ the line of the card just ticked (focus goes back to it after the redraw)
   private cardsOpen = false; // パネルの「すべてのカード」を開いているか（チェックで描き直しても閉じない）/ whether the panel's card list is open (a tick's redraw keeps it open)
   // カンバンの今か次のカードと列。ファイルの更新時刻ごとに覚え、変わったボードだけ読み直す / each kanban's current or next card and lane, kept per file mtime so only changed boards are read again
-  private cardSteps = new Map<string, { mtime: number; meta: CachedMetadata | null; started?: string; step: CardStep }>();
+  private cardSteps = new Map<string, { mtime: number; meta: CachedMetadata | null; started?: string; step: CardStep; done: CardDone[] }>();
   private exporting = false; // PNG の書き出し中 / a PNG export is running
   private historyRunning = false; // 取り消し・やり直しの最中 / an undo or redo is running
   private dragging: "bar" | "link" | "column" | null = null; // ドラッグ中のもの（描き直しを待たせる）/ what is being dragged (redraws wait)
@@ -647,12 +657,12 @@ export class GanttView extends ItemView {
   private async swapStatus(path: string, now: string | undefined, next: string | undefined): Promise<boolean> {
     const f = this.app.vault.getAbstractFileByPath(path);
     if (!(f instanceof TFile)) return false;
-    const key = this.plugin.settings.keys.status;
+    const { keys, statuses } = this.plugin.settings;
+    const today = dayToStr(this.today());
     let done = false;
     await this.app.fileManager.processFrontMatter(f, (fm: Record<string, unknown>) => {
-      if ((fm[key] == null ? undefined : String(fm[key])) !== now) return;
-      if (next === undefined) delete fm[key];
-      else fm[key] = next;
+      if ((fm[keys.status] == null ? undefined : String(fm[keys.status])) !== now) return;
+      applyStatus(fm, keys, statuses, next, today);
       done = true;
     });
     return done;
@@ -964,7 +974,30 @@ export class GanttView extends ItemView {
     for (const p of new Set(pool.flatMap((t) => t.assignees.map(linkLabel)))) if (!lanes.some((l) => l.key === p)) lanes.push({ key: p, cells: [[]] });
     const rank = (k: string) => (k === me ? 0 : k === none ? 2 : 1);
     lanes.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
+    // この端末の名前がまだなら、ここで選んでもらう（自分のカードが先頭に、自分の仕事とつながった印も付く）。閉じたらもう聞かない
+    // without this device's name yet, ask for it here (your card then comes first and work linked to yours is marked); closed, it isn't asked again
+    if (!me && !this.app.loadLocalStorage(ASKED_KEY)) {
+      const ask = main.createDiv({ cls: "ogantt-whoami", attr: { role: "group", "aria-label": tr().whoAreYou } });
+      ask.createSpan({ text: tr().whoAreYou });
+      for (const { key } of lanes.filter((l) => l.key !== none)) {
+        const pick = ask.createEl("button", { cls: "ogantt-whoami-person" });
+        this.avatar(pick, this.assigneeList().find((a) => linkLabel(a) === key) ?? key);
+        pick.createSpan({ text: key, attr: { dir: "auto" } });
+        pick.onclick = () => {
+          this.app.saveLocalStorage(ME_KEY, key);
+          this.plugin.settingTab?.refreshIfOpen();
+          for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_GANTT)) if (leaf.view instanceof GanttView) leaf.view.rerender();
+        };
+      }
+      const close = ask.createEl("button", { cls: "clickable-icon", attr: { "aria-label": tr().close } });
+      setIcon(close, "x");
+      close.onclick = () => {
+        this.app.saveLocalStorage(ASKED_KEY, "1");
+        this.rerender();
+      };
+    }
     const grid = main.createDiv({ cls: "ogantt-team" });
+    const since = weekdayOf(dayToStr(this.since()));
     for (const { key, cells } of lanes) {
       const live = cells[0].filter((t) => !this.disabled.has(t.path) && isOpen(t, statuses));
       if (key === none && !live.length) continue;
@@ -977,8 +1010,9 @@ export class GanttView extends ItemView {
       const due = (t: Task) => anchorEnd(t) ?? "9999";
       const next = live.filter((t) => !now.includes(t)).sort((a, b) => due(a).localeCompare(due(b))).slice(0, 2);
       const all = this.teamOpen.has(key);
-      card.createDiv({ cls: "ogantt-pcard-label", text: tr().teamNow });
-      if (!now.length) card.createDiv({ cls: "ogantt-pcard-idle", text: tr().teamIdle });
+      // 担当なしのカードには「進行中」は無い（誰の今の仕事でもない）/ the "(none)" card has no Now: unassigned work is nobody's current work
+      if (now.length || key !== none) card.createDiv({ cls: "ogantt-pcard-label", text: tr().teamNow });
+      if (!now.length && key !== none) card.createDiv({ cls: "ogantt-pcard-idle", text: tr().teamIdle });
       for (const t of all ? now : now.slice(0, 3)) this.renderCard(card, t, key);
       if (now.length > 3) {
         card.createEl("button", { cls: "ogantt-kb-more", text: all ? tr().collapse : tr().teamMore(now.length - 3) }).onclick = () => {
@@ -987,9 +1021,28 @@ export class GanttView extends ItemView {
           this.rerender();
         };
       }
-      if (!next.length) continue;
-      card.createDiv({ cls: "ogantt-pcard-label", text: tr().teamNext });
-      for (const t of next) this.renderCard(card, t, key);
+      if (next.length) {
+        card.createDiv({ cls: "ogantt-pcard-label", text: tr().teamNext });
+        for (const t of next) this.renderCard(card, t, key);
+      }
+      // 前回のデイリースクラムから終わったもの：タスクとチェックしたカード（カードはそのタスクの担当の人に）
+      // done since the last daily scrum: tasks and checked cards (a card counts for the people on its task)
+      const done = cells[0].map((t) => ({ t, d: this.doneSince(t) })).filter(({ d }) => d.on || d.cards.length);
+      if (!done.length) continue;
+      card.createDiv({ cls: "ogantt-pcard-label", text: tr().doneSince(since) });
+      for (const { t, d } of done) {
+        const row = card.createDiv({ cls: "ogantt-pcard-done", attr: { tabindex: "0", role: "button", title: this.doneTip(t, d) } });
+        setIcon(row.createSpan({ cls: "ogantt-exc-icon", attr: { "aria-hidden": "true" } }), "check-check");
+        row.createSpan({ text: t.name, attr: { dir: "auto" } });
+        if (!d.on) row.createSpan({ cls: "ogantt-pcard-sep", text: "›", attr: { "aria-hidden": "true" } });
+        if (!d.on) row.createSpan({ cls: "ogantt-pcard-steps", text: d.cards.map((c) => withoutName(c.card, t.name)).join(", "), attr: { dir: "auto" } });
+        row.onclick = () => void this.openDetail(t.path);
+        row.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          void this.openDetail(t.path);
+        });
+      }
     }
   }
 
@@ -1032,6 +1085,15 @@ export class GanttView extends ItemView {
     }
     const mine = this.linked.get(t.path);
     if (mine) setIcon(foot.createSpan({ cls: "ogantt-kcard-linked", attr: { title: tr().linkedToYou(mine.join(", ")), "aria-label": tr().linkedToYou(mine.join(", ")) } }), "link");
+    // 前回のデイリースクラムから終わったもの（タスク自身か、そのカード）。誰も言わなくてもボードが言う
+    // what got done since the last daily scrum (the task itself or its cards): the board says it, so nobody has to
+    const fresh = this.doneSince(t);
+    if (fresh.on || fresh.cards.length) {
+      const tip = this.doneTip(t, fresh);
+      const pill = foot.createSpan({ cls: "ogantt-kcard-fresh", attr: { title: tip, "aria-label": tip } });
+      setIcon(pill.createSpan({ cls: "ogantt-exc-icon", attr: { "aria-hidden": "true" } }), "check-check");
+      pill.createSpan({ text: fresh.on ? weekdayOf(fresh.on) : tr().stepsDone(fresh.cards.length) });
+    }
     const people = t.assignees.filter((a) => linkLabel(a) !== person);
     if (people.length) {
       const names = people.map(linkLabel).join(", ");
@@ -1081,7 +1143,7 @@ export class GanttView extends ItemView {
       const t = path ? this.tasks.find((x) => x.path === path) : undefined;
       if (!t || t.status === s.id) return;
       void (async () => {
-        if (!(await this.mutate(tr().undoEdit(t.name), [t.path], () => writeField(this.app, t.path, this.plugin.settings.keys.status, s.id)))) return;
+        if (!(await this.mutate(tr().undoEdit(t.name), [t.path], () => writeStatus(this.app, t.path, this.plugin.settings, s.id, dayToStr(this.today()))))) return;
         await this.refresh();
         if (s.group === "deferred") await this.openDetail(t.path);
       })();
@@ -1121,6 +1183,30 @@ export class GanttView extends ItemView {
       if (names.length) out.set(t.path, names);
     }
     return out;
+  }
+
+  // 前回のデイリースクラムの日：今日より前の最後の稼働日（月曜なら金曜）/ the last daily scrum's day: the last workday before today (Friday on a Monday)
+  private since(): number {
+    return prevWorkday(this.today() - 1, scheduleOptions(this.plugin.settings).cal);
+  }
+
+  // そのタスクでその日から終わったもの：タスク自身（完了のグループに入った日）とチェックしたカード。日付が書かれたものだけで、推測はしない
+  // what got done on a task since that day: the task itself (the day it entered Completed) and its checked cards; only written dates count, nothing is guessed
+  private doneSince(t: Task): { on?: string; cards: CardDone[] } {
+    const since = this.since();
+    const finished = statusGroupOf(this.plugin.settings.statuses, t.status) === "completed";
+    return {
+      on: finished && t.completed && dayIndex(t.completed) >= since ? t.completed : undefined,
+      cards: (this.cardSteps.get(t.path)?.done ?? []).filter((c) => dayIndex(c.on) >= since),
+    };
+  }
+
+  // その説明（いつ終わったか、どのカードか）/ its tooltip (when it was done, which cards)
+  private doneTip(t: Task, d: { on?: string; cards: CardDone[] }): string {
+    const { statuses, dateFormat } = this.plugin.settings;
+    const status = statuses.find((s) => s.id === t.status)?.label ?? "";
+    const day = weekdayOf(dayToStr(this.since()));
+    return [d.on ? `${status} ${formatDate(d.on, dateFormat)}` : "", d.cards.length ? tr().stepsSince(d.cards.length, day, d.cards.map((c) => withoutName(c.card, t.name)).join(", ")) : ""].filter(Boolean).join("\n");
   }
 
   // この端末の名前（「自分の仕事」と同じ設定。表示名で）/ this device's name (the "My work" setting), as a display name
@@ -3604,7 +3690,7 @@ export class GanttView extends ItemView {
     const { statuses, autoStatus } = this.plugin.settings;
     const started = autoStatusTargets(statuses, autoStatus).started;
     const sig = JSON.stringify(statuses);
-    const steps = new Map<string, { mtime: number; meta: CachedMetadata | null; started?: string; step: CardStep }>();
+    const steps = new Map<string, { mtime: number; meta: CachedMetadata | null; started?: string; step: CardStep; done: CardDone[] }>();
     await Promise.all(this.tasks.filter((t) => t.kind === "kanban" && t.cards).map(async (t) => {
       const file = this.app.vault.getAbstractFileByPath(t.path);
       if (!(file instanceof TFile)) return;
@@ -3613,8 +3699,11 @@ export class GanttView extends ItemView {
       // 書いた直後はまだ前の解析のことがあるので、更新時刻だけでなく解析結果も同じときだけ使い回す / right after a write the parse may still be the old one, so reuse only when the parse is the same too
       const meta = this.app.metadataCache.getFileCache(file);
       if (had && had.mtime === file.stat.mtime && had.meta === meta && had.started === key) return void steps.set(t.path, had);
-      const step = kanbanStep(kanbanLanes(meta, await this.app.vault.cachedRead(file)), statuses, started);
-      steps.set(t.path, { mtime: file.stat.mtime, meta, started: key, step });
+      const lanes = kanbanLanes(meta, await this.app.vault.cachedRead(file));
+      const step = kanbanStep(lanes, statuses, started);
+      // チェックして日付のあるカード（「前回から終わったもの」に使う）/ checked cards with a done date (for "done since last time")
+      const done = lanes.flatMap((l) => l.cards).flatMap((c) => (c.done && cardDoneOn(c.text) ? [{ card: cardLabel(c.text), on: cardDoneOn(c.text)! }] : []));
+      steps.set(t.path, { mtime: file.stat.mtime, meta, started: key, step, done });
     }));
     this.cardSteps = steps;
   }
@@ -4326,7 +4415,7 @@ export class GanttView extends ItemView {
         let marked = false; // 今か次のカードを 1 枚だけ目立たせる / the current or next card is marked once
         const tick = (c: KanbanLane["cards"][number], done: boolean) => void this.mutate(tr().undoEdit(t.name), [t.path], async () => {
           let stale = false;
-          await this.app.vault.process(file, (s) => setCardDone(s, c.line, c.text, done) ?? ((stale = true), s));
+          await this.app.vault.process(file, (s) => setCardDone(s, c.line, c.text, done, dayToStr(this.today())) ?? ((stale = true), s));
           if (stale) {
             new Notice(tr().cardStale);
             void this.refresh();
@@ -4495,7 +4584,9 @@ export class GanttView extends ItemView {
     const path = this.selectedPath;
     if (!path) return;
     const name = this.tasks.find((x) => x.path === path)?.name ?? path;
-    await this.mutate(tr().undoEdit(name), [path], () => writeField(this.app, path, key, value === "" ? undefined : value));
+    const s = this.plugin.settings;
+    // ステータスは完了の日と一緒に書く / a status is written together with its completion day
+    await this.mutate(tr().undoEdit(name), [path], () => (key === s.keys.status ? writeStatus(this.app, path, s, value || undefined, dayToStr(this.today())) : writeField(this.app, path, key, value === "" ? undefined : value)));
     await this.refresh();
   }
 

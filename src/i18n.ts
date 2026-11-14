@@ -203,6 +203,10 @@ interface Strings {
   teamIdle: string;
   pickRoom: string; // 新しいタスクを作る共有フォルダ / the shared folder a new task goes in
   notShared: string;
+  whoAreYou: string; // この端末の人を選ぶ / pick who uses this device
+  doneSince: (day: string) => string; // 前回のデイリースクラム（その曜日）から終わったもの / done since the last daily scrum (that weekday)
+  stepsSince: (n: number, day: string, cards: string) => string;
+  stepsDone: (n: number) => string; // カードの印：前回から終えた手順の数 / a card's mark: steps done since last time
   setMeName: string;
   setMeDesc: string;
   dropTag: (tag: string) => string;
@@ -763,6 +767,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "進行中の仕事はありません",
     pickRoom: "どの共有フォルダに作りますか？",
     notShared: "共有されません",
+    whoAreYou: "あなたはどの人ですか？ 自分のカードが先頭になり、自分の仕事とつながった仕事に印が付きます。",
+    doneSince: (d) => `${d}から完了`,
+    stepsSince: (n, d, c) => `${d}から ${n} 個の手順を完了: ${c}`,
+    stepsDone: (n) => `${n} 手順`,
     setMeName: "この端末でのあなたの名前",
     setMeDesc: "「自分の仕事」プリセットの担当者で、チームの見せ方では自分のカードを先頭にし、自分の仕事と依存でつながったほかの人のタスクに印を付けます。この端末だけに保存され、同期されません。",
     dropTag: (tag) => `#${tag} を付ける`,
@@ -1141,6 +1149,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "Nothing in progress",
     pickRoom: "Create the task in which shared folder?",
     notShared: "not shared",
+    whoAreYou: "Which one is you? Your card comes first, and work linked to yours is marked.",
+    doneSince: (d) => `Done since ${d}`,
+    stepsSince: (n, d, c) => `${n} step${n === 1 ? "" : "s"} done since ${d}: ${c}`,
+    stepsDone: (n) => `${n} step${n === 1 ? "" : "s"}`,
     setMeName: "Your name on this device",
     setMeDesc: "The assignee of the “My work” preset; the Team layout also puts your card first and marks others’ tasks linked to yours by a dependency. Stored on this device only, never synced.",
     dropTag: (tag) => `Add #${tag}`,
@@ -1519,6 +1531,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "没有进行中的工作",
     pickRoom: "在哪个共享文件夹中创建任务？",
     notShared: "不共享",
+    whoAreYou: "哪一位是你？你的卡片会排在最前，与你的工作相关的任务会被标出。",
+    doneSince: (d) => `自${d}起完成`,
+    stepsSince: (n, d, c) => `自${d}起完成 ${n} 个步骤：${c}`,
+    stepsDone: (n) => `${n} 个步骤`,
     setMeName: "此设备上的你的名字",
     setMeDesc: "用作“我的工作”预设的负责人；团队布局还会把你的卡片放在最前，并标出与你的工作有依赖关系的他人任务。仅保存在此设备上，不会同步。",
     dropTag: (tag) => `添加 #${tag}`,
@@ -1897,6 +1913,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "沒有進行中的工作",
     pickRoom: "要在哪個共用資料夾建立任務？",
     notShared: "不共用",
+    whoAreYou: "哪一位是你？你的卡片會排在最前，與你的工作相關的任務會被標出。",
+    doneSince: (d) => `自${d}起完成`,
+    stepsSince: (n, d, c) => `自${d}起完成 ${n} 個步驟：${c}`,
+    stepsDone: (n) => `${n} 個步驟`,
     setMeName: "此裝置上的你的名字",
     setMeDesc: "用作「我的工作」預設的負責人；團隊版面也會把你的卡片放在最前，並標出與你的工作有相依關係的他人任務。僅儲存在此裝置上，不會同步。",
     dropTag: (tag) => `加上 #${tag}`,
@@ -2275,6 +2295,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "진행 중인 작업 없음",
     pickRoom: "어느 공유 폴더에 작업을 만들까요?",
     notShared: "공유되지 않음",
+    whoAreYou: "어느 분이 당신인가요? 내 카드가 맨 앞에 오고, 내 작업과 연결된 작업에 표시됩니다.",
+    doneSince: (d) => `${d} 이후 완료`,
+    stepsSince: (n, d, c) => `${d} 이후 ${n}단계 완료: ${c}`,
+    stepsDone: (n) => `${n}단계`,
     setMeName: "이 기기에서의 내 이름",
     setMeDesc: "“내 작업” 프리셋의 담당자입니다. 팀 레이아웃에서는 내 카드를 맨 앞에 두고, 내 작업과 의존 관계로 이어진 다른 사람의 작업에 표시를 합니다. 이 기기에만 저장되며 동기화되지 않습니다.",
     dropTag: (tag) => `#${tag} 추가`,
@@ -2653,6 +2677,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "Rien en cours",
     pickRoom: "Créer la tâche dans quel dossier partagé ?",
     notShared: "non partagé",
+    whoAreYou: "Lequel êtes-vous ? Votre carte passe en premier et le travail lié au vôtre est marqué.",
+    doneSince: (d) => `Terminé depuis ${d}`,
+    stepsSince: (n, d, c) => `${n} étape(s) terminée(s) depuis ${d} : ${c}`,
+    stepsDone: (n) => `${n} étape${n === 1 ? "" : "s"}`,
     setMeName: "Votre nom sur cet appareil",
     setMeDesc: "Le responsable du préréglage « Mon travail » ; la disposition Équipe met aussi votre carte en premier et marque les tâches des autres liées aux vôtres par une dépendance. Enregistré sur cet appareil uniquement, jamais synchronisé.",
     dropTag: (tag) => `Ajouter #${tag}`,
@@ -3031,6 +3059,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "Nada en curso",
     pickRoom: "¿En qué carpeta compartida crear la tarea?",
     notShared: "no compartida",
+    whoAreYou: "¿Cuál eres tú? Tu tarjeta va primero y se marca el trabajo vinculado al tuyo.",
+    doneSince: (d) => `Hecho desde ${d}`,
+    stepsSince: (n, d, c) => `${n} paso(s) hecho(s) desde ${d}: ${c}`,
+    stepsDone: (n) => `${n} paso${n === 1 ? "" : "s"}`,
     setMeName: "Tu nombre en este dispositivo",
     setMeDesc: "El responsable del preajuste «Mi trabajo»; el diseño Equipo además pone tu tarjeta primero y marca las tareas de otros vinculadas a las tuyas por una dependencia. Se guarda solo en este dispositivo y nunca se sincroniza.",
     dropTag: (tag) => `Añadir #${tag}`,
@@ -3409,6 +3441,10 @@ const STRINGS: Record<Lang, () => Strings> = {
     teamIdle: "Ничего не в работе",
     pickRoom: "В какой общей папке создать задачу?",
     notShared: "не общая",
+    whoAreYou: "Кто из них вы? Ваша карточка будет первой, а связанная с вашей работа — отмечена.",
+    doneSince: (d) => `Сделано с ${d}`,
+    stepsSince: (n, d, c) => `С ${d} сделано шагов: ${n} — ${c}`,
+    stepsDone: (n) => `шагов: ${n}`,
     setMeName: "Ваше имя на этом устройстве",
     setMeDesc: "Исполнитель набора «Мои задачи»; вид «Команда» также ставит вашу карточку первой и отмечает задачи других, связанные с вашими зависимостью. Хранится только на этом устройстве и не синхронизируется.",
     dropTag: (tag) => `Добавить #${tag}`,

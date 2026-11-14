@@ -311,6 +311,7 @@ export function collectTasks(app: App, settings: GanttSettings, folderPath: stri
       endFilled: endFilled || undefined,
       priority: fmText(fm[k.priority]) || undefined,
       status: fm[k.status] != null ? String(fm[k.status]) : undefined,
+      completed: parseStored(fm[k.completed], settings.tz)?.date,
       assignees: fmList(fm[k.assignee]),
       kind,
       canvas: kind === "canvas" ? canvas?.path : undefined,
@@ -531,6 +532,22 @@ export async function writeDates(
 }
 
 // 任意のフロントマター値を書き戻す / write back an arbitrary frontmatter value
+// ステータスを書く。完了のグループに入ったらその日を書き、完了のまま別のステータスなら日付は保ち、出たら消す。同じ書き込みでするので、
+// どの端末から見ても同じ日になる（ファイルの更新日時は同期で届いた時刻なので使わない）
+// set the status; entering the Completed group records the day, moving between completed statuses keeps it and leaving clears it. It is
+// the same write, so every computer reads the same day (a file's modified time is when sync delivered it)
+export function applyStatus(fm: Record<string, unknown>, keys: { status: string; completed: string }, statuses: StatusDef[], id: string | undefined, today: string): void {
+  const was = statusGroupOf(statuses, fm[keys.status] == null ? undefined : String(fm[keys.status])) === "completed";
+  if (id) fm[keys.status] = id;
+  else delete fm[keys.status];
+  if (statusGroupOf(statuses, id) !== "completed") delete fm[keys.completed];
+  else if (!was || fm[keys.completed] == null) fm[keys.completed] = today;
+}
+
+export async function writeStatus(app: App, path: string, settings: Pick<GanttSettings, "keys" | "statuses">, id: string | undefined, today: string): Promise<void> {
+  await app.fileManager.processFrontMatter(noteAt(app, path), (fm: Record<string, unknown>) => applyStatus(fm, settings.keys, settings.statuses, id, today));
+}
+
 export async function writeField(
   app: App,
   path: string,
@@ -698,7 +715,14 @@ export function kanbanStep(lanes: KanbanLane[], statuses: StatusDef[], startedId
 // カードの文字から Kanban の書式を外す：[[a|b]] → b、[[a]] → a、@{日付} @@{時刻} @[[日付]] は消す
 // card text without the Kanban markup: [[a|b]] → b, [[a]] → a, and @{date} @@{time} @[[date]] dropped
 export function cardLabel(text: string): string {
-  return text.replace(/@{1,2}(\{[^}]*\}|\[\[[^\]]*\]\])/g, "").replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, "$2").replace(/\s+/g, " ").trim();
+  return text.replace(DONE_ON, "").replace(/@{1,2}(\{[^}]*\}|\[\[[^\]]*\]\])/g, "").replace(/\[\[([^\]|]*\|)?([^\]]*)\]\]/g, "$2").replace(/\s+/g, " ").trim();
+}
+
+// カードを終えた日：Tasks プラグインと同じ「✅ 日付」（Kanban は Tasks があればチェックのときそう書く。パネルのチェックも同じに書く）
+// the day a card was done: "✅ date" as the Tasks plugin writes it (Kanban does so on a check when Tasks is enabled; the panel's check writes the same)
+const DONE_ON = /\s*✅\s*(\d{4}-\d{2}-\d{2})/;
+export function cardDoneOn(text: string): string | undefined {
+  return DONE_ON.exec(text)?.[1];
 }
 
 // カードが行の名前で始まるなら、その名前と区切りを外す（「DB Adapter — x」→「x」）/ a card starting with its task's name loses it ("DB Adapter — x" → "x")
@@ -734,14 +758,16 @@ export function kanbanLanes(cache: CachedMetadata | null, text = ""): KanbanLane
   return lanes.map(({ title, cards }) => ({ title, cards }));
 }
 
-// カード 1 枚のチェックを付け外しした全文。その行がもう同じカードでなければ null（読んだ後にボードが書き換わった）。チェックボックスの無いカードには付ける
+// カード 1 枚のチェックを付け外しした全文。その行がもう同じカードでなければ null（読んだ後にボードが書き換わった）。チェックボックスの無いカードには付ける。
+// today があれば、付けたときに「✅ 日付」を書き、外したときに消す
 // the note's text with one card checked or unchecked; null when that line no longer holds the same card (the board changed after it was read).
-// A card without a checkbox gets one
-export function setCardDone(text: string, line: number, card: string, done: boolean): string | null {
+// A card without a checkbox gets one. With `today`, a check writes "✅ date" and an uncheck removes it
+export function setCardDone(text: string, line: number, card: string, done: boolean, today?: string): string | null {
   const lines = text.split("\n");
-  const m = /^(\s*(?:[-*+]|\d+[.)])\s+)(?:\[.\]\s+)?([^\n]*)$/.exec(lines[line] ?? "");
+  const m = /^(\s*(?:[-*+]|\d+[.)])\s+)(?:\[.\]\s+)?([^\n]*?)(\r?)$/.exec(lines[line] ?? "");
   if (!m || m[2].trim() !== card) return null;
-  lines[line] = `${m[1]}[${done ? "x" : " "}] ${m[2]}`;
+  const body = today ? m[2].replace(DONE_ON, "") : m[2];
+  lines[line] = `${m[1]}[${done ? "x" : " "}] ${body}${done && today ? ` ✅ ${today}` : ""}${m[3]}`;
   return lines.join("\n");
 }
 

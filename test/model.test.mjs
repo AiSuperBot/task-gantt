@@ -1,6 +1,6 @@
 // buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
-import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName } from "./model.mjs";
+import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName, applyStatus, cardDoneOn, cardLabel } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -53,6 +53,23 @@ check("withoutName: 名前と区切りを外す", withoutName("DB Adapter — כ
 check("withoutName: 区切りが無ければそのまま", withoutName("DB Adaptery x", "DB Adapter") === "DB Adaptery x");
 check("withoutName: 名前だけのカードはそのまま", withoutName("DB Adapter", "DB Adapter") === "DB Adapter");
 check("setCardDone: 行が別のカードなら書かない", setCardDone(board, 2, "a [[x|y]]", true) === null);
+// 終えた日は Tasks プラグインと同じ「✅ 日付」で書き、外せば消す / the done day is written as the Tasks plugin does ("✅ date") and removed on an uncheck
+check("setCardDone: チェックで ✅ 日付を書く", setCardDone(board, 2, "b", true, "2026-11-15") === board.replace("- b", "- [x] b ✅ 2026-11-15"));
+const dated = setCardDone(board, 4, "c", true, "2026-11-15");
+check("setCardDone: CRLF の行でも日付は改行の前に、1 つだけ", dated === board.replace("- [x] c\r", "- [x] c ✅ 2026-11-15\r"));
+check("setCardDone: 外すと日付も消える", setCardDone(dated, 4, "c ✅ 2026-11-15", false, "2026-11-16") === board.replace("- [x] c\r", "- [ ] c\r"));
+check("cardDoneOn: ✅ の日付を読む", cardDoneOn("Connection pool ✅ 2026-11-14") === "2026-11-14" && cardDoneOn("Connection pool") === undefined);
+check("cardLabel: ✅ の日付は見せない", cardLabel("[[Connection pool|מאגר חיבורים]] ✅ 2026-11-14") === "מאגר חיבורים");
+
+// ステータスと終えた日（完了のグループに入った日）/ the status and its completion day (the day it entered the Completed group)
+const ST = [{ id: "todo", label: "To do", color: "#888", group: "active" }, { id: "done", label: "Done", color: "#0a0", group: "completed" }, { id: "shipped", label: "Shipped", color: "#0b0", group: "completed" }];
+const KEYS = { status: "status", completed: "completed" };
+const fmAfter = (fm, id, today) => (applyStatus(fm, KEYS, ST, id, today), JSON.stringify(fm));
+check("applyStatus: 完了に入るとその日を書く", fmAfter({ status: "todo" }, "done", "2026-11-15") === '{"status":"done","completed":"2026-11-15"}');
+check("applyStatus: 完了どうしの移動では日付を保つ", fmAfter({ status: "done", completed: "2026-11-10" }, "shipped", "2026-11-15") === '{"status":"shipped","completed":"2026-11-10"}');
+check("applyStatus: 完了から出ると日付を消す", fmAfter({ status: "done", completed: "2026-11-10" }, "todo", "2026-11-15") === '{"status":"todo"}');
+check("applyStatus: ステータスを消すと日付も", fmAfter({ status: "done", completed: "2026-11-10" }, undefined, "2026-11-15") === "{}");
+check("applyStatus: 日付の無い完了には書く", fmAfter({ status: "done" }, "done", "2026-11-15") === '{"status":"done","completed":"2026-11-15"}');
 
 // 担当者などの多値フィールドに 1 件足す・外す / adding or removing one entry of a multi-valued field
 check("listWith: 1 人に足すとリスト", JSON.stringify(listWith("Ana", "Ben", true)) === '["Ana","Ben"]');
