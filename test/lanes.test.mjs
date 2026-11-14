@@ -46,6 +46,7 @@ const day = (n) => new Date((TODAY + n) * 86_400_000).toISOString().slice(0, 10)
 check("work done and due within two weeks is now", boardWhen(task({ name: "x", end: day(-3) }), true, TODAY, 14) === "now");
 check("work done and due earlier is older", boardWhen(task({ name: "x", end: day(-20) }), true, TODAY, 14) === "older");
 check("undated finished work is older", boardWhen(task({ name: "x" }), true, TODAY, 14) === "older");
+check("work finished recently counts by its completion day, not its old due date", boardWhen(task({ name: "x", end: day(-30), completed: day(-1) }), true, TODAY, 14) === "now");
 check("open work starting within two weeks is now", boardWhen(task({ name: "x", start: day(10), end: day(12) }), false, TODAY, 14) === "now");
 check("open work starting later is later", boardWhen(task({ name: "x", start: day(30), end: day(40) }), false, TODAY, 14) === "later");
 check("open undated or overdue work is now", boardWhen(task({ name: "x" }), false, TODAY, 14) === "now" && boardWhen(task({ name: "x", start: day(-40), end: day(-30) }), false, TODAY, 14) === "now");
