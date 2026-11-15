@@ -1,6 +1,6 @@
 // 日付フィルタの解決・判定（resolveDateValue / matchDate）と稲妻線ジオメトリの検証
 // Tests for date-filter resolution/matching and progress-line geometry
-import { resolveDateValue, matchDate, dayIndex, dayToStr, todayIndex, progressLineX, buildProgressLine, buildTicks, buildBands, computeRange, extendChunk, extendLimit, growPad, padRange, padToCover, nearEdge, fixedOffset } from "./timeline.mjs";
+import { revealSpan, resolveDateValue, matchDate, dayIndex, dayToStr, todayIndex, progressLineX, buildProgressLine, buildTicks, buildBands, computeRange, extendChunk, extendLimit, growPad, padRange, padToCover, nearEdge, fixedOffset } from "./timeline.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -128,6 +128,12 @@ const dayTicks = buildTicks({ min: dayIndex("2026-10-01"), max: dayIndex("2026-1
 check("日目盛り: 詰まりすぎる日は間引く", dayTicks.map((t) => t.label).join(" ") === "1 Th 3 Sa");
 // 目盛りの書式は呼び出し側（言語ごと）。日-月の順の言語でも月初の扱いは同じ / the caller owns the format; day-month locales behave the same
 const fr = new Intl.DateTimeFormat("fr", { day: "numeric", month: "short", timeZone: "UTC" });
+// 詳細パネルを開くとき、開いたタスクのバーを見せる / showing the opened task's bar as the detail panel opens
+check("revealSpan: a bar in view stays put", revealSpan(100, 500, 200, 300, 24) === 100);
+check("revealSpan: a bar the panel would hide moves just far enough", revealSpan(100, 500, 560, 640, 24) === 164);
+check("revealSpan: a bar left of the view moves just far enough", revealSpan(300, 500, 200, 260, 24) === 176);
+check("revealSpan: a bar longer than the view stays while it crosses it", revealSpan(100, 300, 0, 1000, 24) === 100);
+check("revealSpan: a long bar out of view shows its start", revealSpan(2000, 300, 0, 1000, 24) === -24);
 check("週目盛り: 書式は label 次第（fr）", buildTicks({ min: dayIndex("2026-11-01"), max: dayIndex("2026-11-02") }, "Week", 16, (d) => fr.format(d))[0].label === "1 nov.");
 
 // 目盛りの上の帯：左端に今の月、月の区切りごとに見出し / the band: the current month at the left edge, then one per month
