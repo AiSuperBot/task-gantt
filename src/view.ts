@@ -1073,6 +1073,14 @@ export class GanttView extends ItemView {
     const locked = this.readOnly(t.path);
     if (locked) setIcon(title.createSpan({ cls: "ogantt-name-icon", attr: { "aria-label": tr().readOnlyHint, title: tr().readOnlyHint } }), "lock");
     title.createSpan({ text: t.name, attr: { dir: "auto" } });
+    // 人は名前のすぐ後、その行の端に（行を 1 つ使わない）/ the people follow the name, at the end of its line (no line of their own)
+    const people = t.assignees.filter((a) => linkLabel(a) !== person);
+    if (people.length) {
+      const names = people.map(linkLabel).join(", ");
+      const who = title.createSpan({ cls: "ogantt-kcard-people", attr: { title: names, "aria-label": names } });
+      for (const a of people.slice(0, 2)) this.avatar(who, a);
+      if (people.length > 2) who.createSpan({ cls: "ogantt-kcard-more", text: `+${people.length - 2}` });
+    }
     const foot = card.createDiv({ cls: "ogantt-kcard-foot" });
     this.excTag(foot, this.exceptionsOf(t), this.layout === "board", 2);
     if (t.kind === "kanban") this.boardCue(foot, t);
@@ -1096,13 +1104,6 @@ export class GanttView extends ItemView {
       const pill = foot.createSpan({ cls: "ogantt-kcard-fresh", attr: { title: tip, "aria-label": tip } });
       setIcon(pill.createSpan({ cls: "ogantt-exc-icon", attr: { "aria-hidden": "true" } }), "check-check");
       pill.createSpan({ text: fresh.on ? weekdayOf(fresh.on) : tr().stepsDone(fresh.cards.length) });
-    }
-    const people = t.assignees.filter((a) => linkLabel(a) !== person);
-    if (people.length) {
-      const names = people.map(linkLabel).join(", ");
-      const who = foot.createSpan({ cls: "ogantt-kcard-people", attr: { title: names, "aria-label": names } });
-      for (const a of people.slice(0, 2)) this.avatar(who, a);
-      if (people.length > 2) who.createSpan({ cls: "ogantt-kcard-more", text: `+${people.length - 2}` });
     }
     card.onclick = () => void this.openDetail(t.path);
     card.addEventListener("keydown", (e) => {
