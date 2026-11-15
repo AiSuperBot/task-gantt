@@ -199,6 +199,7 @@ export class GanttView extends ItemView {
   private filters: Filter[] = [];
   private filterMatch: FilterMatch = "all";
   private olderOpen = new Set<string>(); // 古い完了も見せている列（ボード）/ columns also showing their older finished cards (board)
+  private history = false; // タイムラインで前の期間の終わった仕事も見せる / the Timeline also shows finished work from before the window
   private teamOpen = new Set<string>(); // 全部を見せている人のカード（チーム）/ people whose card shows everything (team)
   private collapsed = new Set<string>(); // 折りたたみ中フォルダのキー / collapsed folder keys
   private order: string[] = []; // 手で決めた行の並び（タスクのパス。並べ替えが「手動」のとき）/ the manual row order (task paths; used while the sort is "manual")
@@ -275,7 +276,7 @@ export class GanttView extends ItemView {
   private ints: Interruptions = { interrupted: new Map(), resume: new Map() }; // 割り込みと再開待ち / interruptions and work waiting to be resumed
   private shown = new Set<string>(); // 行に出ているタスク（描き直しごと）/ tasks that have a row (per redraw)
   private kids = new Map<string, Task[]>(); // 親のパス → サブタスク（描き直しごと）/ parent path → its subtasks (per redraw)
-  private linked = new Map<string, string[]>(); // 自分の仕事と依存でつながったほかの人のタスク（カードの描き直しごと）/ others' tasks linked to my work (per card redraw)
+  private linked = new Map<string, { mine: boolean; names: string[] }>(); // 自分の仕事と依存でつながったほかの人のタスク（カードの描き直しごと）/ others' tasks linked to my work (per card redraw)
   private projects = false; // カードがボードの下の 2 つ以上のフォルダにまたがる（カードにプロジェクトを出す）/ the cards span two or more folders under the board (cards name their project)
   private cardFocus: string | null = null; // チェックしたカードの行（描き直した後もそこへフォーカスを戻す）/ the line of the card just ticked (focus goes back to it after the redraw)
   private cardsOpen = false; // パネルの「すべてのカード」を開いているか（チェックで描き直しても閉じない）/ whether the panel's card list is open (a tick's redraw keeps it open)
@@ -352,6 +353,7 @@ export class GanttView extends ItemView {
     this.useLayout(l);
     this.app.workspace.requestSaveLayout();
     this.rerender();
+    if (l === "timeline") this.scrollToToday(); // カードから戻ったら今日へ / back from the cards, at today
   }
 
   // 同じフォルダを開いているほかのタブ / the other tabs showing this folder
@@ -771,7 +773,8 @@ export class GanttView extends ItemView {
     // 描き直してもスクロール位置を保つ。縦はそのまま、横は画面中央の日付で（縮尺を変えても同じ日が中央に残る）
     // keep the scroll position across redraws: vertical as is, horizontal by the date in the middle (a zoom change keeps that day centred)
     // 隠れたタブではどの値も 0 と読めるので、見えていたときに覚えた位置を使う / a hidden tab reads 0 everywhere, so use the position remembered while visible
-    const prev = this.boardMain;
+    // タイムラインの枠だけが位置を持つ（カードの枠を読むと 1970 年になる）/ only a Timeline's box holds a position (a card layout's box reads as 1970)
+    const prev = this.boardMain?.hasClass("ogantt-main") ? this.boardMain : null;
     const keep = prev && (prev.clientHeight ? this.scrollOf(prev) : this.pendingScroll ?? this.scrollMemo);
     const hadFocus = !!this.tbodyEl?.contains(activeDocument.activeElement); // キーボードで行にいたら描き直した後も行へ / keep keyboard focus on the rows
     this.baseRange = computeRange(view, this.today());
@@ -895,8 +898,7 @@ export class GanttView extends ItemView {
     this.paintWindow = null;
     this.conflicts = this.lateTasks();
     this.linked = this.linkedToMe();
-    const on = new Set(list.map((t) => t.path));
-    const cards = list.filter((t) => !isSprint(t) && !(this.kids.get(t.path) ?? []).some((k) => on.has(k.path)));
+    const cards = this.cardsOf(list);
     this.shown = new Set(cards.map((t) => t.path));
     // ボードのフォルダの下の 2 つ以上のフォルダ（プロジェクト）にまたがるときだけ、カードにプロジェクトを出す / cards name their project only when the board spans two or more
     this.projects = new Set(cards.map((t) => this.projectOf(t))).size > 1;
@@ -907,7 +909,7 @@ export class GanttView extends ItemView {
     if (!cards.length && !idle) return this.renderEmpty(this.tasks.some((t) => !isSprint(t)));
     const main = this.gridHost.createDiv({ cls: "ogantt-cards" });
     this.boardMain = main;
-    this.sprintLine(main, cards);
+    this.sprintLine(main);
     if (this.layout === "board") this.renderBoard(main, cards);
     else this.renderTeam(main, cards);
     if (keep) (main.scrollTop = keep.top), (main.scrollLeft = keep.left);
@@ -932,8 +934,7 @@ export class GanttView extends ItemView {
     const started = autoStatusTargets(statuses, autoStatus).started;
     // スプリント中はボードもそのスプリント：終わった列はスプリントが始まってからの分、残っている列はスプリントの終わりまでに始まる分
     // during a sprint the board is that sprint's: finished columns hold what was done since it began, open columns what starts before it ends
-    const sprint = this.currentSprint();
-    const [from, to] = sprint ? [sprint.from, sprint.to] : [this.today() - FOLD_DAYS, this.today() + FOLD_DAYS];
+    const [from, to] = this.window();
     // shortcut: every card is drawn at once (the Timeline virtualizes its rows); fine for hundreds of tasks, virtualize if boards reach thousands
     const board = main.createDiv({ cls: "ogantt-kb" });
     ids.forEach((id, i) => {
@@ -950,7 +951,7 @@ export class GanttView extends ItemView {
       const open = this.olderOpen.has(key);
       for (const t of open ? cells[i] : cells[i].filter((t) => !folded.includes(t))) this.renderCard(col, t, "");
       if (folded.length) {
-        col.createEl("button", { cls: "ogantt-kb-more", text: open ? tr().collapse : finished ? tr().olderDone(folded.length) : tr().laterTodo(folded.length) }).onclick = () => {
+        col.createEl("button", { cls: "ogantt-kb-more", text: finished ? (open ? tr().hideOlder(folded.length) : tr().olderDone(folded.length)) : open ? tr().hideLater(folded.length) : tr().laterTodo(folded.length) }).onclick = () => {
           if (open) this.olderOpen.delete(key);
           else this.olderOpen.add(key);
           this.rerender();
@@ -1082,8 +1083,13 @@ export class GanttView extends ItemView {
       const sum = subtaskSummary(kids, statuses);
       foot.createSpan({ cls: "ogantt-subtask-sum", text: `${sum.done}/${sum.total}`, attr: { title: tr().execComplete(sum.done, sum.total) } });
     }
-    const mine = this.linked.get(t.path);
-    if (mine) setIcon(foot.createSpan({ cls: "ogantt-kcard-linked", attr: { title: tr().linkedToYou(mine.join(", ")), "aria-label": tr().linkedToYou(mine.join(", ")) } }), "link");
+    // 自分の仕事とのつながりは向きを言葉で（印だけだと URL に見える）/ the link to my work says which way in words (an icon alone reads as a URL)
+    const link = this.linked.get(t.path);
+    if (link) {
+      const rel = foot.createSpan({ cls: "ogantt-kcard-linked", attr: { title: tr().linkedToYou(link.names.join(", ")) } });
+      setIcon(rel.createSpan({ cls: "ogantt-exc-icon", attr: { "aria-hidden": "true" } }), "link");
+      rel.createSpan({ text: link.mine ? tr().youWaitOn : tr().waitsOnYou });
+    }
     // 前回のデイリースクラムから終わったもの（タスク自身か、そのカード）。誰も言わなくてもボードが言う
     // what got done since the last daily scrum (the task itself or its cards): the board says it, so nobody has to
     const fresh = this.doneSince(t);
@@ -1151,11 +1157,12 @@ export class GanttView extends ItemView {
 
   // 今のスプリント（#sprint のタグのノートで、日付が今日を含むもの）を 1 行で：名前（ゴールを書く）と、稼働日で何日目か。押すとそのノートの詳細
   // the current sprint (a note tagged #sprint whose dates hold today) in one line: its name (carrying the goal) and which workday it is; a click opens it
-  private sprintLine(host: HTMLElement, cards: Task[]): void {
+  private sprintLine(host: HTMLElement): void {
     const sprint = this.currentSprint();
     if (!sprint) return;
     const { statuses } = this.plugin.settings;
-    const inSprint = cards.filter((t) => statusGroupOf(statuses, t.status) !== "cancelled" && boardWhen(t, statusGroupOf(statuses, t.status) === "completed", sprint.from, sprint.to) === "now");
+    // チームのスプリントなので、このタブの絞り込みに関係なくボード全体で数える / the team's sprint, so the whole board counts, this tab's filters aside
+    const inSprint = this.cardsOf(this.tasks.filter((t) => !this.disabled.has(t.path))).filter((t) => statusGroupOf(statuses, t.status) !== "cancelled" && boardWhen(t, statusGroupOf(statuses, t.status) === "completed", sprint.from, sprint.to) === "now");
     const done = inSprint.filter((t) => statusGroupOf(statuses, t.status) === "completed").length;
     const cal = scheduleOptions(this.plugin.settings).cal;
     const line = host.createEl("button", { cls: "ogantt-sprint", attr: { title: tr().sprintHint } });
@@ -1163,6 +1170,13 @@ export class GanttView extends ItemView {
     line.createSpan({ cls: "ogantt-sprint-name", text: sprint.task.name, attr: { dir: "auto" } });
     line.createSpan({ text: tr().sprintLine(Math.max(1, workdaysBetween(sprint.from, this.today(), cal)), workdaysBetween(sprint.from, sprint.to, cal), done, inSprint.length) });
     line.onclick = () => void this.openDetail(sprint.task.path);
+  }
+
+  // 今の期間：スプリントの期間、無ければ今日の前後 2 週間。ボードとタイムラインが畳む境目 / the current window: the sprint, else two weeks either side of
+  // today; where the Board and the Timeline fold
+  private window(): [number, number] {
+    const sprint = this.currentSprint();
+    return sprint ? [sprint.from, sprint.to] : [this.today() - FOLD_DAYS, this.today() + FOLD_DAYS];
   }
 
   // 今のスプリント：#sprint のタグのノートで日付が今日を含むもの（重なれば遅く始まった方）と、その期間 / the current sprint: a note tagged #sprint
@@ -1174,10 +1188,10 @@ export class GanttView extends ItemView {
     return task && { task, from: span(task)[0], to: span(task)[1] };
   }
 
-  // ほかの人のタスクのうち、自分（この端末の名前）の残っている仕事と依存でつながったもの → つながった自分のタスクの名前
-  // other people's open tasks linked by a dependency to my open work (this device's name) → the names of my tasks they link to
-  private linkedToMe(): Map<string, string[]> {
-    const out = new Map<string, string[]>();
+  // ほかの人のタスクのうち、自分（この端末の名前）の残っている仕事と依存でつながったもの → 向き（自分が待つか、相手が待つか）とつながった自分のタスク
+  // other people's open tasks linked by a dependency to my open work (this device's name) → which way (I wait on it, or it waits on me) and my tasks
+  private linkedToMe(): Map<string, { mine: boolean; names: string[] }> {
+    const out = new Map<string, { mine: boolean; names: string[] }>();
     const me = this.me();
     if (!me) return out;
     const { statuses } = this.plugin.settings;
@@ -1186,8 +1200,9 @@ export class GanttView extends ItemView {
     const mine = open.filter(mineOf);
     for (const t of open) {
       if (mineOf(t)) continue;
-      const names = mine.filter((m) => m.deps.some((d) => d.path === t.path) || t.deps.some((d) => d.path === m.path)).map((m) => m.name);
-      if (names.length) out.set(t.path, names);
+      const waiting = mine.filter((m) => m.deps.some((d) => d.path === t.path)); // 自分のタスクがこれを待つ / my tasks waiting on this one
+      const names = [...waiting, ...mine.filter((m) => t.deps.some((d) => d.path === m.path))].map((m) => m.name);
+      if (names.length) out.set(t.path, { mine: waiting.length > 0, names });
     }
     return out;
   }
@@ -1226,6 +1241,13 @@ export class GanttView extends ItemView {
   private projectOf(t: Task): string {
     const rel = (this.folder ? t.path.slice(this.folder.length + 1) : t.path).split("/");
     return rel.length > 1 ? rel[0] : "";
+  }
+
+  // カードにするタスク：スプリントのノートと、サブタスクが出ている親は除く（同じ仕事を 2 度数えない）/ the tasks that become cards: no sprint notes, and no
+  // parent whose subtasks are on show (nothing counted twice)
+  private cardsOf(list: Task[]): Task[] {
+    const on = new Set(list.map((t) => t.path));
+    return list.filter((t) => !isSprint(t) && !(this.kids.get(t.path) ?? []).some((k) => on.has(k.path)));
   }
 
   // タスクの例外（止めたタスクとスプリントのノートには無い）/ a task's exceptions (none for a disabled task or a sprint note)
@@ -1504,6 +1526,20 @@ export class GanttView extends ItemView {
       }
       sel.onchange = () => { this.filterMatch = sel.value as FilterMatch; this.commitFilters(); };
     }
+  }
+
+  // 畳んだ過去の仕事のチップ（フィルタのチップと並べる。押すと見せる・畳む）/ the chip for folded past work (beside the filter chips; a click shows or folds it)
+  private historyChip(n: number, from: number): void {
+    const group = this.filterHost.querySelector(".ogantt-filter-group");
+    if (!group || !n) return;
+    const chip = group.createDiv({ cls: "ogantt-filter-chip ogantt-history-chip" });
+    const btn = chip.createEl("button", { cls: "ogantt-filter-chip-main", attr: { title: tr().olderHint(formatDate(dayToStr(from), this.plugin.settings.dateFormat)) } });
+    setIcon(btn.createSpan({ cls: "ogantt-filter-chip-ico" }), "archive");
+    btn.createSpan({ text: this.history ? tr().hideOlder(n) : tr().olderDone(n) });
+    btn.onclick = () => {
+      this.history = !this.history;
+      this.rerender();
+    };
   }
 
   // 「フィルタを追加」→ 項目選択メニュー / "Add filter" → field picker
@@ -2231,7 +2267,13 @@ export class GanttView extends ItemView {
     // today は 1 回だけ評価して共有 / evaluate `today` once and share it
     const list = applyFilters(this.tasks, this.filters, this.filterMatch, statuses, this.today());
     // ボードとチームは行のグループ化を使わない（人やタグごとの複製もしない）/ the board and team don't use the rows' grouping (no copies per person or tag)
-    return this.layout === "timeline" ? regroup(list, this.groupBy, this.flat, statuses, tr().noneLabel, this.tasks) : list;
+    if (this.layout !== "timeline") return list;
+    // タイムラインも、期間より前に終わった仕事は畳む（ノートはそのまま。フィルタ行のチップで見せる）/ the Timeline folds finished work from before the window
+    // too (the notes stay; the chip in the filter row shows them)
+    const from = this.window()[0];
+    const older = list.filter((t) => !isOpen(t, statuses) && boardWhen(t, true, from, Infinity) === "older");
+    this.historyChip(older.length, from);
+    return regroup(this.history ? list : list.filter((t) => !older.includes(t)), this.groupBy, this.flat, statuses, tr().noneLabel, this.tasks);
   }
 
   // 今日の線が中央に来るよう横スクロール / scroll horizontally so the today marker is centered
@@ -4007,7 +4049,8 @@ export class GanttView extends ItemView {
       if (this.layout === "timeline") {
         const today = dayToStr(this.today());
         await writeDates(this.app, this.plugin.settings, created[0], today, today, false);
-      } else if (todo) await writeField(this.app, created[0], keys.status, todo);
+      }
+      if (todo) await writeField(this.app, created[0], keys.status, todo);
       return { created };
     });
     if (!created.length) return;
