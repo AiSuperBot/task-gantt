@@ -56,6 +56,7 @@ import {
   padRange,
   padToCover,
   RangePad,
+  revealSpan,
   buildProgressLine,
   ProgressLineRow,
   Tick,
@@ -82,6 +83,7 @@ const BAR_PAD = 5; // バーの上下余白 / vertical padding inside a row
 const RESIZE_EDGE = 8; // バー端リサイズの当たり幅 / edge-resize hit width
 const MIN_PPD = 2; // Fit 時の最小 1 日幅（これ未満は横スクロール）/ minimum px/day in Fit mode
 const FIT_SCROLLBAR_PAD = 16; // 縦スクロールバー分の余白 / room for the vertical scrollbar
+const REVEAL_PAD = 24; // 開いたタスクのバーを見せるとき端に残す余白 / room kept between a revealed bar and the edge
 const FALLBACK_BAR = "#7c8db5"; // ステータス/担当者が未設定のときのバー色 / bar color when status/assignee is unset
 
 const MAX_INDENT_DEPTH = 8; // インデントの段数上限（論理ツリーは無制限）/ visual indent cap (the tree itself is unlimited)
@@ -457,14 +459,14 @@ export class GanttView extends ItemView {
       const el = e.target as HTMLElement;
       if (el.instanceOf(HTMLInputElement)) this.fieldStart.set(el, el.value);
     });
-    // ペインの大きさが変わったら（ウィンドウ・サイドバー・詳細パネルの開閉）見える行を描き足し、Fit は幅に合わせ直す
-    // when the pane resizes (window, sidebars, the detail panel opening or closing) draw any newly visible rows, and re-fit in Fit
+    // ペインの大きさが変わったら（ウィンドウ・サイドバー・詳細パネルの開閉）見える行を描き足し、Fit は幅に合わせ直す（パネルの開閉では合わせ直さない）
+    // when the pane resizes (window, sidebars, the detail panel opening or closing) draw any newly visible rows, and re-fit in Fit (not for the panel)
     const ro = new (this.contentEl.win as Window & typeof globalThis).ResizeObserver(() => { // ビューの窓のもの（ポップアウトでも）/ the view's own window's (popouts too)
       // 隠れたタブで描き直していたら、見えた今スクロール位置を戻す / a redraw done while the tab was hidden gets its scroll position now that it shows
       if (this.pendingScroll && this.boardMain?.clientHeight) this.applyScroll(this.boardMain, this.pendingScroll);
       this.paintWindow?.();
       // 最初の描画（boardKey が決まる）までは合わせ直さない：まだタスクが無いので「空」と出てしまう / no re-fit before the first render (with no tasks yet it would show "empty")
-      if (this.zoom !== "Fit" || this.boardKey === null || this.gridHost.clientWidth === this.fitWidth) return;
+      if (this.zoom !== "Fit" || this.boardKey === null || this.fitBase() === this.fitWidth) return;
       if (this.fitTimer != null) window.clearTimeout(this.fitTimer);
       this.fitTimer = window.setTimeout(() => this.rerender(), 80);
     });
@@ -1256,18 +1258,25 @@ export class GanttView extends ItemView {
   private computePpd(): number {
     if (this.zoom !== "Fit") return pxPerDay(this.zoom);
     const totalDays = Math.max(1, this.range.max - this.range.min + 1);
-    this.fitWidth = this.gridHost?.clientWidth ?? 0;
-    const avail = this.fitWidth - this.tableWidth() - FIT_SCROLLBAR_PAD;
+    // 詳細パネルが開いていても、閉じているときの幅と列で合わせる（開け閉めで縮尺が変わらない）/ fit as if the detail panel were closed, so opening or closing it keeps the scale
+    this.fitWidth = this.fitBase();
+    const avail = this.fitWidth - this.tableWidth(false) - FIT_SCROLLBAR_PAD;
     if (avail <= 0) return pxPerDay("Week"); // まだレイアウト前 / not laid out yet
     return Math.max(MIN_PPD, Math.floor(avail / totalDays));
   }
 
+  // 詳細パネルを閉じたときの盤の幅 / the board's width with the detail panel closed
+  private fitBase(): number {
+    const panel = this.detailEl?.hasClass("is-open") && !Platform.isPhone ? this.detailEl.offsetWidth : 0;
+    return (this.gridHost?.clientWidth ?? 0) + panel;
+  }
+
   // ----- テーブル列 / table columns -----
   // 表示中の列（name は常時、その他は設定の visibleColumns に従い、columnOrder の順）/ visible columns (name always; the rest per settings, in columnOrder)
-  private visibleColumns(): ColumnDef[] {
+  private visibleColumns(withPanel = true): ColumnDef[] {
     const cols = visibleColumns(this.columns(), this.plugin.settings.visibleColumns ?? [], this.plugin.settings.columnOrder ?? []);
     // 詳細パネルを開いている間は名前の列だけ（パネルがタイムラインを押しつぶさない）/ while the panel is open, only the name column (so the panel doesn't crush the timeline)
-    return this.detailEl?.hasClass("is-open") && !Platform.isPhone ? cols.filter((c) => c.kind === "name") : cols;
+    return withPanel && this.detailEl?.hasClass("is-open") && !Platform.isPhone ? cols.filter((c) => c.kind === "name") : cols;
   }
 
   // 設定タイムゾーンでの今日 / today in the configured timezone
@@ -1283,10 +1292,10 @@ export class GanttView extends ItemView {
     return this.columnCache.cols;
   }
   // 表全体の幅（表示中の列幅の合計）/ total table width (sum of visible column widths)
-  private tableWidth(): number {
+  private tableWidth(withPanel = true): number {
     // スクロールのたびに呼ばれるので、列ごとに列定義を引き直さない / called on every scroll, so the definitions aren't looked up again per column
     const widths = this.plugin.settings.columnWidths;
-    return this.visibleColumns().reduce((w, c) => w + columnWidth(c, widths), 0);
+    return this.visibleColumns(withPanel).reduce((w, c) => w + columnWidth(c, widths), 0);
   }
 
   // 列の実効幅（ユーザー上書き > 既定）/ effective column width (user override > default)
@@ -2551,17 +2560,58 @@ export class GanttView extends ItemView {
   // 詳細パネルを閉じて選択を外す。returnFocus なら元の行へフォーカスを戻す / close the detail panel and clear the selection; returnFocus puts focus back on the row
   private closeDetail(returnFocus = false): void {
     const path = this.selectedPath;
+    const at = this.barAt(path);
     this.selectedPath = null;
     const was = this.detailEl?.hasClass("is-open");
     this.detailEl?.removeClass("is-open");
-    if (was && !Platform.isPhone) this.rerender(); // 隠した列を戻す / bring the hidden columns back
+    if (was && !Platform.isPhone) {
+      this.rerender(); // 隠した列を戻す / bring the hidden columns back
+      if (path) this.holdBar(path, at, false);
+    }
     if (this.bodyOwner) this.removeChild(this.bodyOwner);
     this.bodyOwner = null;
-    this.tbodyEl?.querySelectorAll(".ogantt-tr.is-selected").forEach((el) => el.removeClass("is-selected"));
+    this.markSelected(null);
     if (!returnFocus) return;
     // タイムラインでは行へ、カードの見せ方ではそのカードへ / back to the row on the timeline, to the card in the card layouts
     if (this.layout === "timeline") this.focusRow(this.cursor);
     else if (path) this.boardMain?.querySelector<HTMLElement>(`.ogantt-kcard[data-path="${CSS.escape(path)}"]`)?.focus();
+  }
+
+  // 開いているタスクの印：表の行・バー・カード（複製も）/ mark the open task: its rows, bars and cards (copies included)
+  private markSelected(path: string | null): void {
+    const box = this.boardMain;
+    box?.querySelectorAll(":is(.ogantt-tr, .ogantt-bar-g, .ogantt-kcard).is-selected").forEach((el) => el.removeClass("is-selected"));
+    if (path) box?.querySelectorAll(`:is(.ogantt-tr, .ogantt-bar-g, .ogantt-kcard)[data-path="${CSS.escape(path)}"]`).forEach((el) => el.addClass("is-selected"));
+  }
+
+  // 開いたタスクのバーの始まりが、表を含む枠の左端から何 px のところにあるか（バーが無ければ null）
+  // how far the open task's bar starts from the left edge of the box, table included (null without a bar)
+  private barAt(path: string | null): number | null {
+    const t = path ? this.tasks.find((x) => x.path === path) : undefined;
+    const start = t ? anchorStart(t) ?? anchorEnd(t) : undefined;
+    const main = this.boardMain;
+    return start && main?.hasClass("ogantt-main") ? this.xOf(start) - main.scrollLeft + this.tableWidth() : null;
+  }
+
+  // 詳細パネルを開け閉めしても、開いたタスクのバーは画面の同じ場所に（縮尺も変えない）。reveal なら、パネルに隠れる・見えないバーと行だけを、見えるところまで最小限ずらす
+  // opening or closing the detail panel leaves the open task's bar where it was on screen, at the same scale; with reveal, a bar (and its row)
+  // that the panel would hide, or that is out of view, moves just far enough to show
+  private holdBar(path: string, at: number | null, reveal: boolean): void {
+    const main = this.boardMain;
+    if (!main?.hasClass("ogantt-main") || Platform.isPhone) return;
+    const t = this.tasks.find((x) => x.path === path);
+    const start = t ? anchorStart(t) ?? anchorEnd(t) : undefined;
+    if (t && start) {
+      const x0 = this.xOf(start);
+      const table = this.tableWidth();
+      let left = at == null ? main.scrollLeft : x0 + table - at;
+      if (reveal) left = revealSpan(left, main.clientWidth - table, x0, this.xOf(anchorEnd(t) ?? start) + this.ppd, REVEAL_PAD);
+      main.scrollLeft = Math.max(0, left);
+    }
+    const i = reveal ? this.rows.findIndex((r) => r.task?.path === path) : -1;
+    if (i >= 0) this.revealRow(main, i);
+    this.scrollMemo = this.scrollOf(main);
+    this.paintWindow?.();
   }
 
   // 取り消し・やり直しボタンの有効/無効を更新 / enable or disable the undo and redo buttons
@@ -3077,14 +3127,19 @@ export class GanttView extends ItemView {
   }
 
   // 行へフォーカスを移す（範囲外ならスクロールして描いてから）/ move focus to a row, scrolling it into view (and drawing it) first
-  private focusRow(i: number): void {
-    this.cursor = i;
-    const main = this.boardMain;
-    if (!main) return;
+  // 行が見えるところまで縦に最小限スクロールする / scroll vertically just enough for row i to show
+  private revealRow(main: HTMLElement, i: number): void {
     const top = i * ROW_H;
     const view = main.clientHeight - HEAD_H;
     if (top < main.scrollTop) main.scrollTop = top;
     else if (top + ROW_H > main.scrollTop + view) main.scrollTop = top + ROW_H - view;
+  }
+
+  private focusRow(i: number): void {
+    this.cursor = i;
+    const main = this.boardMain;
+    if (!main) return;
+    this.revealRow(main, i);
     this.paintWindow?.();
     this.tbodyEl.querySelectorAll('.ogantt-tr[tabindex="0"]').forEach((el) => el.setAttr("tabindex", "-1"));
     const el = this.tbodyEl.querySelector<HTMLElement>(`.ogantt-tr[data-index="${i}"]`);
@@ -3248,7 +3303,7 @@ export class GanttView extends ItemView {
     if (this.rollup && row.span) {
       const sx = this.xOf(row.span.start);
       const sw = Math.max((dayIndex(row.span.end) - dayIndex(row.span.start) + 1) * this.ppd, 6);
-      const rg = this.svgEl("g", { class: "ogantt-bar-g ogantt-rollup-g", "data-path": t.path });
+      const rg = this.svgEl("g", { class: "ogantt-bar-g ogantt-rollup-g" + (t.path === this.selectedPath ? " is-selected" : ""), "data-path": t.path });
       rg.appendChild(this.svgEl("rect", { x: sx, y, width: sw, height: h, rx: 4, class: "ogantt-bar ogantt-rollup-bar", fill: fill(t) }));
       this.drawLabel(rg, t, sx + sw + LABEL_GAP, cyMid, group, row.group);
       rg.addEventListener("pointerenter", (e) => this.showCard(t, e));
@@ -3261,7 +3316,7 @@ export class GanttView extends ItemView {
     const x = this.xOf(aStart);
     const flags = this.disabled.has(t.path) ? " is-disabled"
       : (this.late?.has(t.path) ? " is-late" : "") + (isOverdue(t, this.plugin.settings.statuses, this.today()) ? " is-overdue" : "");
-    const g = this.svgEl("g", { class: "ogantt-bar-g" + (group === "cancelled" ? " is-cancelled" : "") + flags, "data-path": t.path });
+    const g = this.svgEl("g", { class: "ogantt-bar-g" + (group === "cancelled" ? " is-cancelled" : "") + flags + (t.path === this.selectedPath ? " is-selected" : ""), "data-path": t.path });
     let lx = x; // 左端ハンドル位置 / left handle x
     let rx = x; // 右端ハンドル位置 / right handle x
     if (t.milestone) {
@@ -4236,15 +4291,16 @@ export class GanttView extends ItemView {
     if (!t) return;
     const d = this.detailEl;
     // 同じタスクを描き直すときはパネルのスクロール位置を保つ / redrawing the same task keeps the panel's scroll position
-    const keepScroll = this.isDetailOpenFor(path) ? d.scrollTop : 0;
+    const again = this.isDetailOpenFor(path);
+    const keepScroll = again ? d.scrollTop : 0;
+    const barX = again ? null : this.barAt(path); // 開く前のバーの位置 / where its bar is before the panel opens
     const seq = ++this.detailSeq;
     this.selectedPath = path;
     // 前のタスクの本文の描画（埋め込み・Dataview など）を片付ける / unload the previous task's rendered body (embeds, Dataview, …)
     if (this.bodyOwner) this.removeChild(this.bodyOwner);
     this.bodyOwner = null;
     // 選択行ハイライト更新（複製も含めて）。Esc で戻る行もこのタスクに / refresh the selection highlight (copies included); Esc returns to this task's row
-    this.tbodyEl?.querySelectorAll(".ogantt-tr.is-selected").forEach((el) => el.removeClass("is-selected"));
-    this.tbodyEl?.querySelectorAll(`.ogantt-tr[data-path="${CSS.escape(path)}"]`).forEach((el) => el.addClass("is-selected"));
+    this.markSelected(path);
     const at = this.rows.findIndex((r) => r.task?.path === path);
     if (at >= 0 && this.rows[this.cursor]?.task?.path !== path && !this.tbodyEl?.contains(activeDocument.activeElement)) this.cursor = at;
 
@@ -4252,9 +4308,10 @@ export class GanttView extends ItemView {
     d.empty();
     const was = d.hasClass("is-open");
     d.addClass("is-open");
-    if (!was && !Platform.isPhone) this.rerender(); // 表を名前の列だけに / narrow the table to the name column
     // スマホではパネルが画面いっぱい（幅は CSS）/ on phones the panel fills the screen (width from CSS)
     if (!Platform.isPhone) d.style.width = `${this.plugin.settings.detailWidth}px`;
+    if (!was && !Platform.isPhone) this.rerender(); // 表を名前の列だけに / narrow the table to the name column
+    if (!again) this.holdBar(path, barX, true);
 
     // 左端の幅リサイズハンドル / left-edge width resize handle
     const resizer = d.createDiv({ cls: "ogantt-detail-resizer" });

@@ -176,6 +176,14 @@ export function padRange(r: DateRange, pad: RangePad): DateRange {
   return { min: r.min - pad.before, max: r.max + pad.after };
 }
 
+// 見えている窓 [left, left + view] を、[x0, x1] が pad を残して見えるよう最小限ずらした left。窓より長ければ、窓にかかっている限りそのまま、外なら始まりを見せる
+// the window's left edge, moved as little as possible for [x0, x1] to show inside [left, left + view] with `pad` to spare;
+// a span longer than the window stays put while it crosses the window, and shows its start when it doesn't
+export function revealSpan(left: number, view: number, x0: number, x1: number, pad: number): number {
+  if (x1 - x0 > view - 2 * pad) return x1 < left + pad || x0 > left + view - pad ? x0 - pad : left;
+  return Math.min(Math.max(left, x1 + pad - view), x0 - pad);
+}
+
 // day が表示範囲に（1 回分の余裕をもって）入る余白。今日へ飛ぶ・縮尺を変えるときに使うので、上限より広くてもよい
 // a pad that brings `day` into the shown range with a chunk to spare; used for jumps (Today, a zoom change), so it may exceed the limit
 export function padToCover(base: DateRange, pad: RangePad, day: number, zoom: ZoomMode): RangePad {

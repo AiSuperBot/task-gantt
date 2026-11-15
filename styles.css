@@ -2222,6 +2222,11 @@ button.ogantt-dep-add {
   stroke: var(--color-red);
   stroke-width: 2;
 }
+/* 詳細を開いているタスクのバーは光の縁（期限切れ・依存の縁はそのまま、名前はぼかさない）/ the bar whose details are open glows, keeping its other outlines (overdue, broken link) and a crisp label */
+.ogantt-bar-g.is-selected .ogantt-bar,
+.ogantt-bar-g.is-selected .ogantt-milestone {
+  filter: drop-shadow(0 0 2px var(--interactive-accent)) drop-shadow(0 0 1px var(--interactive-accent));
+}
 /* 見出しの件数は控えめに、期限切れや急ぎがあるときは本文色の太字 / a heading's counts stay quiet; bold body text when something is overdue or urgent */
 .ogantt-group-count {
   font-weight: 400;
@@ -2297,7 +2302,11 @@ button.ogantt-sprint:hover {
 }
 .ogantt-kb-col {
   position: relative;
-  flex: 0 0 264px;
+  /* 列は同じ幅で盤を分け合い、中身で広がらない（長い文字は折り返す）。列が多いときだけ横にスクロール */
+  /* columns share the board's width equally and content never widens one (long text wraps); the board scrolls sideways only with many columns */
+  flex: 1 1 0;
+  min-width: 220px;
+  max-width: 480px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2388,18 +2397,12 @@ button.ogantt-kb-more:hover {
 }
 /* プロジェクト › 親（親は押すと開く）/ project › parent (the parent opens on a click) */
 .ogantt-kcard-crumb {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
 }
 /* 名前は 2 行まで。揃えは画面の向き、文字の向きは名前ごと / the name takes two lines at most, aligned with the interface, each in its own direction */
 .ogantt-kcard-title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   font-size: var(--font-ui-small);
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -2410,8 +2413,7 @@ button.ogantt-kb-more:hover {
 }
 .ogantt-kcard-foot {
   display: flex;
-  flex-wrap: nowrap;
-  overflow: hidden;
+  flex-wrap: wrap; /* 長い手順や札は次の行へ（切らない）/ a long step or tag goes on to the next line instead of being cut */
   align-items: center;
   gap: 4px 6px;
   min-height: 0;
@@ -2431,8 +2433,15 @@ button.ogantt-kb-more:hover {
   font-size: var(--font-ui-smaller);
 }
 .ogantt-kcard-foot .ogantt-board-cue {
+  height: auto;
+  max-width: 100%;
   margin: 0;
-  padding: 0 4px;
+  padding: 2px 4px;
+  white-space: normal;
+  text-align: start;
+}
+.ogantt-kcard-foot .ogantt-board-cue-text {
+  overflow-wrap: anywhere;
 }
 .ogantt-kcard-fresh,
 .ogantt-kcard-people {
