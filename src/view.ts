@@ -40,7 +40,7 @@ import {
   anchorEnd,
   statusGroupOf,
 } from "./model";
-import { autoStatusChanges, autoStatusTargets, renameAutoStatusId, cascadeDates, depViolated, endForDuration, isWorkday, keepDurationOnStartChange, offDayGradient, parseDuration, prevWorkday, scheduleOptions, successorClosure, taskDuration, wouldLoop } from "./schedule";
+import { autoStatusChanges, autoStatusTargets, renameAutoStatusId, cascadeDates, depViolated, endForDuration, isWorkday, keepDurationOnStartChange, offDayGradient, parseDuration, prevWorkday, scheduleOptions, successorClosure, taskDuration, workdaysBetween, wouldLoop } from "./schedule";
 import {
   DateRange,
   computeRange,
@@ -71,7 +71,7 @@ import { isConnected } from "./gcal/auth";
 import { ATTENTION, EXCEPTIONS, applyFilters, tagSpelling, besideHeading, exceptionsOf, interruptions, isOpen, isOverdue, isUrgent, nextToStart, regroup, runningWorkOf, subtaskSummary, urgentFirst, Exception, GroupBy, Interruptions } from "./filter";
 import { BoardContext, Move, MutateResult, StatusChange } from "./board";
 import { CellColumn, ColumnDef, allColumns, columnList, columnWidth, disabledLast, manualComparator, moveColumn, paintProgress, progressPct, statusMark, taskComparator, toggleColumn, visibleColumns } from "./columns";
-import { boardColumns, boardLanes, boardWhen, isSprint } from "./lanes";
+import { boardColumns, boardWhen, byPerson, isSprint } from "./lanes";
 
 const ROW_H = 30; // 行の高さ（表とタイムラインで共通）/ shared row height
 // 日本語などの変換中のキー（Enter は変換の確定、Esc は変換の取り消しで、こちらの操作ではない）
@@ -303,7 +303,7 @@ export class GanttView extends ItemView {
   }
   getDisplayText(): string {
     const name = this.folder ? this.folder.split("/").pop() : tr().vaultRoot;
-    return `${this.layout === "board" ? tr().layoutBoard : this.layout === "team" ? tr().presetTeam : tr().layoutTimeline}: ${name}`;
+    return `${this.layout === "board" ? tr().layoutBoard : this.layout === "team" ? tr().layoutPeople : tr().layoutTimeline}: ${name}`;
   }
   getIcon(): string {
     return "gantt-chart";
@@ -907,7 +907,7 @@ export class GanttView extends ItemView {
     if (!cards.length && !idle) return this.renderEmpty(this.tasks.some((t) => !isSprint(t)));
     const main = this.gridHost.createDiv({ cls: "ogantt-cards" });
     this.boardMain = main;
-    this.sprintLine(main);
+    this.sprintLine(main, cards);
     if (this.layout === "board") this.renderBoard(main, cards);
     else this.renderTeam(main, cards);
     if (keep) (main.scrollTop = keep.top), (main.scrollLeft = keep.left);
@@ -930,20 +930,23 @@ export class GanttView extends ItemView {
     const ids = boardColumns(sorted, kept);
     const cells = ids.map((id) => sorted.filter((t) => (t.status || null) === id));
     const started = autoStatusTargets(statuses, autoStatus).started;
-    const today = this.today();
+    // スプリント中はボードもそのスプリント：終わった列はスプリントが始まってからの分、残っている列はスプリントの終わりまでに始まる分
+    // during a sprint the board is that sprint's: finished columns hold what was done since it began, open columns what starts before it ends
+    const sprint = this.currentSprint();
+    const [from, to] = sprint ? [sprint.from, sprint.to] : [this.today() - FOLD_DAYS, this.today() + FOLD_DAYS];
     // shortcut: every card is drawn at once (the Timeline virtualizes its rows); fine for hundreds of tasks, virtualize if boards reach thousands
     const board = main.createDiv({ cls: "ogantt-kb" });
     ids.forEach((id, i) => {
       const s = kept.find((x) => x.id === id);
-      const name = s?.label ?? id ?? tr().noneLabel; // 設定に無いステータス（ほかの端末で足したもの）は id のまま / a status these settings lack (added on another computer) shows its id
+      const name = s?.label ?? id ?? tr().noStatus; // 設定に無いステータス（ほかの端末で足したもの）は id のまま / a status these settings lack (added on another computer) shows its id
       const col = board.createDiv({ cls: "ogantt-kb-col" + (s ? "" : " is-unknown"), attr: { role: "list", "aria-label": name } });
       const head = col.createDiv({ cls: "ogantt-kb-head" });
       if (s) statusMark(head, s, started);
       head.createSpan({ cls: "ogantt-kb-name", text: name, attr: { dir: "auto" } });
-      head.createSpan({ cls: "ogantt-kb-count", text: String(cells[i].length) });
       const finished = s?.group === "completed";
       const key = id ?? "";
-      const folded = cells[i].filter((t) => boardWhen(t, finished, today, FOLD_DAYS) !== "now");
+      const folded = cells[i].filter((t) => boardWhen(t, finished, from, to) !== "now");
+      head.createSpan({ cls: "ogantt-kb-count", text: String(cells[i].length - folded.length) }); // 見えている数（畳んだ分はボタンが言う）/ what shows (the folded ones are on their button)
       const open = this.olderOpen.has(key);
       for (const t of open ? cells[i] : cells[i].filter((t) => !folded.includes(t))) this.renderCard(col, t, "");
       if (folded.length) {
@@ -966,20 +969,16 @@ export class GanttView extends ItemView {
   private renderTeam(main: HTMLElement, list: Task[]): void {
     const { statuses, autoStatus } = this.plugin.settings;
     const notStarted = autoStatusTargets(statuses, autoStatus).notStarted;
-    const none = tr().noneLabel;
+    const none = tr().presetUnassigned;
     const me = this.me();
-    const sorted = list.slice().sort(this.comparator());
-    const lanes = boardLanes(regroup(sorted, "assignee", false, statuses, none, this.tasks), [null], (t) => t.groups[0], me, none);
     const pool = this.filters.length ? list : this.tasks.filter((t) => !isSprint(t));
-    for (const p of new Set(pool.flatMap((t) => t.assignees.map(linkLabel)))) if (!lanes.some((l) => l.key === p)) lanes.push({ key: p, cells: [[]] });
-    const rank = (k: string) => (k === me ? 0 : k === none ? 2 : 1);
-    lanes.sort((a, b) => rank(a.key) - rank(b.key) || a.key.localeCompare(b.key));
+    const lanes = byPerson(list.slice().sort(this.comparator()), [...new Set(pool.flatMap((t) => t.assignees.map(linkLabel)))], none, me);
     // この端末の名前がまだなら、ここで選んでもらう（自分のカードが先頭に、自分の仕事とつながった印も付く）。閉じたらもう聞かない
     // without this device's name yet, ask for it here (your card then comes first and work linked to yours is marked); closed, it isn't asked again
     if (!me && !this.app.loadLocalStorage(ASKED_KEY)) {
       const ask = main.createDiv({ cls: "ogantt-whoami", attr: { role: "group", "aria-label": tr().whoAreYou } });
       ask.createSpan({ text: tr().whoAreYou });
-      for (const { key } of lanes.filter((l) => l.key !== none)) {
+      for (const [key] of lanes.filter(([k]) => k !== none)) {
         const pick = ask.createEl("button", { cls: "ogantt-whoami-person" });
         this.avatar(pick, this.assigneeList().find((a) => linkLabel(a) === key) ?? key);
         pick.createSpan({ text: key, attr: { dir: "auto" } });
@@ -998,8 +997,8 @@ export class GanttView extends ItemView {
     }
     const grid = main.createDiv({ cls: "ogantt-team" });
     const since = weekdayOf(dayToStr(this.since()));
-    for (const { key, cells } of lanes) {
-      const live = cells[0].filter((t) => !this.disabled.has(t.path) && isOpen(t, statuses));
+    for (const [key, tasks] of lanes) {
+      const live = tasks.filter((t) => !this.disabled.has(t.path) && isOpen(t, statuses));
       if (key === none && !live.length) continue;
       const card = grid.createDiv({ cls: "ogantt-pcard", attr: { role: "group", "aria-label": key } });
       const head = card.createDiv({ cls: "ogantt-pcard-head" });
@@ -1027,7 +1026,7 @@ export class GanttView extends ItemView {
       }
       // 前回のデイリースクラムから終わったもの：タスクとチェックしたカード（カードはそのタスクの担当の人に）
       // done since the last daily scrum: tasks and checked cards (a card counts for the people on its task)
-      const done = cells[0].map((t) => ({ t, d: this.doneSince(t) })).filter(({ d }) => d.on || d.cards.length);
+      const done = tasks.map((t) => ({ t, d: this.doneSince(t) })).filter(({ d }) => d.on || d.cards.length);
       if (!done.length) continue;
       card.createDiv({ cls: "ogantt-pcard-label", text: tr().doneSince(since) });
       for (const { t, d } of done) {
@@ -1076,7 +1075,7 @@ export class GanttView extends ItemView {
     if (locked) setIcon(title.createSpan({ cls: "ogantt-name-icon", attr: { "aria-label": tr().readOnlyHint, title: tr().readOnlyHint } }), "lock");
     title.createSpan({ text: t.name, attr: { dir: "auto" } });
     const foot = card.createDiv({ cls: "ogantt-kcard-foot" });
-    this.excTag(foot, this.exceptionsOf(t), this.layout === "board");
+    this.excTag(foot, this.exceptionsOf(t), this.layout === "board", 2);
     if (t.kind === "kanban") this.boardCue(foot, t);
     const kids = this.kids.get(t.path) ?? [];
     if (kids.length) {
@@ -1088,7 +1087,7 @@ export class GanttView extends ItemView {
     // 前回のデイリースクラムから終わったもの（タスク自身か、そのカード）。誰も言わなくてもボードが言う
     // what got done since the last daily scrum (the task itself or its cards): the board says it, so nobody has to
     const fresh = this.doneSince(t);
-    if (fresh.on || fresh.cards.length) {
+    if (this.layout === "board" && (fresh.on || fresh.cards.length)) {
       const tip = this.doneTip(t, fresh);
       const pill = foot.createSpan({ cls: "ogantt-kcard-fresh", attr: { title: tip, "aria-label": tip } });
       setIcon(pill.createSpan({ cls: "ogantt-exc-icon", attr: { "aria-hidden": "true" } }), "check-check");
@@ -1152,19 +1151,27 @@ export class GanttView extends ItemView {
 
   // 今のスプリント（#sprint のタグのノートで、日付が今日を含むもの）を 1 行で：名前（ゴールを書く）と、稼働日で何日目か。押すとそのノートの詳細
   // the current sprint (a note tagged #sprint whose dates hold today) in one line: its name (carrying the goal) and which workday it is; a click opens it
-  private sprintLine(host: HTMLElement): void {
-    const today = this.today();
-    const span = (t: Task) => [anchorStart(t) ?? anchorEnd(t), anchorEnd(t) ?? anchorStart(t)].map((d) => (d ? dayIndex(d) : NaN));
-    const sprint = this.tasks.filter((t) => isSprint(t) && span(t)[0] <= today && span(t)[1] >= today).sort((a, b) => span(b)[0] - span(a)[0])[0];
+  private sprintLine(host: HTMLElement, cards: Task[]): void {
+    const sprint = this.currentSprint();
     if (!sprint) return;
-    const [from, to] = span(sprint);
+    const { statuses } = this.plugin.settings;
+    const inSprint = cards.filter((t) => statusGroupOf(statuses, t.status) !== "cancelled" && boardWhen(t, statusGroupOf(statuses, t.status) === "completed", sprint.from, sprint.to) === "now");
+    const done = inSprint.filter((t) => statusGroupOf(statuses, t.status) === "completed").length;
     const cal = scheduleOptions(this.plugin.settings).cal;
-    const workdays = (a: number, b: number) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i).filter((d) => isWorkday(d, cal)).length;
     const line = host.createEl("button", { cls: "ogantt-sprint", attr: { title: tr().sprintHint } });
     setIcon(line.createSpan({ cls: "ogantt-exc-icon", attr: { "aria-hidden": "true" } }), "flag");
-    line.createSpan({ cls: "ogantt-sprint-name", text: sprint.name, attr: { dir: "auto" } });
-    line.createSpan({ text: tr().sprintLine(Math.max(1, workdays(from, today)), workdays(from, to)) });
-    line.onclick = () => void this.openDetail(sprint.path);
+    line.createSpan({ cls: "ogantt-sprint-name", text: sprint.task.name, attr: { dir: "auto" } });
+    line.createSpan({ text: tr().sprintLine(Math.max(1, workdaysBetween(sprint.from, this.today(), cal)), workdaysBetween(sprint.from, sprint.to, cal), done, inSprint.length) });
+    line.onclick = () => void this.openDetail(sprint.task.path);
+  }
+
+  // 今のスプリント：#sprint のタグのノートで日付が今日を含むもの（重なれば遅く始まった方）と、その期間 / the current sprint: a note tagged #sprint
+  // whose dates hold today (the later-starting one when they overlap), and its span
+  private currentSprint(): { task: Task; from: number; to: number } | undefined {
+    const today = this.today();
+    const span = (t: Task) => [anchorStart(t) ?? anchorEnd(t), anchorEnd(t) ?? anchorStart(t)].map((d) => (d ? dayIndex(d) : NaN));
+    const task = this.tasks.filter((t) => isSprint(t) && span(t)[0] <= today && span(t)[1] >= today).sort((a, b) => span(b)[0] - span(a)[0])[0];
+    return task && { task, from: span(task)[0], to: span(task)[1] };
   }
 
   // ほかの人のタスクのうち、自分（この端末の名前）の残っている仕事と依存でつながったもの → つながった自分のタスクの名前
@@ -1562,15 +1569,6 @@ export class GanttView extends ItemView {
         { kind: "date", field: "start", op: "empty" },
         { kind: "date", field: "end", op: "empty" },
       ] },
-      // 日付あり＝開始 or 期限がある / has a start or an end
-      { name: tr().presetHasDates, filterMatch: "any", filters: [
-        { kind: "date", field: "start", op: "notEmpty" },
-        { kind: "date", field: "end", op: "notEmpty" },
-      ] },
-      // 期限切れ＝期限が今日より前 / due before today
-      { name: tr().presetOverdue, filterMatch: "all", filters: [
-        { kind: "date", field: "end", op: "before", value: today },
-      ] },
       // 未割り当て＝担当者なし / no assignee
       { name: tr().presetUnassigned, filterMatch: "all", filters: [
         { kind: "category", field: "assignee", op: "empty", values: [] },
@@ -1578,13 +1576,6 @@ export class GanttView extends ItemView {
       // 完了済み＝ステータスが「完了」グループ / status sits in the Completed group
       { name: tr().presetCompleted, filterMatch: "all", filters: [
         { kind: "category", field: "statusGroup", op: "is", values: ["completed"] },
-      ] },
-      // 未完了＝完了でもキャンセルでもない（アクティブ・延期・ステータス未設定）。中止したタスクは
-      // 「残っている仕事」ではないので除く。フィールド内は OR なので isNot 1件で「どちらでもない」
-      // incomplete = neither completed nor cancelled (active, deferred, or no status at all):
-      // cancelled work isn't outstanding work. Values OR within a field, so one isNot covers both
-      { name: tr().presetIncomplete, filterMatch: "all", filters: [
-        { kind: "category", field: "statusGroup", op: "isNot", values: ["completed", "cancelled"] },
       ] },
     ];
   }
@@ -1822,7 +1813,7 @@ export class GanttView extends ItemView {
     // 見せ方の切り替え（タブごとに覚える）：計画はタイムライン、デイリースクラムはボード、人ごとはチーム
     // the layout switch (remembered per tab): planning on the Timeline, the daily scrum on the Board, people on Team
     this.layoutSeg = bar.createDiv({ cls: "ogantt-seg ogantt-layout", attr: { role: "group", "aria-label": tr().layoutAria } });
-    for (const [l, icon, label] of [["timeline", "gantt-chart", tr().layoutTimeline], ["board", "kanban", tr().layoutBoard], ["team", "users", tr().presetTeam]] as const) {
+    for (const [l, icon, label] of [["timeline", "gantt-chart", tr().layoutTimeline], ["board", "kanban", tr().layoutBoard], ["team", "users", tr().layoutPeople]] as const) {
       const b = this.layoutSeg.createEl("button", { attr: { "data-layout": l } });
       setIcon(b.createSpan({ cls: "ogantt-opt-ico" }), icon);
       b.createSpan({ text: label });
@@ -2964,13 +2955,14 @@ export class GanttView extends ItemView {
   // said＝「止まっている」はほかが言っている（ステータス列・ボードの列）ので出さず、数えもしない
   // one exception tag: the strongest as an icon and a word (never colour alone), "+N" when there are more; every reason is in the details.
   // `said` = something else already says blocked (the Status column, the board's column), so it is neither shown nor counted
-  private excTag(host: HTMLElement, all: Exception[], said: boolean): void {
+  private excTag(host: HTMLElement, all: Exception[], said: boolean, named = 1): void {
     const shown = all.filter((e) => !(e === "blocked" && said));
     if (!shown.length) return;
     const words = all.map((e) => EXC_TEXT[e]()).join(", ");
     const tag = host.createSpan({ cls: `ogantt-exc is-${shown[0]}`, attr: { title: words, "aria-label": words } });
     setIcon(tag.createSpan({ cls: "ogantt-exc-icon", attr: { "aria-hidden": "true" } }), EXC_ICON[shown[0]]);
-    tag.createSpan({ cls: "ogantt-exc-text", text: EXC_TEXT[shown[0]]() + (shown.length > 1 ? ` +${shown.length - 1}` : "") });
+    const rest = shown.length - named;
+    tag.createSpan({ cls: "ogantt-exc-text", text: shown.slice(0, named).map((e) => EXC_TEXT[e]()).join(" · ") + (rest > 0 ? ` +${rest}` : "") });
   }
 
   // 入れ子インデント（上限あり）。画面と書き出しで同じ / the nesting indent (capped), the same on screen and in the export
@@ -4397,7 +4389,7 @@ export class GanttView extends ItemView {
       // a kanban is the execution layer: no board squeezed into the narrow panel, just a short summary and "Open board"; counts and the next card only when they can be read for sure
       if (!(file instanceof TFile)) return;
       if (this.plugin.settings.execPosition !== "top") d.appendChild(execHost); // 既定は欄の後 / after the fields by default
-      execHost.createDiv({ cls: "ogantt-detail-label", text: tr().execution });
+      execHost.createDiv({ cls: "ogantt-detail-label", text: tr().boardCue });
       const ex = execHost.createDiv({ cls: "ogantt-exec" });
       if (t.cards) ex.createDiv({ text: tr().cardsChecked(t.cards.done, t.cards.total) });
       const { statuses, autoStatus } = this.plugin.settings;
