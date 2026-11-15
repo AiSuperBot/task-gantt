@@ -1974,6 +1974,9 @@ button.ogantt-board-cue:hover {
   flex: none;
   font-variant-numeric: tabular-nums;
 }
+.ogantt-board-cue-count:not(:last-child)::after {
+  content: " ·";
+}
 .ogantt-board-cue-text {
   flex: 0 1000 auto;
   min-width: 0;
