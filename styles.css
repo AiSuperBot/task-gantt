@@ -2305,7 +2305,7 @@ button.ogantt-sprint:hover {
   /* 列は同じ幅で盤を分け合い、中身で広がらない（長い文字は折り返す）。列が多いときだけ横にスクロール */
   /* columns share the board's width equally and content never widens one (long text wraps); the board scrolls sideways only with many columns */
   flex: 1 1 0;
-  min-width: 220px;
+  min-width: 200px;
   max-width: 480px;
   display: flex;
   flex-direction: column;
@@ -2403,6 +2403,7 @@ button.ogantt-kb-more:hover {
 }
 /* 名前は 2 行まで。揃えは画面の向き、文字の向きは名前ごと / the name takes two lines at most, aligned with the interface, each in its own direction */
 .ogantt-kcard-title {
+  display: flow-root; /* 端に寄せた人を中に収める / holds the people floated to its end */
   font-size: var(--font-ui-small);
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -2443,8 +2444,7 @@ button.ogantt-kb-more:hover {
 .ogantt-kcard-foot .ogantt-board-cue-text {
   overflow-wrap: anywhere;
 }
-.ogantt-kcard-fresh,
-.ogantt-kcard-people {
+.ogantt-kcard-fresh {
   flex: none;
 }
 .ogantt-kcard-linked {
@@ -2470,10 +2470,12 @@ button.ogantt-kb-more:hover {
 .ogantt-kcard-linked {
   color: var(--text-normal);
 }
+/* 名前の最後の行の端に（入らなければ次の行の端）/ at the end of the name's last line (the next line's end when it doesn't fit) */
 .ogantt-kcard-people {
+  float: inline-end;
   display: inline-flex;
   align-items: center;
-  margin-inline-start: auto;
+  margin-inline-start: 6px;
 }
 .ogantt-kcard-people .ogantt-avatar + .ogantt-avatar {
   margin-inline-start: -5px;
