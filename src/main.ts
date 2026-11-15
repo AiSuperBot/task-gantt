@@ -4,7 +4,7 @@ import { GanttView } from "./view";
 import { VIEW_TYPE_GANTT, GanttViewState } from "./types";
 import { t } from "./i18n";
 import { collectTasks, inferStatusGroup, movePaths } from "./model";
-import { keepAutoFired, migrateAutoFired, moveAutoFired } from "./schedule";
+import { keepAutoFired, migrateAutoFired, migrateWeekend, moveAutoFired } from "./schedule";
 import { checkNotifications } from "./notify";
 import { usePopoverKeys } from "./popover";
 import { migrateRenamedPath, schedulePush, syncGcal } from "./gcal/sync";
@@ -239,7 +239,8 @@ export default class GanttPlugin extends Plugin {
     this.settings.customFields = (this.settings.customFields ?? []).map((f) => ({ ...f }));
     this.settings.filters = structuredClone(this.settings.filters ?? []);
     this.settings.filterPresets = structuredClone(this.settings.filterPresets ?? []);
-    this.settings.nonWorkingDays = [...(this.settings.nonWorkingDays ?? DEFAULT_SETTINGS.nonWorkingDays)];
+    this.settings.nonWorkingDays = migrateWeekend([...(this.settings.nonWorkingDays ?? DEFAULT_SETTINGS.nonWorkingDays)], this.settings.weekendMigrated);
+    this.settings.weekendMigrated = true;
     // 通知設定も既定とマージ＆複製 / merge notify settings with defaults and clone containers
     this.settings.notify = Object.assign({}, DEFAULT_SETTINGS.notify, this.settings.notify);
     this.settings.notify.leads = [...(this.settings.notify.leads ?? [])];

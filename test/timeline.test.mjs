@@ -122,6 +122,8 @@ const lbl = (d, z) => (z === "Day" ? `${d.getUTCDate()} ${WD[d.getUTCDay()]}` : 
 const wk = buildTicks({ min: dayIndex("2026-10-26"), max: dayIndex("2026-11-10") }, "Week", 16, lbl);
 check("週目盛り: 10/26, 11/1, 11/9（11/2 は 11/1 と重なるので省く）", wk.map((t) => t.label).join(" ") === "10/26 11/1 11/9");
 check("週目盛り: 月初は major", wk[1].major && !wk[0].major);
+// 金土休み（日〜木の週）なら週の初日は日曜 / with Fri+Sat off (a Sunday-to-Thursday week) the week ticks fall on Sundays
+check("週目盛り: 日曜始まり（11/8, 11/15）", buildTicks({ min: dayIndex("2026-11-02"), max: dayIndex("2026-11-16") }, "Week", 16, lbl, 0).map((t) => t.label).join(" ") === "11/8 11/15");
 const dayTicks = buildTicks({ min: dayIndex("2026-10-01"), max: dayIndex("2026-10-04") }, "Day", 20, lbl);
 check("日目盛り: 詰まりすぎる日は間引く", dayTicks.map((t) => t.label).join(" ") === "1 Th 3 Sa");
 // 目盛りの書式は呼び出し側（言語ごと）。日-月の順の言語でも月初の扱いは同じ / the caller owns the format; day-month locales behave the same

@@ -19,6 +19,8 @@ import {
   autoStatusTargets,
   keepAutoFired,
   migrateAutoFired,
+  migrateWeekend,
+  weekStart,
   moveAutoFired,
   renameAutoStatusId,
 } from "./schedule.mjs";
@@ -256,6 +258,14 @@ check("休日の帯: 休日なしは none", offDayGradient(0, { off: [] }, 10, "
   check("更新: 記録の日付のままなら手のステータスは書き換えない", JSON.stringify(changed([T("P/overdue.md", "in-progress", "2026-10-20", "2026-11-01"), T("P/both.md", "todo", "2026-10-20", "2026-10-25"), T("P/old.md", "todo", "2026-10-30", "2026-11-20")])) === "{}");
   check("更新: 日付が変われば日付に合わせる", JSON.stringify(changed([T("P/overdue.md", "in-progress", "2026-10-20", "2026-11-02"), T("P/old.md", "todo", "2026-10-31", "2026-11-20")])) === '{"P/overdue.md":"done","P/old.md":"in-progress"}');
 }
+
+// ── 週の初日と、旧既定（土日）の移行 / a week's first day, and moving the old default (Sat+Sun) ──
+check("the week starts on Monday after a Sat+Sun weekend", weekStart({ off: [0, 6] }) === 1);
+check("the week starts on Sunday after a Fri+Sat weekend", weekStart({ off: [5, 6] }) === 0);
+check("the week starts on Monday with no days off, or with every day off", weekStart({ off: [] }) === 1 && weekStart({ off: [0, 1, 2, 3, 4, 5, 6] }) === 1);
+check("the old saved default Sat+Sun moves to Fri+Sat once", String(migrateWeekend([6, 0], undefined)) === "5,6");
+check("after that, Sat+Sun picked again stays", String(migrateWeekend([0, 6], true)) === "0,6");
+check("other weekends never move", String(migrateWeekend([0], undefined)) === "0" && String(migrateWeekend([5, 6], undefined)) === "5,6");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

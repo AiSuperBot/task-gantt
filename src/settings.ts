@@ -110,6 +110,8 @@ export interface GanttSettings {
   // 休日の曜日（0=日 … 6=土）。Duration と依存の連動は稼働日で数える
   // non-working weekdays (0 = Sun … 6 = Sat); durations and dependency cascades count workdays only
   nonWorkingDays: number[];
+  // 2.17 で既定を金土にしたとき、保存されていた旧既定（土日）を一度だけ移した印 / set once the old saved default (Sat+Sun) has been moved to 2.17's default (Fri+Sat)
+  weekendMigrated?: boolean;
   // 先行が遅れて FS の後続と重なったら後続を押し出す / push FS successors when a slipping predecessor overlaps them
   autoScheduleFS: boolean;
   // 日付で自動的にステータスを進める（既定 OFF）。空の id・空の一覧は既定（組み込みの in-progress / done、最初の「進行中」グループのステータス）。
@@ -238,7 +240,7 @@ export const DEFAULT_SETTINGS: GanttSettings = {
   defaultZoom: "Week",
   dateFormat: "YYYY/MM/DD",
   tz: "system",
-  nonWorkingDays: [0, 6],
+  nonWorkingDays: [5, 6], // 日〜木の週 / a Sunday-to-Thursday week
   autoScheduleFS: true,
   autoStatus: { enabled: false, started: "", finished: "", notStarted: [], fired: {} },
   detailWidth: 380,
