@@ -282,6 +282,10 @@ button.ogantt-opt-gear {
   background: var(--background-primary);
 }
 /* プリセットボタン（フィルタ行の左端）/ presets button (leftmost of the filter row) */
+.ogantt-preset-btn,
+.ogantt-filter-add {
+  min-height: 24px;
+}
 .ogantt-preset-btn {
   display: inline-flex;
   align-items: center;
@@ -810,7 +814,7 @@ button.ogantt-legend-chip {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-faint);
+  color: var(--text-muted);
   font-size: var(--font-smallest);
   unicode-bidi: plaintext;
 }
@@ -2338,6 +2342,7 @@ button.ogantt-sprint:hover {
 button.ogantt-kb-more {
   align-self: flex-start;
   height: auto;
+  min-height: 24px;
   padding: 2px 6px;
   border: none;
   background: none;
@@ -2405,7 +2410,8 @@ button.ogantt-kb-more:hover {
 }
 .ogantt-kcard-foot {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
   align-items: center;
   gap: 4px 6px;
   min-height: 0;
@@ -2417,15 +2423,20 @@ button.ogantt-kb-more:hover {
 }
 /* 行の中の札とカンバンの目印をカードではそのまま並べる（行の余白と縮み方は使わない）/ the row's tag and board cue sit plainly in a card (without the row's margins and shrinking) */
 .ogantt-kcard-foot .ogantt-exc,
-.ogantt-kcard-foot .ogantt-board-cue,
 .ogantt-kcard-foot .ogantt-subtask-sum {
   margin: 0;
-  flex: 0 1 auto;
-  max-width: 100%;
+  flex: none;
+}
+.ogantt-kcard-foot .ogantt-exc {
+  font-size: var(--font-ui-smaller);
 }
 .ogantt-kcard-foot .ogantt-board-cue {
-  min-height: 20px;
+  margin: 0;
   padding: 0 4px;
+}
+.ogantt-kcard-fresh,
+.ogantt-kcard-people {
+  flex: none;
 }
 .ogantt-kcard-linked {
   display: inline-flex;
@@ -2501,7 +2512,7 @@ button.ogantt-kb-more:hover {
   font-weight: var(--font-semibold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 /* 「どの人があなたですか」/ "Which one is you?" */
 .ogantt-whoami {
@@ -2525,7 +2536,8 @@ button.ogantt-whoami-person {
 }
 .ogantt-pcard-done {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  min-height: 24px;
   gap: 6px;
   padding: 2px 4px;
   border-radius: var(--radius-s);
@@ -2552,4 +2564,28 @@ button.ogantt-whoami-person {
 .ogantt-pcard-idle {
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
+}
+
+/* 表示メニューのグループ化・色分け / Group by and Color by in the Display menu */
+.ogantt-colmenu-pick {
+  justify-content: space-between;
+  gap: 12px;
+}
+/* 詳細パネル：日付の名前と期間の単位 / details panel: the dates' names and the duration's unit */
+.ogantt-date-cap,
+.ogantt-duration-unit {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+.ogantt-duration-unit {
+  margin-inline-start: 6px;
+  white-space: nowrap;
+}
+.ogantt-detail-field:has(> .ogantt-duration-unit) {
+  display: flex;
+  align-items: center;
+}
+.ogantt-detail-field > .ogantt-duration-input {
+  flex: 1;
+  min-width: 0;
 }

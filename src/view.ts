@@ -216,8 +216,6 @@ export class GanttView extends ItemView {
   private showDeps = true; // 依存の矢印（とリンクを作るハンドル）/ dependency arrows (and the handles that make links)
   private showTags = true; // バーの後ろのタグ / tags after the bars' labels
   private allFolders: string[][] = []; // スコープ配下の全フォルダ（相対セグメント）/ all folders under scope
-  private groupSel!: HTMLSelectElement; // ツールバーの「グループ化」/ the toolbar's Group by
-  private colorSel!: HTMLSelectElement; // ツールバーの「色分け」/ the toolbar's Color by
   private filterHost!: HTMLElement; // 統合フィルタ行の差し替え先 / unified filter bar container
 
   // 取り消し・やり直し履歴（対象ファイルのスナップショット＋移動）/ undo & redo history (snapshots of affected files + moves)
@@ -699,8 +697,6 @@ export class GanttView extends ItemView {
     this.order = [...(b?.order ?? [])];
     this.disabled = new Set(b?.disabled ?? []);
     this.expanded = new Set(b?.expanded ?? []);
-    this.groupSel.value = this.groupBy;
-    this.colorSel.value = this.colorBy;
   }
 
   // 表示オプションを覚える / remember the view options
@@ -1623,7 +1619,6 @@ export class GanttView extends ItemView {
     this.filterMatch = clone.filterMatch;
     if (clone.groupBy) {
       this.groupBy = clone.groupBy;
-      this.groupSel.value = clone.groupBy;
       this.saveBoard();
     }
     this.commitFilters();
@@ -1913,21 +1908,6 @@ export class GanttView extends ItemView {
     // on the right: group by, colour by and the Display menu, built once since they don't depend on the data (so the Display menu's
     // anchor survives redraws). Occasional switches and the columns live in the Display menu; reload and PNG export in the "⋯" menu
     const host = bar.createDiv({ cls: "ogantt-options" });
-    // 見える名前つきのセレクト（アイコンだけに頼らない）/ a select with a visible name, not just an icon
-    const makeSelect = (icon: string, label: string, opts: [string, string][], on: (v: string) => void): HTMLSelectElement => {
-      const wrap = host.createEl("label", { cls: "ogantt-opt" });
-      setIcon(wrap.createSpan({ cls: "ogantt-opt-ico" }), icon);
-      wrap.createSpan({ text: label });
-      const sel = wrap.createEl("select", { cls: "dropdown", attr: { "aria-label": label } });
-      for (const [value, text] of opts) sel.createEl("option", { text, value });
-      sel.addEventListener("change", () => on(sel.value));
-      return sel;
-    };
-    this.groupSel = makeSelect("layers", tr().optGroupLabel,
-      [["folder", tr().optGroupFolder], ["status", tr().fieldStatus], ["assignee", tr().fieldAssignee], ["tag", tr().fieldTags]],
-      (v) => { this.groupBy = v as GroupBy; this.saveBoard(); this.rerender(); });
-    this.colorSel = makeSelect("palette", tr().optColorLabel, [["status", tr().fieldStatus], ["assignee", tr().fieldAssignee]],
-      (v) => { this.colorBy = v as typeof this.colorBy; this.saveBoard(); this.rerender(); });
     const display = host.createEl("button", { cls: "ogantt-opt-gear", attr: { "aria-haspopup": "true" } });
     setIcon(display.createSpan({ cls: "ogantt-opt-ico" }), "sliders-horizontal");
     display.createSpan({ text: tr().optDisplay });
@@ -1971,6 +1951,26 @@ export class GanttView extends ItemView {
           this.rerender();
           sync();
         });
+      // グループ化と色分け（ツールバーを 1 行に）/ grouping and colour (so the toolbar stays one row)
+      const pick = (label: string, opts: [string, string][], value: string, on: (v: string) => void) => {
+        const item = menu.createEl("label", { cls: "ogantt-colmenu-item ogantt-colmenu-pick" });
+        item.createSpan({ text: label });
+        const sel = item.createEl("select", { cls: "dropdown", attr: { "aria-label": label } });
+        for (const [v, text] of opts) sel.createEl("option", { value: v, text });
+        sel.value = value;
+        sel.addEventListener("change", () => on(sel.value));
+      };
+      pick(tr().optGroupLabel, [["folder", tr().optGroupFolder], ["status", tr().fieldStatus], ["assignee", tr().fieldAssignee], ["tag", tr().fieldTags]], this.groupBy, (v) => {
+        this.groupBy = v as GroupBy;
+        this.saveBoard();
+        this.rerender();
+        sync();
+      });
+      pick(tr().optColorLabel, [["status", tr().fieldStatus], ["assignee", tr().fieldAssignee]], this.colorBy, (v) => {
+        this.colorBy = v as typeof this.colorBy;
+        this.saveBoard();
+        this.rerender();
+      });
       menu.createDiv({ cls: "ogantt-preset-heading", text: tr().optTimeline });
       toggle("showDeps", tr().optArrows);
       toggle("showTags", tr().optTagLabels);
@@ -2869,12 +2869,14 @@ export class GanttView extends ItemView {
       if (sum.total) g.createSpan({ cls: "ogantt-subtask-sum", text: `${sum.done}/${sum.total}`, attr: { title: tr().execComplete(sum.done, sum.total) } });
       // 担当者ごとなら、同時に 2 つ以上進めているのも知らせる（切り替えの負担）/ by assignee, two or more tasks under way at once is flagged too (switching cost)
       const juggling = this.groupBy === "assignee" && running > 1;
-      if (live.length) g.createSpan({ cls: "ogantt-group-count" + (late || hot || juggling ? " is-alert" : ""), text: tr().headingCount(live.length, running, blocked, late, hot) });
+      // 見出しに出すのは気にかけることだけ（短いので切れない）。未完了・進行中の数と次に始まるものは、見出しに重ねると出る行に
+      // the heading shows only what needs attention (short enough not to be cut); the open and in-progress counts and what starts next are in the hover line
+      const alerts = tr().headingAlerts(juggling ? running : 0, blocked, late, hot);
+      if (alerts) g.createSpan({ cls: "ogantt-group-count is-alert", text: alerts });
       const next = nextToStart(live, today);
       // サブタスクなら親も添える（畳んだ親の中にあっても、どこを開けばいいか分かる）/ a subtask carries its parent, so a collapsed one can still be found
       const nextName = next ? (next.parent ? `${isolate(this.nameOf(next.parent))} › ` : "") + isolate(next.name) : "";
-      if (next) g.createSpan({ cls: "ogantt-group-next", text: tr().nextUp(nextName, formatDate(anchorStart(next)!, this.plugin.settings.dateFormat)) });
-      g.setAttr("title", Array.from(g.querySelectorAll("span:not([aria-hidden])")).map((x) => x.textContent).filter(Boolean).join(" · ")); // 狭い表で切れた行を全部読めるように / the whole line on hover when a narrow table cuts it
+      g.setAttr("title", [row.group, sum.total ? `${sum.done}/${sum.total}` : "", live.length ? tr().headingCount(live.length, running, blocked, late, hot) : "", next ? tr().nextUp(nextName, formatDate(anchorStart(next)!, this.plugin.settings.dateFormat)) : ""].filter(Boolean).join(" · "));
       // 見出しを右クリック＝色・アイコンを変更（(なし) は除く）/ right-click a heading to change its colour or icon (not "(none)")
       if (!none) g.addEventListener("contextmenu", (e) => this.openStyleMenu(e, this.groupBy, row.group, this.headingKey(row)));
       el.onclick = () => {
@@ -4352,7 +4354,8 @@ export class GanttView extends ItemView {
       x.onclick = () => void this.removeDep(here(), dep.path, dep.type).then(reopen);
     }
     const depType = depField.createEl("select", { cls: "dropdown ogantt-dep-type-select", attr: { "aria-label": tr().fieldDeps } });
-    for (const ty of ["FS", "SS", "FF"] as DepType[]) depType.createEl("option", { value: ty, text: ty });
+    const words: Record<DepType, string> = { FS: tr().depFS, SS: tr().depSS, FF: tr().depFF };
+    for (const ty of ["FS", "SS", "FF"] as DepType[]) depType.createEl("option", { value: ty, text: words[ty] });
     const addDepBtn = depField.createEl("button", { cls: "ogantt-dep-add", text: tr().addDependency });
     addDepBtn.onclick = () => {
       // 自分・すでに先行のもの・自分の後続（選ぶと輪になる）は出さない / leave out itself, its predecessors and its successors (picking one would close a loop)
@@ -4439,7 +4442,7 @@ export class GanttView extends ItemView {
       const lanes = kanbanLanes(this.app.metadataCache.getFileCache(file), text);
       const step = kanbanStep(lanes, statuses, autoStatusTargets(statuses, autoStatus).started);
       if (step.card) ex.createDiv({ cls: "ogantt-exec-card", text: (step.now ? tr().nowStep : tr().nextStep)(isolate(withoutName(step.card, t.name))) });
-      if (step.stage) ex.createDiv({ cls: "ogantt-exec-stage", text: step.stage, attr: { dir: "auto" } });
+      if (step.stage) ex.createDiv({ cls: "ogantt-exec-stage", text: tr().inLane(isolate(step.stage)) });
       // 中身を見たいとき：全部のカードを列ごとに。チェックはここで付け外しでき（取り消し可）、文字の編集と並べ替えはボードで
       // for the specifics: every card, lane by lane. A card can be checked here (undoable); editing its text and reordering happen on the board
       const count = lanes.reduce((n, l) => n + l.cards.length, 0);
@@ -4659,6 +4662,7 @@ export class GanttView extends ItemView {
       const chip = chips.createDiv({ cls: "ogantt-date-chip" });
       const ico = chip.createSpan({ cls: "ogantt-date-ico" });
       setIcon(ico, "calendar");
+      chip.createSpan({ cls: "ogantt-date-cap", text: which === "start" ? tr().colStart : tr().colDue });
       const val = chip.createEl("button", { cls: "ogantt-date-val", attr: { "data-focus": `date-${which}` } });
       const x = chip.createEl("button", { cls: "ogantt-date-x clickable-icon" });
       setIcon(x, "x");
@@ -4737,6 +4741,7 @@ export class GanttView extends ItemView {
     dinp.min = "1";
     dinp.step = "1";
     dinp.setAttr("aria-label", tr().colDuration);
+    dfield.createSpan({ cls: "ogantt-duration-unit", text: tr().workdaysUnit });
     painters.push(() => {
       const d = t.milestone ? undefined : taskDuration({ start: state.start || undefined, end: state.end || undefined, milestone: false }, cal);
       dinp.value = d != null ? String(d) : "";
