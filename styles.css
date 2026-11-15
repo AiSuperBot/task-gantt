@@ -2432,6 +2432,10 @@ button.ogantt-kb-more:hover {
   align-items: center;
   gap: 2px;
 }
+/* 畳んだ過去の仕事のチップは控えめに / the chip for folded past work stays quiet */
+.ogantt-history-chip {
+  opacity: 0.85;
+}
 /* 前回のデイリースクラムから終わったもの（終えた曜日か、チェックしたカードの数）/ done since the last daily scrum (the weekday it was done, or how many cards were checked) */
 .ogantt-kcard-fresh {
   display: inline-flex;
@@ -2441,12 +2445,10 @@ button.ogantt-kb-more:hover {
 }
 .ogantt-kcard-fresh .ogantt-exc-icon,
 .ogantt-pcard-done .ogantt-exc-icon {
-  color: var(--color-green);
+  color: var(--text-muted);
 }
-.ogantt-kcard-linked .svg-icon {
-  width: 12px;
-  height: 12px;
-  color: var(--interactive-accent);
+.ogantt-kcard-linked {
+  color: var(--text-normal);
 }
 .ogantt-kcard-people {
   display: inline-flex;
