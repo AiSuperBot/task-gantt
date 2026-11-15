@@ -40,7 +40,7 @@ import {
   anchorEnd,
   statusGroupOf,
 } from "./model";
-import { autoStatusChanges, autoStatusTargets, renameAutoStatusId, cascadeDates, depViolated, endForDuration, isWorkday, keepDurationOnStartChange, offDayGradient, parseDuration, prevWorkday, scheduleOptions, successorClosure, taskDuration, workdaysBetween, wouldLoop } from "./schedule";
+import { autoStatusChanges, autoStatusTargets, renameAutoStatusId, cascadeDates, depViolated, endForDuration, isWorkday, keepDurationOnStartChange, offDayGradient, parseDuration, prevWorkday, scheduleOptions, successorClosure, taskDuration, weekStart, workdaysBetween, wouldLoop } from "./schedule";
 import {
   DateRange,
   computeRange,
@@ -2808,7 +2808,7 @@ export class GanttView extends ItemView {
     const wk = moment.weekdaysMin(); // 表示言語の曜日（日曜始まり）/ the UI language's weekdays (Sunday first)
     const label = (d: Date, z: ZoomMode) => (z === "Day" ? `${d.getUTCDate()} ${wk[d.getUTCDay()]}` : z === "Week" ? md.format(d) : mo.format(d));
     const band = zoom === "Month" ? fmt({ year: "numeric" }) : fmt({ year: "numeric", month: "long" });
-    return { ticks: buildTicks(this.range, zoom, this.ppd, label), bands: buildBands(this.range, zoom, this.ppd, (d) => band.format(d)) };
+    return { ticks: buildTicks(this.range, zoom, this.ppd, label, weekStart(scheduleOptions(this.plugin.settings).cal)), bands: buildBands(this.range, zoom, this.ppd, (d) => band.format(d)) };
   }
 
   // 日付軸 / the date axis

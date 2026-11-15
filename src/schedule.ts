@@ -20,6 +20,19 @@ function offSet(cal: WorkCalendar): Set<number> {
   return s.size >= 7 ? new Set() : s;
 }
 
+// 週の初日：休みが明けた最初の曜日（土日休みなら月曜、金土休みなら日曜、休みが無ければ月曜）
+// a week's first day: the first day after the days off (Monday after Sat+Sun, Sunday after Fri+Sat, Monday with none)
+export function weekStart(cal: WorkCalendar): number {
+  const off = offSet(cal);
+  return !off.size || off.has(0) ? 1 : (Math.max(...off) + 1) % 7;
+}
+
+// 2.16 までは土日が既定で、ほかの設定と一緒に保存されていた：その値だけを一度、新しい既定（金土）へ移す
+// up to 2.16, Sat+Sun was the default and got saved with every other setting: move just that value, once, to the new default (Fri+Sat)
+export function migrateWeekend(off: number[], migrated: boolean | undefined): number[] {
+  return !migrated && [...off].sort().join() === "0,6" ? [5, 6] : off;
+}
+
 // 休日を塗る CSS グラデーション（1 週間周期で繰り返す）。firstDay はタイムライン左端の通日番号
 // a CSS gradient shading the non-working days, repeating every week; firstDay is the day index at the timeline's left edge
 export function offDayGradient(firstDay: number, cal: WorkCalendar, ppd: number, color: string): string {

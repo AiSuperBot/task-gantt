@@ -232,19 +232,19 @@ export interface Tick {
   major: boolean; // 月境界など / month boundary
 }
 
-// 上部の日付軸の目盛りを生成（Day＝毎日、Week＝月曜と月初、Month＝月初）。文字列は label が作る（言語ごとの書式は呼び出し側）。
+// 上部の日付軸の目盛りを生成（Day＝毎日、Week＝週の初日と月初、Month＝月初）。文字列は label が作る（言語ごとの書式は呼び出し側）。
 // ラベル同士が詰まりすぎる目盛りは間引き、月初（major）と重なる通常の目盛りは月初を残す
-// generate header ticks (Day: every day, Week: Mondays and month starts, Month: month starts); `label` writes the text,
+// generate header ticks (Day: every day, Week: each week's first day (weekStart) and month starts, Month: month starts); `label` writes the text,
 // so the caller owns the locale. A tick too close to the previous one is dropped, except that a month start (major)
 // replaces the regular tick it would collide with
-export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, label: (d: Date, zoom: ZoomMode) => string): Tick[] {
+export function buildTicks(range: DateRange, zoom: ZoomMode, ppd: number, label: (d: Date, zoom: ZoomMode) => string, weekStart = 1): Tick[] {
   const ticks: Tick[] = [];
   const gap = zoom === "Day" ? MIN_TICK_GAP : MIN_TICK_GAP_WIDE;
   for (let day = range.min; day <= range.max; day++) {
     const d = new Date(day * MS_PER_DAY);
     const x = (day - range.min) * ppd;
     const major = d.getUTCDate() === 1;
-    if (!(zoom === "Day" || (zoom === "Week" && (d.getUTCDay() === 1 || major)) || (zoom === "Month" && major))) continue;
+    if (!(zoom === "Day" || (zoom === "Week" && (d.getUTCDay() === weekStart || major)) || (zoom === "Month" && major))) continue;
     const text = label(d, zoom);
     const prev = ticks[ticks.length - 1];
     if (prev && x - prev.x < gap) {
