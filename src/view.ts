@@ -275,6 +275,8 @@ export class GanttView extends ItemView {
   private peopleColors: Map<string, string> | null = null; // 担当者の自動の色（同上）/ the assignees' automatic colours (likewise)
   private late: Set<string> | null = null; // 矢印を隠しているときの、依存が守られていない後続 / with arrows hidden, successors whose dependency is broken
   private roomsWatched = false;
+  private stale = false; // 隠れている間に読み直しを見送った / a reload was skipped while the tab was hidden
+  private lastSig = ""; // 最後に描いたデータの署名 / the signature of the data last drawn
   private readOnlySeen = ""; // 読むだけのタスクの一覧（役割が変わったか見るため）/ the read-only tasks last seen (to tell when a role changed)
   private conflicts = new Set<string>(); // 依存が守られていない後続（表の札用・矢印の有無に関係なく）/ successors whose dependency is broken (for the table's tag, arrows or not)
   private ints: Interruptions = { interrupted: new Map(), resume: new Map() }; // 割り込みと再開待ち / interruptions and work waiting to be resumed
@@ -469,6 +471,8 @@ export class GanttView extends ItemView {
     // ペインの大きさが変わったら（ウィンドウ・サイドバー・詳細パネルの開閉）見える行を描き足し、Fit は幅に合わせ直す（パネルの開閉では合わせ直さない）
     // when the pane resizes (window, sidebars, the detail panel opening or closing) draw any newly visible rows, and re-fit in Fit (not for the panel)
     const ro = new (this.contentEl.win as Window & typeof globalThis).ResizeObserver(() => { // ビューの窓のもの（ポップアウトでも）/ the view's own window's (popouts too)
+      // 隠れている間に見送った読み直しを、見えた今する / the reload skipped while hidden happens now that the tab shows
+      if (this.stale && this.contentEl.isShown()) return void this.refresh();
       // 隠れたタブで描き直していたら、見えた今スクロール位置を戻す / a redraw done while the tab was hidden gets its scroll position now that it shows
       if (this.pendingScroll && this.boardMain?.clientHeight) this.applyScroll(this.boardMain, this.pendingScroll);
       this.paintWindow?.();
@@ -549,6 +553,14 @@ export class GanttView extends ItemView {
     if (pending) await this.plugin.saveData(this.plugin.settings);
   }
 
+  // 描画が読むデータの署名：タスク・フォルダ・カードの手順・設定（自分で変わる記録は除く）・今日・この端末の名前。同じなら作り直しは要らない
+  // a signature of the data a render reads: tasks, folders, card steps, settings (minus the records that change by themselves), today and
+  // this device's name; equal means no rebuild is needed
+  private dataSig(): string {
+    const look = { ...this.plugin.settings, gcal: 0, notify: 0 };
+    return JSON.stringify([this.tasks, this.allFolders, [...this.cardSteps].map(([p, s]) => [p, s.step, s.done]), look, this.today(), this.me()]);
+  }
+
   // ディスクから集計し直して再描画 / re-collect from disk, then render
   async refresh(): Promise<void> {
     if (!this.gridHost) this.buildSkeleton();
@@ -557,6 +569,10 @@ export class GanttView extends ItemView {
       this.app.workspace.onLayoutReady(() => this.scheduleRefresh());
       return;
     }
+    // 隠れているタブは読み直さず印だけ付け、見えたとき（ResizeObserver）に読み直す（開いているタブの数だけ同じ仕事をしない）
+    // a hidden tab doesn't reload: it notes it's stale and reloads once shown (from the ResizeObserver), so open tabs don't all repeat the work
+    if (this.boardKey !== null && !this.contentEl.isShown()) return void (this.stale = true);
+    this.stale = false;
     // 書き込み・取り消し・ドラッグの最中は待つ（更新中のタスクを差し替えたり、掴んでいるバーを消したりしない）
     // wait while a write, an undo or a drag is under way (it would swap the tasks they update, or remove the bar being dragged)
     // 表のセルで入力中も待つ（作り直すと打った文字が消えるか、途中の名前で保存される）/ also while a table cell is being typed in (a rebuild would drop the text or save it half-typed)
@@ -581,7 +597,13 @@ export class GanttView extends ItemView {
     this.tasks = collectTasks(this.app, this.plugin.settings, this.folder);
     await this.readCardSteps();
     this.allFolders = collectFolders(this.app, this.plugin.settings, this.folder);
-    this.rerender();
+    // 画面に出るものが何も変わっていなければ作り直さない（本文の入力、パネル自身の編集の後の読み直し）。パネルの更新は下で続ける
+    // nothing a render reads changed (typing in a body, the reload after the panel's own edit): no rebuild. The panel update below still runs
+    const sig = this.dataSig();
+    if (opened || sig !== this.lastSig) {
+      this.lastSig = sig;
+      this.rerender();
+    }
     // 日付による自動ステータスはボードを開いたときに頼む（読み直しのたびには回さない）/ automatic status is requested when a board opens (not on every reload)
     if (opened) this.plugin.requestAutoStatus();
     // 開いている詳細パネルも最新に。表示中の内容が変わったときだけ描き直し（別のノートの変更や、パネル自身の編集の後の読み直しでは描き直さない）、
@@ -928,12 +950,13 @@ export class GanttView extends ItemView {
     const { statuses, autoStatus } = this.plugin.settings;
     const kept = statuses.filter((s) => s.group !== "cancelled");
     const live = list.filter((t) => statusGroupOf(statuses, t.status) !== "cancelled");
-    const rank = (t: Task) => {
+    // 気にかける順位は 1 枚に 1 度だけ求める（比べるたびに求めない）/ each card's attention rank is worked out once, not on every comparison
+    const rank = new Map(live.map((t) => {
       const e = this.exceptionsOf(t).find((x) => x !== "blocked"); // 止まっていることは列が言う / the column says blocked
-      return e ? EXCEPTIONS.indexOf(e) : EXCEPTIONS.length;
-    };
+      return [t, e ? EXCEPTIONS.indexOf(e) : EXCEPTIONS.length] as const;
+    }));
     const base = this.comparator();
-    const sorted = live.slice().sort((a, b) => rank(a) - rank(b) || base(a, b));
+    const sorted = live.slice().sort((a, b) => rank.get(a)! - rank.get(b)! || base(a, b));
     const ids = boardColumns(sorted, kept);
     const cells = ids.map((id) => sorted.filter((t) => (t.status || null) === id));
     const started = autoStatusTargets(statuses, autoStatus).started;
@@ -3846,6 +3869,7 @@ export class GanttView extends ItemView {
     // A tick counts wherever it was made (Kanban, the detail panel, another computer), and nothing is written into the notes
     if (read.size) {
       const seen = (this.app.loadLocalStorage(STEPS_KEY) as Record<string, StepsSeen> | null) ?? {};
+      for (const p of Object.keys(seen)) if (!this.app.vault.getAbstractFileByPath(p)) delete seen[p]; // 消えた・改名したボードは忘れる / boards deleted or renamed are forgotten
       const today = this.today();
       for (const [path, cards] of read) {
         const { on } = (seen[path] = seeSteps(seen[path], cards, dayToStr(today), dayToStr(today - 30)));

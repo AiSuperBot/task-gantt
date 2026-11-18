@@ -23,7 +23,8 @@ let pushTimer = 0;
 // 同期を実行できる状態か / can we sync at all?
 function ready(plugin: GanttPlugin): boolean {
   const g = plugin.settings.gcal;
-  return Platform.isDesktop && isConnected(plugin) && !!g.calendarId && (g.pushEnabled || g.pullEnabled);
+  // 設定の有無を先に見る（つながっているかは秘密の保管庫に聞くので、使っていないボードでは聞かない）/ the settings first: whether it's connected asks the secret store, skipped where Calendar isn't set up
+  return Platform.isDesktop && !!g.calendarId && (g.pushEnabled || g.pullEnabled) && isConnected(plugin);
 }
 
 // 同期スコープのタスク（設定フォルダ・日付あり・オプトイン条件）/ tasks in the sync scope
@@ -308,6 +309,7 @@ export async function syncGcal(plugin: GanttPlugin, opts: { pull: boolean }): Pr
   }
   running = true;
   const g = plugin.settings.gcal;
+  const was = JSON.stringify({ ...g, lastSync: 0 }); // 同期の時刻だけの変化では保存しない（ほかの端末が毎分読み直さない）/ a new sync time alone isn't saved, so other computers don't reload every minute
   let ok = true;
   try {
     let justPulled = new Set<string>();
@@ -321,7 +323,7 @@ export async function syncGcal(plugin: GanttPlugin, opts: { pull: boolean }): Pr
     console.error("Task Gantt: Google Calendar sync failed", e);
   } finally {
     running = false;
-    await plugin.saveData(plugin.settings);
+    if (JSON.stringify({ ...g, lastSync: 0 }) !== was) await plugin.saveData(plugin.settings);
     if (rerun) {
       rerun = false;
       void syncGcal(plugin, { pull: false });
