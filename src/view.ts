@@ -30,6 +30,8 @@ import {
   cardLabel,
   setCardDone,
   cardDoneOn,
+  seeSteps,
+  type StepsSeen,
   applyStatus,
   writeStatus,
   withoutName,
@@ -116,10 +118,12 @@ const EXC_TEXT: Record<Exception, () => string> = { urgent: () => tr().excUrgent
 // isolate a name or card text from what surrounds it (FSI … PDI), so Hebrew and other right-to-left text doesn't reorder the sentence
 const isolate = (text: string): string => `\u2068${text}\u2069`;
 type CardStep = { card?: string; stage?: string; now?: boolean };
-// チェックして日付（✅）のあるカード / a checked card with its done date (✅)
+// チェックしたカードと終えた日（✅ の日付か、この端末がチェックを初めて見た日）/ a ticked step and its day (its ✅ date, or the day this computer first saw the tick)
 type CardDone = { card: string; on: string };
 // 「誰ですか」を閉じたことを覚える（この端末だけ）/ remembers that "Which one is you?" was closed (this device only)
 const ASKED_KEY = "task-gantt-me-asked";
+// 手順のチェックを見た日（この端末だけ。ノートには書かない）/ the days this computer first saw steps ticked (this device only; nothing goes into the notes)
+const STEPS_KEY = "task-gantt-steps-seen";
 
 // 名前の頭文字（アバター用・最大 2 文字）/ initials of a name for an avatar (up to two letters)
 function initials(name: string): string {
@@ -1211,8 +1215,8 @@ export class GanttView extends ItemView {
     return prevWorkday(this.today() - 1, scheduleOptions(this.plugin.settings).cal);
   }
 
-  // そのタスクでその日から終わったもの：タスク自身（完了のグループに入った日）とチェックしたカード。日付が書かれたものだけで、推測はしない
-  // what got done on a task since that day: the task itself (the day it entered Completed) and its checked cards; only written dates count, nothing is guessed
+  // そのタスクでその日から終わったもの：タスク自身（完了のグループに入った日）とチェックしたカード（✅ の日付か、この端末がチェックを初めて見た日）
+  // what got done on a task since that day: the task itself (the day it entered Completed) and its ticked steps (their ✅ date, or the day this computer first saw the tick)
   private doneSince(t: Task): { on?: string; cards: CardDone[] } {
     const since = this.since();
     const finished = statusGroupOf(this.plugin.settings.statuses, t.status) === "completed";
@@ -3783,6 +3787,7 @@ export class GanttView extends ItemView {
     const started = autoStatusTargets(statuses, autoStatus).started;
     const sig = JSON.stringify(statuses);
     const steps = new Map<string, { mtime: number; meta: CachedMetadata | null; started?: string; step: CardStep; done: CardDone[] }>();
+    const read = new Map<string, KanbanLane["cards"]>(); // 読み直したボードのカード / the cards of the boards read again
     await Promise.all(this.tasks.filter((t) => t.kind === "kanban" && t.cards).map(async (t) => {
       const file = this.app.vault.getAbstractFileByPath(t.path);
       if (!(file instanceof TFile)) return;
@@ -3793,10 +3798,25 @@ export class GanttView extends ItemView {
       if (had && had.mtime === file.stat.mtime && had.meta === meta && had.started === key) return void steps.set(t.path, had);
       const lanes = kanbanLanes(meta, await this.app.vault.cachedRead(file));
       const step = kanbanStep(lanes, statuses, started);
-      // チェックして日付のあるカード（「前回から終わったもの」に使う）/ checked cards with a done date (for "done since last time")
-      const done = lanes.flatMap((l) => l.cards).flatMap((c) => (c.done && cardDoneOn(c.text) ? [{ card: cardLabel(c.text), on: cardDoneOn(c.text)! }] : []));
-      steps.set(t.path, { mtime: file.stat.mtime, meta, started: key, step, done });
+      read.set(t.path, lanes.flatMap((l) => l.cards));
+      steps.set(t.path, { mtime: file.stat.mtime, meta, started: key, step, done: [] });
     }));
+    // 手順を終えた日（「前回から終わったもの」に使う）：カードに ✅ の日付があればそれ、無ければこの端末がチェックを初めて見た日。どこでチェックしても（Kanban・詳細パネル・ほかの端末）数え、ノートには何も書かない
+    // when each step was done (for "done since last time"): its ✅ date when the card has one, else the day this computer first saw it ticked.
+    // A tick counts wherever it was made (Kanban, the detail panel, another computer), and nothing is written into the notes
+    if (read.size) {
+      const seen = (this.app.loadLocalStorage(STEPS_KEY) as Record<string, StepsSeen> | null) ?? {};
+      const today = this.today();
+      for (const [path, cards] of read) {
+        const { on } = (seen[path] = seeSteps(seen[path], cards, dayToStr(today), dayToStr(today - 30)));
+        steps.get(path)!.done = cards.flatMap((c) => {
+          const card = cardLabel(c.text);
+          const day = c.done ? cardDoneOn(c.text) ?? on[card] : undefined;
+          return day ? [{ card, on: day }] : [];
+        });
+      }
+      this.app.saveLocalStorage(STEPS_KEY, seen);
+    }
     this.cardSteps = steps;
   }
 
@@ -4511,7 +4531,7 @@ export class GanttView extends ItemView {
         let marked = false; // 今か次のカードを 1 枚だけ目立たせる / the current or next card is marked once
         const tick = (c: KanbanLane["cards"][number], done: boolean) => void this.mutate(tr().undoEdit(t.name), [t.path], async () => {
           let stale = false;
-          await this.app.vault.process(file, (s) => setCardDone(s, c.line, c.text, done, dayToStr(this.today())) ?? ((stale = true), s));
+          await this.app.vault.process(file, (s) => setCardDone(s, c.line, c.text, done) ?? ((stale = true), s));
           if (stale) {
             new Notice(tr().cardStale);
             void this.refresh();
