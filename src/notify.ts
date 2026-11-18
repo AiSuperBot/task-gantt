@@ -1,6 +1,7 @@
 import { Notice, requestUrl } from "obsidian";
 import type GanttPlugin from "./main";
 import { collectTasks, toInstant } from "./model";
+import { isOpen } from "./filter";
 import { formatDate } from "./timeline";
 import { t as tr } from "./i18n";
 
@@ -37,6 +38,7 @@ export async function checkNotifications(plugin: GanttPlugin, fromMs: number, to
   const tasks = collectTasks(plugin.app, { ...s, recurse: true }, "");
   let dirty = false;
   for (const t of tasks) {
+    if (!isOpen(t, s.statuses)) continue; // 終わった・中止した仕事は知らせない / finished or cancelled work isn't announced
     const ends: { kind: "start" | "end"; date?: string; time?: string; on: boolean }[] = [
       { kind: "start", date: t.start, time: t.startTime, on: n.notifyStart && !t.milestone },
       { kind: "end", date: t.end, time: t.endTime, on: n.notifyEnd },
