@@ -12,7 +12,7 @@
      each text itself (plaintext below) */
   direction: ltr;
   /* 休日の網掛けの色 / the shading of non-working days */
-  --ogantt-offday: var(--background-modifier-hover);
+  --ogantt-offday: color-mix(in srgb, var(--background-modifier-hover) 55%, transparent); /* 気づける程度に / just enough to notice */
 }
 /* ツールバーからボード本体までの列。詳細パネルはこの右に並び、ボードを覆わない
    the column from the toolbar down to the board; the detail panel docks to its right instead of covering it */
@@ -116,6 +116,9 @@ button.ogantt-title {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
   border-left: 1px solid var(--background-modifier-border);
+}
+.ogantt-add-kind.mod-cta {
+  border-left-color: color-mix(in srgb, var(--text-on-accent) 35%, transparent);
 }
 /* 空の状態：理由と次の一手のボタン / the empty state: the reason, plus a button for the next step */
 .ogantt-empty {
@@ -708,7 +711,7 @@ button.ogantt-legend-chip {
   right: 0;
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--background-modifier-border-hover);
+  border-bottom: 1px solid var(--background-modifier-border);
   cursor: pointer;
   font-size: 0.85em;
 }
@@ -1115,7 +1118,7 @@ input.ogantt-cell-input[type="number"] {
   font-size: 0.72em;
   color: var(--text-muted);
   white-space: nowrap;
-  border-left: 1px solid var(--background-modifier-border-hover);
+  border-left: 1px solid var(--background-modifier-border);
 }
 .ogantt-band {
   position: absolute;
@@ -1150,7 +1153,61 @@ input.ogantt-cell-input[type="number"] {
 /* 今日の線：格子より目立ち、期限切れの赤とは別の色 / the today line: stronger than the grid, and not the overdue red */
 .ogantt-today {
   stroke: var(--interactive-accent);
-  stroke-width: 1.5;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--interactive-accent) 55%, transparent));
+}
+/* 今日の札：月の段に置き、細い線で今日の線へつなぐ（日付の目盛りを隠さない）/ the Today pill sits in the month row, joined to the today line by a thin stem (it never hides a date) */
+.ogantt-today-pill {
+  position: absolute;
+  top: 3px;
+  z-index: 1;
+  transform: translateX(-50%);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  box-shadow: 0 0 0 2px var(--background-secondary);
+  font-size: 0.68em;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.ogantt-today-pill::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 2px;
+  height: 24px;
+  transform: translateX(-50%);
+  background: var(--interactive-accent);
+  opacity: 0.6;
+}
+/* いまのスプリント：軸の下端の線と、その日付の淡い塗り / the current sprint: a line along the axis's foot and a faint wash over its dates */
+.ogantt-sprint-span {
+  position: absolute;
+  bottom: -1px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--interactive-accent);
+  opacity: 0.7;
+}
+.ogantt-sprint-band {
+  fill: var(--interactive-accent);
+  fill-opacity: 0.07;
+  pointer-events: none;
+}
+/* 載っている行の帯（表の行のホバーと同じ色）/ the hovered row's band (the table row's hover colour) */
+.ogantt-row-band {
+  fill: var(--background-modifier-hover);
+  pointer-events: none;
+}
+/* 遅れの尾：期限から今日まで / the late tail, from the due date to today */
+.ogantt-late-tail {
+  fill: var(--color-red);
+  fill-opacity: 0.6;
+  pointer-events: none;
 }
 /* 稲妻線（今日基準の進捗折れ線）/ progress line against today */
 .ogantt-progress-line {
@@ -1162,6 +1219,21 @@ input.ogantt-cell-input[type="number"] {
 }
 .ogantt-bar {
   cursor: grab;
+  stroke-width: 0;
+}
+/* バーの種類は表の印と同じ文法：待ちは中抜き（その色の縁と淡い地）、進行中は塗り、止まっているのは斜線、完了は淡く。終わった仕事は退く
+   a bar's kind follows the table's marks: hollow while waiting (an edge and a faint fill in its colour), solid once started, hatched when blocked,
+   faded once done, so finished work steps back. The hover, overdue and broken-link outlines come later and win */
+.ogantt-bar-g.is-queued :is(.ogantt-bar, .ogantt-milestone) {
+  fill-opacity: 0.2;
+  stroke: var(--bar);
+  stroke-width: 1.5;
+}
+.ogantt-bar-g.is-done :is(.ogantt-bar, .ogantt-milestone) {
+  fill-opacity: 0.4;
+}
+.ogantt-bar-g.is-done .ogantt-bar-progress {
+  display: none;
 }
 /* タッチでもバー・ハンドルをドラッグできるように（スクロールに取られない）/ let touch drag bars and handles instead of scrolling */
 .ogantt-bar,
@@ -1203,11 +1275,11 @@ input.ogantt-cell-input[type="number"] {
 /* 見出しのまとめバー（色は見出しの色を JS で。無いときはこの色）/ a heading's summary bar (tinted with the heading colour from JS; this one otherwise) */
 .ogantt-group-bar {
   fill: var(--text-faint);
-  opacity: 0.85;
+  opacity: 0.5;
 }
 .ogantt-group-cap {
   fill: var(--text-faint);
-  opacity: 0.85;
+  opacity: 0.5;
 }
 /* 文字の大きさは描くときに付ける（札の位置を決める計測と同じ値）/ the font size is set when drawing (the same value used to place the pills) */
 .ogantt-bar-label {

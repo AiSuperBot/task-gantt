@@ -73,7 +73,7 @@ import { schedulePush } from "./gcal/sync";
 import { isConnected } from "./gcal/auth";
 import { ATTENTION, EXCEPTIONS, applyFilters, tagSpelling, besideHeading, exceptionsOf, interruptions, isOpen, isOverdue, isUrgent, nextToStart, regroup, runningWorkOf, subtaskSummary, urgentFirst, Exception, GroupBy, Interruptions } from "./filter";
 import { BoardContext, Move, MutateResult, StatusChange } from "./board";
-import { CellColumn, ColumnDef, allColumns, columnList, columnWidth, disabledLast, manualComparator, moveColumn, paintProgress, progressPct, statusMark, taskComparator, toggleColumn, visibleColumns } from "./columns";
+import { CellColumn, ColumnDef, allColumns, columnList, columnWidth, disabledLast, manualComparator, moveColumn, paintProgress, progressPct, statusKind, statusMark, taskComparator, toggleColumn, visibleColumns } from "./columns";
 import { boardColumns, boardWhen, byPerson, isSprint } from "./lanes";
 
 const ROW_H = 30; // 行の高さ（表とタイムラインで共通）/ shared row height
@@ -1866,13 +1866,13 @@ export class GanttView extends ItemView {
     }
     this.useLayout(this.layout);
     // 新規タスク追加（アイコン＋ラベル）/ add a new task (icon + label)
-    const add = bar.createEl("button", { cls: "ogantt-add" });
+    const add = bar.createEl("button", { cls: "ogantt-add mod-cta" }); // 唯一の主な操作 / the one primary action
     setIcon(add, "plus");
     add.createSpan({ cls: "ogantt-add-label", text: tr().newTaskName });
     add.setAttr("aria-label", tr().newTaskAria);
     add.onclick = () => void this.createNewTask();
     // 種類（ノート / カンバン / キャンバス）を選んで作る / pick the kind (note / kanban / canvas) to create
-    const kinds = bar.createEl("button", { cls: "ogantt-add-kind", attr: { "aria-label": tr().newTaskKindAria } });
+    const kinds = bar.createEl("button", { cls: "ogantt-add-kind mod-cta", attr: { "aria-label": tr().newTaskKindAria } });
     setIcon(kinds, "chevron-down");
     kinds.onclick = () => {
       const m = new Menu();
@@ -2654,13 +2654,18 @@ export class GanttView extends ItemView {
     const svgWrap = grid.createDiv({ cls: "ogantt-svgwrap" });
     // 行の区切り線と休日の網掛けは背景で描く（行ごと・日ごとに要素を作らない）/ row lines and non-working days are a background, not elements
     const offDays = tickZoom === "Month" ? "" : offDayGradient(this.range.min, scheduleOptions(this.plugin.settings).cal, this.ppd, "var(--ogantt-offday)");
-    const rowLines = `repeating-linear-gradient(to bottom, transparent 0 ${ROW_H - 1}px, var(--background-modifier-border-hover) ${ROW_H - 1}px ${ROW_H}px)`;
+    const rowLines = `repeating-linear-gradient(to bottom, transparent 0 ${ROW_H - 1}px, var(--background-modifier-border) ${ROW_H - 1}px ${ROW_H}px)`;
     svgWrap.style.backgroundImage = [offDays, rowLines].filter((x) => x && x !== "none").join(", ");
     const svg = svgWrap.createSvg("svg", { cls: "ogantt-svg" });
     svg.setAttribute("width", String(width));
     svg.setAttribute("height", String(bodyH));
     const layer = (cls: string) => svg.appendChild(this.svgEl("g", { class: cls }));
     const bgLayer = layer("ogantt-bg-layer");
+    // いまのスプリントの日付を淡く塗る（ボードと人の「いま」と同じ期間）/ the current sprint's dates get a faint wash (the same "now" as the Board and People)
+    const sprint = this.currentSprint();
+    if (sprint) svg.insertBefore(this.svgEl("rect", { x: (sprint.from - this.range.min) * this.ppd, y: 0, width: (sprint.to - sprint.from + 1) * this.ppd, height: bodyH, class: "ogantt-sprint-band" }), bgLayer);
+    // 行をたどる帯：載っている行をタイムラインの端から端まで淡く塗り、名前とバーを目で結ぶ / a band following the hovered row across the timeline, so a name and its bar line up
+    const band = svg.appendChild(this.svgEl("rect", { x: 0, y: -ROW_H, width, height: ROW_H, class: "ogantt-row-band" }));
     this.drawToday(svg, width, bodyH);
     const copyLayer = layer("ogantt-copy-layer");
     // 依存の矢印はバーの下：重なったところではバーがクリックとホバーを受ける（矢印の先はバーの端の外なので隠れない）
@@ -2691,6 +2696,12 @@ export class GanttView extends ItemView {
     };
     grid.addEventListener("mouseover", (e) => highlight((e.target as Element).closest("[data-path]")?.getAttribute("data-path") ?? null));
     grid.addEventListener("mouseleave", () => highlight(null));
+    grid.addEventListener("mousemove", (e) => {
+      const tr = (e.target as Element).closest<HTMLElement>(".ogantt-tr");
+      const i = tr ? Number(tr.dataset.index) : svgWrap.contains(e.target as Node) ? Math.floor((e.clientY - svg.getBoundingClientRect().top) / ROW_H) : -1;
+      band.setAttribute("y", String(i * ROW_H));
+    });
+    grid.addEventListener("mouseleave", () => band.setAttribute("y", String(-ROW_H)));
 
     // 見えている行（＋前後の余白）だけを描き、スクロールでその範囲を出たら描き直す
     // draw only the rows in view (plus a margin); repaint once scrolling leaves that range
@@ -2884,6 +2895,15 @@ export class GanttView extends ItemView {
       box.style.width = `${(bands[k + 1]?.x ?? width) - b.x}px`;
       box.createSpan({ text: b.label }).style.left = `${tw}px`;
     });
+    // 今日の札（線の真上）と、いまのスプリントの期間（軸の下端の線。名前は説明に）/ the Today pill above the line, and the current sprint's span along the axis's foot (its name in the tooltip)
+    const today = (this.today() - this.range.min) * this.ppd;
+    if (today >= 0 && today <= width) axis.createDiv({ cls: "ogantt-today-pill", text: tr().today }).style.left = `${today}px`;
+    const sprint = this.currentSprint();
+    if (sprint) {
+      const span = axis.createDiv({ cls: "ogantt-sprint-span", attr: { title: sprint.task.name, "aria-label": sprint.task.name } });
+      span.style.left = `${(sprint.from - this.range.min) * this.ppd}px`;
+      span.style.width = `${(sprint.to - sprint.from + 1) * this.ppd}px`;
+    }
   }
 
   // 表の 1 行（グループ見出しかタスク）。見えている範囲だけ作るので、行番号から絶対位置に置く
@@ -3319,9 +3339,15 @@ export class GanttView extends ItemView {
     const aStart = anchorStart(t);
     if (!aStart) return;
     const x = this.xOf(aStart);
-    const flags = this.disabled.has(t.path) ? " is-disabled"
-      : (this.late?.has(t.path) ? " is-late" : "") + (isOverdue(t, this.plugin.settings.statuses, this.today()) ? " is-overdue" : "");
-    const g = this.svgEl("g", { class: "ogantt-bar-g" + (group === "cancelled" ? " is-cancelled" : "") + flags + (t.path === this.selectedPath ? " is-selected" : ""), "data-path": t.path });
+    const { statuses, autoStatus } = this.plugin.settings;
+    const overdue = !this.disabled.has(t.path) && isOverdue(t, statuses, this.today());
+    const flags = this.disabled.has(t.path) ? " is-disabled" : (this.late?.has(t.path) ? " is-late" : "") + (overdue ? " is-overdue" : "");
+    // 種類は表の印と同じ文法：待ちは中抜き、進行中は塗り、止まっているのは斜線、完了は淡く（色だけに頼らない）
+    // the kind follows the table's marks: hollow while waiting, solid once started, hatched when blocked, faded once done (not colour alone)
+    const kind = statusKind(statuses.find((s) => s.id === t.status), autoStatusTargets(statuses, autoStatus).started);
+    const color = fill(t);
+    const g = this.svgEl("g", { class: `ogantt-bar-g is-${kind}${flags}${t.path === this.selectedPath ? " is-selected" : ""}`, "data-path": t.path });
+    g.style.setProperty("--bar", color);
     let lx = x; // 左端ハンドル位置 / left handle x
     let rx = x; // 右端ハンドル位置 / right handle x
     if (t.milestone) {
@@ -3329,7 +3355,7 @@ export class GanttView extends ItemView {
       const dia = this.svgEl("path", {
         d: `M ${x} ${cyMid - r} L ${x + r} ${cyMid} L ${x} ${cyMid + r} L ${x - r} ${cyMid} Z`,
         class: "ogantt-milestone",
-        fill: fill(t),
+        fill: color,
       });
       g.appendChild(dia);
       this.attachDrag(g, dia, t);
@@ -3337,7 +3363,7 @@ export class GanttView extends ItemView {
       rx = x + r;
     } else {
       const w = Math.max((dayIndex(anchorEnd(t) ?? aStart) - dayIndex(aStart) + 1) * this.ppd, 6);
-      const rect = g.appendChild(this.svgEl("rect", { x, y, width: w, height: h, rx: 4, class: "ogantt-bar", fill: fill(t) }));
+      const rect = g.appendChild(this.svgEl("rect", { x, y, width: w, height: h, rx: 4, class: "ogantt-bar", fill: color }));
       const p = Math.min(100, t.progress ?? 0);
       const prog = p > 0 ? g.appendChild(this.svgEl("rect", { x, y, width: (w * p) / 100, height: h, rx: 4, class: "ogantt-bar-progress" })) : null;
       const hatch = group === "deferred" ? g.appendChild(this.svgEl("rect", { x, y, width: w, height: h, rx: 4, class: "ogantt-bar-hatch", fill: this.hatch(svg) })) : null;
@@ -3360,7 +3386,12 @@ export class GanttView extends ItemView {
       });
       rx = x + w;
     }
-    this.drawLabel(g, t, rx + LABEL_GAP, cyMid, group, row.group);
+    // 期限を過ぎて終わっていない仕事は、期限から今日の終わりまで赤い尾を引く（今日の辺りを見ていても遅れが見える）
+    // late work trails a red tail from its due date through today, so it shows while the view is at today
+    const todayEnd = (this.today() - this.range.min + 1) * this.ppd;
+    const tail = overdue && todayEnd > rx ? todayEnd : rx;
+    if (tail > rx) g.appendChild(this.svgEl("rect", { x: rx, y: cyMid - 2, width: tail - rx, height: 4, rx: 2, class: "ogantt-late-tail" }));
+    this.drawLabel(g, t, tail + LABEL_GAP, cyMid, group, row.group);
     g.addEventListener("pointerenter", (e) => {
       if (!this.readOnly(t.path)) handles?.show(t, g, lx, rx, cyMid);
       this.showCard(t, e);

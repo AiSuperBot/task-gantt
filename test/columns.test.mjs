@@ -1,6 +1,6 @@
 // 列定義の並び・表示・並べ替え（visibleColumns / columnWidth / taskComparator）の検証
 // Tests for column order, visibility, widths and sorting (visibleColumns / columnWidth / taskComparator)
-import { BUILTIN_COLUMNS, visibleColumns, columnWidth, taskComparator, customColumn, customColumnId, columnList, toggleColumn, moveColumn, allColumns, manualComparator, disabledLast } from "./columns.mjs";
+import { BUILTIN_COLUMNS, visibleColumns, columnWidth, taskComparator, customColumn, customColumnId, columnList, toggleColumn, moveColumn, allColumns, manualComparator, disabledLast, statusKind } from "./columns.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -121,6 +121,11 @@ check("unknown sort column falls back to start", sorted(ALL, settings("ghost")) 
   check("manual: 並びの順、並びに無いものは後ろで開始日順", names(manualComparator(["c", "a"], byStart)) === "cabd");
   check("manual: 止めたタスクは最後（その中も並びの順）", names(disabledLast(new Set(["c", "b"]), manualComparator(["c", "a"], byStart))) === "adcb");
 }
+
+// 表の印とバーが同じ文法で読むステータスの種類 / the status kind the table's marks and the bars both read
+const KINDS = [{ id: "todo", group: "active" }, { id: "doing", group: "active" }, { id: "hold", group: "deferred" }, { id: "done", group: "completed" }, { id: "x", group: "cancelled" }];
+check("statusKind: waiting, running, blocked, done, cancelled", KINDS.map((s) => statusKind(s, "doing")).join() === "queued,running,blocked,done,cancelled");
+check("statusKind: a task without a status is waiting", statusKind(undefined, "doing") === "queued");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
