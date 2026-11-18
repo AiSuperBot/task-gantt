@@ -635,7 +635,7 @@ export class GanttSettingTab extends PluginSettingTab {
         })());
       })
       .addText((t) => {
-        t.setPlaceholder(tr().setStatusLabel).setValue(st.label).onChange((v) => { st.label = v; this.save(); });
+        t.setPlaceholder(tr().setStatusLabel).setValue(st.label).onChange((v) => { st.label = v; }); // 保存は確定時（下）/ saved on commit (below)
         // 名前で覚えている見出しのアイコン・畳み状態は、打ち終えたとき（確定時）にまとめて付け替える / the heading icon and collapse state kept by name move once, on commit
         let was = st.label;
         t.inputEl.addEventListener("change", () => {
@@ -693,7 +693,10 @@ export class GanttSettingTab extends PluginSettingTab {
         t.setPlaceholder(tr().setCfKey).setValue(f.key);
         t.inputEl.addEventListener("change", () => this.commitCustomFieldKey(f, t));
       })
-      .addText((t) => t.setPlaceholder(tr().setCfLabel).setValue(f.label).onChange((v) => { f.label = v; this.save(); }))
+      .addText((t) => {
+        t.setPlaceholder(tr().setCfLabel).setValue(f.label).onChange((v) => { f.label = v; });
+        t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存（打つたびに全ボードを描き直さない）/ saved once typed, not redrawing every board per key
+      })
       .addDropdown((d) => {
         d.addOption("text", tr().cfTypeText).addOption("number", tr().cfTypeNumber).addOption("date", tr().cfTypeDate);
         d.setValue(f.type)
@@ -892,7 +895,10 @@ export class GanttSettingTab extends PluginSettingTab {
 
   private ctlWebhook(setting: Setting, key: "discordWebhook" | "slackWebhook" | "teamsWebhook", placeholder: string): void {
     const n = this.plugin.settings.notify;
-    setting.addText((t) => t.setPlaceholder(placeholder).setValue(n[key]).onChange((v) => { n[key] = v.trim(); this.save(); }));
+    setting.addText((t) => {
+      t.setPlaceholder(placeholder).setValue(n[key]).onChange((v) => { n[key] = v.trim(); });
+      t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存 / saved once typed
+    });
   }
 
   private ctlNotifyToggle(setting: Setting, key: "notifyStart" | "notifyEnd"): void {
@@ -915,7 +921,10 @@ export class GanttSettingTab extends PluginSettingTab {
   // one helper per row, shared by display() and getSettingDefinitions() so the two can't drift
   private ctlGcalClientId(setting: Setting): void {
     const g = this.plugin.settings.gcal;
-    setting.addText((t) => t.setValue(g.clientId).onChange((v) => { g.clientId = v.trim(); this.save(); }));
+    setting.addText((t) => {
+      t.setValue(g.clientId).onChange((v) => { g.clientId = v.trim(); });
+      t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存 / saved once typed
+    });
   }
 
   // 入力値は data.json ではなく SecretStorage へ保存 / saved to SecretStorage, not data.json
