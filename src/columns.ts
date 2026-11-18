@@ -495,8 +495,14 @@ function paintAssignee(ctx: BoardContext, td: HTMLElement, t: Task, people: stri
 // ステータスの印：色に形を重ねる（白黒でも分かる）。始めた＝塗りの丸、それ以外のアクティブ＝輪、延期＝四角、完了＝チェック、中止＝×
 // a status mark: a shape on top of the colour (readable in greyscale): started = filled dot, other Active = ring, Deferred = square,
 // Completed = check, Cancelled = cross
+// ステータスの種類：表の印とタイムラインのバーが同じ文法で使う（ステータスの無いタスクは待ち）
+// a status's kind, the one grammar shared by the table's marks and the timeline's bars (a task without a status is waiting)
+export function statusKind(s: StatusDef | undefined, startedId: string | undefined): "done" | "cancelled" | "blocked" | "running" | "queued" {
+  return s?.group === "completed" ? "done" : s?.group === "cancelled" ? "cancelled" : s?.group === "deferred" ? "blocked" : s && s.id === startedId ? "running" : "queued";
+}
+
 export function statusMark(host: HTMLElement, s: StatusDef, startedId: string | undefined): HTMLElement {
-  const kind = s.group === "completed" ? "done" : s.group === "cancelled" ? "cancelled" : s.group === "deferred" ? "blocked" : s.id === startedId ? "running" : "queued";
+  const kind = statusKind(s, startedId);
   const mark = host.createSpan({ cls: `ogantt-status-dot is-${kind}`, attr: { "aria-hidden": "true" } });
   mark.style.setProperty("--ogantt-status", s.color);
   if (kind === "done" || kind === "cancelled") setIcon(mark, kind === "done" ? "check" : "x");
