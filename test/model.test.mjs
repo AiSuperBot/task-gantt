@@ -1,6 +1,6 @@
 // buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
-import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName, applyStatus, cardDoneOn, cardLabel } from "./model.mjs";
+import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName, applyStatus, cardDoneOn, cardLabel, seeSteps } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -53,11 +53,21 @@ check("withoutName: 名前と区切りを外す", withoutName("DB Adapter — כ
 check("withoutName: 区切りが無ければそのまま", withoutName("DB Adaptery x", "DB Adapter") === "DB Adaptery x");
 check("withoutName: 名前だけのカードはそのまま", withoutName("DB Adapter", "DB Adapter") === "DB Adapter");
 check("setCardDone: 行が別のカードなら書かない", setCardDone(board, 2, "a [[x|y]]", true) === null);
-// 終えた日は Tasks プラグインと同じ「✅ 日付」で書き、外せば消す / the done day is written as the Tasks plugin does ("✅ date") and removed on an uncheck
-check("setCardDone: チェックで ✅ 日付を書く", setCardDone(board, 2, "b", true, "2026-11-15") === board.replace("- b", "- [x] b ✅ 2026-11-15"));
-const dated = setCardDone(board, 4, "c", true, "2026-11-15");
-check("setCardDone: CRLF の行でも日付は改行の前に、1 つだけ", dated === board.replace("- [x] c\r", "- [x] c ✅ 2026-11-15\r"));
-check("setCardDone: 外すと日付も消える", setCardDone(dated, 4, "c ✅ 2026-11-15", false, "2026-11-16") === board.replace("- [x] c\r", "- [ ] c\r"));
+// チェックしてもカードに何も書き足さない。外すと前の版や Tasks プラグインの「✅ 日付」は消える / a tick adds nothing to the card; an untick removes an earlier "✅ date"
+check("setCardDone: a tick adds no text", setCardDone(board, 2, "b", true) === board.replace("- b", "- [x] b"));
+const dated = board.replace("- [x] c\r", "- [x] c ✅ 2026-11-15 ✅ 2026-11-16\r");
+check("setCardDone: an untick removes every ✅ date, keeping CRLF", setCardDone(dated, 4, "c ✅ 2026-11-15 ✅ 2026-11-16", false) === board.replace("- [x] c\r", "- [ ] c\r"));
+check("setCardDone: a tick keeps a ✅ date already there", setCardDone(dated, 4, "c ✅ 2026-11-15 ✅ 2026-11-16", true) === dated);
+// 手順のチェックを見た日（この端末が初めて見た日）/ the day this computer first saw a step ticked
+const C = (text, done) => ({ text, done });
+const base = seeSteps(undefined, [C("a", true), C("b", false)], "2026-11-18", "2026-10-19");
+check("seeSteps: a board seen for the first time dates nothing", base.done.join() === "a" && Object.keys(base.on).length === 0);
+const next = seeSteps(base, [C("a", true), C("[[Pool|b]]", true), C("c", false)], "2026-11-19", "2026-10-20");
+check("seeSteps: a newly ticked step gets today, by its label", next.on.b === "2026-11-19" && next.on.a === undefined);
+check("seeSteps: unticking drops the date", seeSteps(next, [C("b", false)], "2026-11-20", "2026-10-21").on.b === undefined);
+check("seeSteps: an archived step keeps its date", seeSteps(next, [C("a", true)], "2026-11-20", "2026-10-21").on.b === "2026-11-19");
+check("seeSteps: old dates are let go", seeSteps(next, [C("a", true), C("b", true)], "2026-12-25", "2026-11-25").on.b === undefined);
+check("seeSteps: a step already dated keeps its first day", seeSteps(next, [C("a", true), C("b", true)], "2026-11-21", "2026-10-22").on.b === "2026-11-19");
 check("cardDoneOn: ✅ の日付を読む", cardDoneOn("Connection pool ✅ 2026-11-14") === "2026-11-14" && cardDoneOn("Connection pool") === undefined);
 check("cardLabel: ✅ の日付は見せない", cardLabel("[[Connection pool|מאגר חיבורים]] ✅ 2026-11-14") === "מאגר חיבורים");
 

@@ -759,16 +759,32 @@ export function kanbanLanes(cache: CachedMetadata | null, text = ""): KanbanLane
 }
 
 // カード 1 枚のチェックを付け外しした全文。その行がもう同じカードでなければ null（読んだ後にボードが書き換わった）。チェックボックスの無いカードには付ける。
-// today があれば、付けたときに「✅ 日付」を書き、外したときに消す
+// 付けるときは何も書き足さない。外すときは「✅ 日付」（Tasks プラグインや 2.17.0〜2.17.2 が書いたもの）を消す
 // the note's text with one card checked or unchecked; null when that line no longer holds the same card (the board changed after it was read).
-// A card without a checkbox gets one. With `today`, a check writes "✅ date" and an uncheck removes it
-export function setCardDone(text: string, line: number, card: string, done: boolean, today?: string): string | null {
+// A card without a checkbox gets one. A check adds nothing; an uncheck removes any "✅ date" (as the Tasks plugin, or 2.17.0 to 2.17.2, wrote it)
+export function setCardDone(text: string, line: number, card: string, done: boolean): string | null {
   const lines = text.split("\n");
   const m = /^(\s*(?:[-*+]|\d+[.)])\s+)(?:\[.\]\s+)?([^\n]*?)(\r?)$/.exec(lines[line] ?? "");
   if (!m || m[2].trim() !== card) return null;
-  const body = today ? m[2].replace(DONE_ON, "") : m[2];
-  lines[line] = `${m[1]}[${done ? "x" : " "}] ${body}${done && today ? ` ✅ ${today}` : ""}${m[3]}`;
+  lines[line] = `${m[1]}[${done ? "x" : " "}] ${done ? m[2] : m[2].replace(new RegExp(DONE_ON.source, "g"), "")}${m[3]}`;
   return lines.join("\n");
+}
+
+// この端末が手順のチェックを初めて見た日。前に見たチェック済みと比べ、新しくチェックされたものに today を付ける（初めて見るボードは今を基準にするだけ）。
+// チェックが外れたものは日付を消し、見えなくなったもの（アーカイブ・削除）は keepFrom より古くなるまで残す。同じ名前のカードは 1 つとして数える
+// the day this computer first saw each step ticked: compared with the ticked steps it saw before, newly ticked ones get `today` (a board seen for
+// the first time only sets the baseline). Unticking drops the date; a step gone from view (archived, deleted) keeps it until older than `keepFrom`
+// shortcut: cards with the same label share one date; key by line or block id if boards ever hold duplicate steps
+export type StepsSeen = { done: string[]; on: Record<string, string> };
+export function seeSteps(prev: StepsSeen | undefined, cards: { text: string; done: boolean }[], today: string, keepFrom: string): StepsSeen {
+  const done = cards.filter((c) => c.done).map((c) => cardLabel(c.text));
+  if (!prev) return { done, on: {} };
+  const open = new Set(cards.filter((c) => !c.done).map((c) => cardLabel(c.text)));
+  const was = new Set(prev.done);
+  const on: Record<string, string> = {};
+  for (const [card, day] of Object.entries(prev.on)) if (day >= keepFrom && !open.has(card)) on[card] = day;
+  for (const card of done) if (!was.has(card)) on[card] ??= today;
+  return { done, on };
 }
 
 // タスク（ファイル）をリネーム。リンクも更新される / rename the task file (updates links)
