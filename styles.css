@@ -42,7 +42,8 @@ button.ogantt-date-val,
 button.ogantt-legend-chip,
 button.ogantt-dep-add,
 button.ogantt-board-cue,
-button.ogantt-task-chevron {
+button.ogantt-task-chevron,
+button.ogantt-quiet {
   height: auto;
   border: none;
   background: none;
@@ -58,6 +59,30 @@ button.ogantt-legend-chip:hover,
 button.ogantt-dep-add:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
+}
+/* 静かなボタン（ツールバーの「今日」）：枠も影もなく、載ると地が出る。ツールバーのほかのボタンと同じ高さ
+   a quiet button (the toolbar's Today): no border or shadow, a fill on hover, as tall as the toolbar's other controls */
+button.ogantt-quiet {
+  height: var(--input-height, 30px);
+  padding: 0 10px;
+  border-radius: var(--button-radius, 6px);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small); /* ほかの操作と同じ大きさ / the same size as the other controls */
+}
+button.ogantt-quiet:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+/* 載る・押す手応え（120ms・ease-out）。動きを減らす設定では色だけ / hover and press feedback (120 ms, ease-out); colour only with reduced motion */
+.ogantt-toolbar button,
+.ogantt-filterbar button {
+  transition: background-color 120ms ease-out, color 120ms ease-out, box-shadow 120ms ease-out, transform 120ms ease-out;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ogantt-toolbar button:active:not(:disabled),
+  .ogantt-filterbar button:active:not(:disabled) {
+    transform: scale(0.97);
+  }
 }
 
 .ogantt-toolbar {
@@ -105,6 +130,14 @@ button.ogantt-title {
   background: var(--background-primary);
   color: var(--text-normal);
   box-shadow: var(--shadow-s);
+}
+/* 取り消し・やり直し：アイコンだけ、使えないときは薄く / undo and redo: icons only, faded while there is nothing to undo or redo */
+.ogantt-history button {
+  padding: 0 8px;
+}
+.ogantt-seg button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 /* 新規タスク追加ボタン（アイコン＋ラベル）。種類を選ぶ ▾ と 1 つのボタンに見せる
    add-task button (icon + label), reading as one split button with the kind caret */
@@ -185,9 +218,20 @@ button.ogantt-opt-gear {
   background: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  box-shadow: var(--shadow-s);
+  box-shadow: var(--shadow-l); /* 浮いている面だけに影 / elevation belongs to floating surfaces */
   padding: 8px;
   overflow-y: auto; /* 高さは JS が窓に合わせて制限する / JS caps the height to the window */
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ogantt-popover {
+    animation: ogantt-pop 140ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+}
+@keyframes ogantt-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
 }
 .ogantt-colmenu {
   padding: 6px;
@@ -233,6 +277,15 @@ button.ogantt-opt-gear {
   opacity: 0.3;
   cursor: default;
 }
+/* 並べ替えの矢印は載ったとき・キーボードで中にいるときだけ（タッチでは常に）/ the reorder arrows show on hover or keyboard focus within (always on touch) */
+.ogantt-colmenu-col .clickable-icon {
+  transition: opacity 120ms ease-out;
+}
+@media (hover: hover) {
+  .ogantt-colmenu-col:not(:hover):not(:focus-within) .clickable-icon {
+    opacity: 0;
+  }
+}
 .ogantt-colmenu-note {
   padding: 0 8px 4px 30px;
   max-width: 220px;
@@ -277,7 +330,7 @@ button.ogantt-opt-gear {
   font-size: 0.9em;
   font-weight: var(--font-semibold, 600);
 }
-/* 絞り込み本体の枠（Wrike 風）/ the bordered filter group (Wrike-style) */
+/* 絞り込み：チップを 1 列に。枠は付けない（枠は文字を打つ欄に見える）/ the filters: chips in a row, with no box around them (a box reads as a text field) */
 .ogantt-filter-group {
   display: flex;
   flex: 1;
@@ -285,10 +338,6 @@ button.ogantt-opt-gear {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  background: var(--background-primary);
 }
 /* プリセットボタン（フィルタ行の左端）/ presets button (leftmost of the filter row) */
 .ogantt-preset-btn,
@@ -736,6 +785,7 @@ button.ogantt-legend-chip {
 }
 .ogantt-tr.is-selected {
   background: var(--background-modifier-hover);
+  box-shadow: inset 2px 0 0 var(--interactive-accent); /* 開いているタスクの印 / marks the open task */
 }
 /* ドラッグ中の行 / row being dragged */
 .ogantt-tr.is-dragging {
@@ -848,6 +898,7 @@ button.ogantt-legend-chip {
   padding: 0 8px;
   flex: none;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums; /* 日付と数が縦にそろう / dates and numbers line up */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1557,18 +1608,29 @@ input.ogantt-cell-input[type="number"] {
   gap: 8px;
   margin-top: 16px;
 }
-.ogantt-detail-title {
+/* 名前は見出し：載ると地、編集中だけ入力欄に見える（Obsidian の入力欄の地と枠に勝つよう見出しの中の input で指定）
+   the name is a heading: a fill on hover, a field only while editing (scoped to the header's input to beat Obsidian's text-field fill and border) */
+.ogantt-detail-head input.ogantt-detail-title {
   flex: 1;
-  font-size: 1.1em;
-  font-weight: 600;
-  background: transparent;
+  min-width: 0;
+  height: auto;
+  margin-inline-start: -6px;
+  padding: 4px 6px;
   border: none;
-  border-bottom: 1px solid transparent;
-  padding: 2px 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.3em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
 }
-.ogantt-detail-title:hover,
-.ogantt-detail-title:focus {
-  border-bottom-color: var(--background-modifier-border);
+.ogantt-detail-head input.ogantt-detail-title:hover {
+  background: var(--background-modifier-hover);
+}
+.ogantt-detail-head input.ogantt-detail-title:focus {
+  background: var(--background-modifier-form-field);
+  box-shadow: 0 0 0 2px var(--background-modifier-border-focus);
 }
 .ogantt-detail-meta {
   margin: 12px 0;
@@ -1577,13 +1639,15 @@ input.ogantt-cell-input[type="number"] {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
+  min-height: 34px; /* 欄ごとに同じ間隔 / one rhythm for every field */
+  padding: 2px 0;
   font-size: 0.9em;
 }
 .ogantt-detail-label {
   width: 96px;
   flex: none;
   color: var(--text-muted);
+  font-weight: var(--font-medium, 500);
 }
 .ogantt-detail-field {
   flex: 1;
@@ -2075,6 +2139,7 @@ button.ogantt-board-cue:hover {
   align-items: flex-start;
   gap: 4px;
   margin-bottom: 12px;
+  font-size: 0.9em; /* 欄と同じ大きさ / the fields' size */
 }
 .ogantt-exec-card {
   unicode-bidi: plaintext;
@@ -2311,6 +2376,7 @@ button.ogantt-dep-add {
 }
 /* 見出しの件数は控えめに、期限切れや急ぎがあるときは本文色の太字 / a heading's counts stay quiet; bold body text when something is overdue or urgent */
 .ogantt-group-count {
+  font-variant-numeric: tabular-nums;
   font-weight: 400;
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
@@ -2339,7 +2405,7 @@ button.ogantt-dep-add {
 /* カードの見せ方では、タイムライン専用の操作（今日・縮尺・グループ化・色分け・表示・凡例）を隠す
    in the card layouts, the Timeline-only controls (Today, zoom, group, colour, Display, legend) are hidden */
 .ogantt-board.is-cards .ogantt-today-btn,
-.ogantt-board.is-cards .ogantt-seg:not(.ogantt-layout),
+.ogantt-board.is-cards .ogantt-zoom,
 .ogantt-board.is-cards .ogantt-options,
 .ogantt-board.is-cards .ogantt-legend {
   display: none;
@@ -2425,10 +2491,16 @@ button.ogantt-sprint:hover {
   font-weight: var(--font-semibold);
 }
 .ogantt-kb-count {
+  min-width: 20px;
   margin-inline-start: auto;
-  font-weight: 400;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
   color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 button.ogantt-kb-more {
   align-self: flex-start;
@@ -2455,9 +2527,11 @@ button.ogantt-kb-more:hover {
   border-radius: var(--radius-s);
   background: var(--background-primary);
   cursor: pointer;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
 }
 .ogantt-kcard:hover {
   border-color: var(--background-modifier-border-hover);
+  box-shadow: var(--shadow-s);
 }
 .ogantt-kcard:focus-visible,
 .ogantt-kcard.is-selected {

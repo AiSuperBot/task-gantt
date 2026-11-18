@@ -1888,11 +1888,11 @@ export class GanttView extends ItemView {
       m.showAtPosition({ x: r.left, y: r.bottom + 4 }, kinds.doc);
     };
     // 今日へスクロール / scroll to today
-    const todayBtn = bar.createEl("button", { cls: "ogantt-today-btn", text: tr().today });
+    const todayBtn = bar.createEl("button", { cls: "ogantt-today-btn ogantt-quiet", text: tr().today });
     todayBtn.onclick = () => this.scrollToToday();
     // 縮尺は 1 つにつながったボタン群（押されている 1 つが現在の縮尺）/ zoom as a segmented control (the pressed one is current)
     const zoomLabel: Record<ZoomMode, string> = { Day: tr().zoomDay, Week: tr().zoomWeek, Month: tr().zoomMonth, Fit: tr().zoomFit };
-    const seg = bar.createDiv({ cls: "ogantt-seg", attr: { role: "group" } });
+    const seg = bar.createDiv({ cls: "ogantt-seg ogantt-zoom", attr: { role: "group" } });
     for (const z of ["Day", "Week", "Month", "Fit"] as ZoomMode[]) {
       const btn = seg.createEl("button", { text: zoomLabel[z], attr: { "aria-pressed": String(z === this.zoom) } });
       btn.toggleClass("is-active", z === this.zoom);
@@ -1906,14 +1906,16 @@ export class GanttView extends ItemView {
         this.rerender(); // 縮尺だけの変更なのでディスクは読み直さない / only the scale changed, so no disk read
       };
     }
+    // 取り消し・やり直しは 1 つにつながったボタン群 / undo and redo as one segmented group
+    const history = bar.createDiv({ cls: "ogantt-seg ogantt-history", attr: { role: "group" } });
     // 取り消しボタン / undo button
-    const undo = bar.createEl("button");
+    const undo = history.createEl("button");
     setIcon(undo, "undo-2");
     undo.setAttr("aria-label", tr().undoAria);
     undo.onclick = () => void this.undo();
     this.undoBtn = undo;
     // やり直しボタン / redo button
-    const redo = bar.createEl("button");
+    const redo = history.createEl("button");
     setIcon(redo, "redo-2");
     redo.setAttr("aria-label", tr().redoAria);
     redo.onclick = () => void this.redo();
