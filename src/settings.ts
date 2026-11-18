@@ -406,10 +406,11 @@ export class GanttSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     // キーは数字だけにしない（整数風のキーはオブジェクトの先頭へ並び替わり、選択肢の順が崩れる）
     // keys aren't bare digits: integer-like keys get hoisted to the front of an object and reorder the options
-    const presets: Record<string, number[]> = { satSun: [0, 6], friSat: [5, 6], sun: [0], none: [] };
+    // 既定（金・土、日〜木の週）を先頭に / the default (Friday and Saturday, a Sunday-to-Thursday week) comes first
+    const presets: Record<string, number[]> = { friSat: [5, 6], satSun: [0, 6], sun: [0], none: [] };
     const opts: Record<string, string> = {
-      satSun: tr().setWeekendSatSun,
       friSat: tr().setWeekendFriSat,
+      satSun: tr().setWeekendSatSun,
       sun: tr().setWeekendSun,
       none: tr().setWeekendNone,
     };

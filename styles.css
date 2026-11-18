@@ -1,6 +1,7 @@
 /* ===== Gantt board (表＋タイムライン レイアウト / table + timeline layout) ===== */
 .ogantt-board {
   display: flex;
+  flex-direction: column; /* ツールバー、その下に盤と詳細パネル / the toolbar, then the board and the detail panel below it */
   height: 100%;
   padding: 0;
   position: relative;
@@ -14,8 +15,13 @@
   /* 休日の網掛けの色 / the shading of non-working days */
   --ogantt-offday: color-mix(in srgb, var(--background-modifier-hover) 55%, transparent); /* 気づける程度に / just enough to notice */
 }
-/* ツールバーからボード本体までの列。詳細パネルはこの右に並び、ボードを覆わない
-   the column from the toolbar down to the board; the detail panel docks to its right instead of covering it */
+/* ツールバーの下の段：盤と、その右の詳細パネル（盤を覆わない）/ the row below the toolbar: the board, and the detail panel docked to its right (never covering it) */
+.ogantt-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+/* 凡例・絞り込みの行からボード本体までの列 / the column from the legend and filter rows down to the board */
 .ogantt-pane {
   flex: 1;
   min-width: 0;
@@ -1769,6 +1775,10 @@ button.ogantt-cal-title:hover {
 }
 .ogantt-cal-day:hover {
   background: var(--background-modifier-hover);
+}
+/* 休みの日（休日の曜日の設定から）は控えめに。選べるのは同じ / days off (from the non-working days setting) are quieter, and still pickable */
+.ogantt-cal-day.is-off {
+  color: var(--text-muted);
 }
 .ogantt-cal-day.is-today {
   box-shadow: inset 0 0 0 1px var(--interactive-accent);
