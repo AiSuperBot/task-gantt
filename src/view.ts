@@ -453,12 +453,15 @@ export class GanttView extends ItemView {
     // フォーカスがビューの中にあるときだけ届くため / a click anywhere in the board keeps focus in it (on bars and blank space too): in a pop-out
     // window the view's keys (undo and the rest) only arrive while focus is inside the view
     root.setAttr("tabindex", "-1");
-    const pane = root.createDiv({ cls: "ogantt-pane" });
-    this.renderToolbar(pane); // 右端に表示オプション / the view options sit on its right
+    // ツールバーはビューの幅いっぱい（詳細パネルの上にも）。パネルを開いても折り返しが変わらず、盤が上下に動かない
+    // the toolbar spans the whole view (above the detail panel too): opening the panel never re-wraps it, so the board doesn't jump
+    this.renderToolbar(root); // 右端に表示オプション / the view options sit on its right
+    const body = root.createDiv({ cls: "ogantt-body" });
+    const pane = body.createDiv({ cls: "ogantt-pane" });
     this.legendHost = pane.createDiv({ cls: "ogantt-legend" }); // 色の凡例 / the colour key
     this.filterHost = pane.createDiv({ cls: "ogantt-filterbar" }); // 統合フィルタ行 / the filter row
     this.gridHost = pane.createDiv({ cls: "ogantt-host" });
-    this.detailEl = root.createDiv({ cls: "ogantt-detail", attr: { tabindex: "-1" } }); // Esc で欄を抜けたときの受け皿 / takes focus when Esc leaves a field
+    this.detailEl = body.createDiv({ cls: "ogantt-detail", attr: { tabindex: "-1" } }); // Esc で欄を抜けたときの受け皿 / takes focus when Esc leaves a field
     this.detailEl.addEventListener("focusin", (e) => {
       const el = e.target as HTMLElement;
       if (el.instanceOf(HTMLInputElement)) this.fieldStart.set(el, el.value);
@@ -2051,9 +2054,11 @@ export class GanttView extends ItemView {
   private renderLegend(): void {
     const legend = this.legendHost;
     legend.empty();
-    // 色の意味が表の列（ステータス・担当者）に文字で出ているときは凡例を出さない（ステータスの編集は設定にもある）
-    // no legend while a table column already spells out what the colours mean (statuses can still be edited in settings)
-    const said = this.visibleColumns().some((c) => c.id === this.colorBy);
+    // 色の意味が表の列（ステータス・担当者）に文字で出ているときは凡例を出さない（ステータスの編集は設定にもある）。
+    // 詳細パネルが列を一時的に隠しても出し入れしない（盤が上下に動かない）
+    // no legend while a table column already spells out what the colours mean (statuses can still be edited in settings);
+    // the detail panel hiding the columns for a while doesn't toggle it, so the board never jumps up or down
+    const said = this.visibleColumns(false).some((c) => c.id === this.colorBy);
     legend.toggleClass("is-hidden", said);
     if (said) return;
     for (const k of this.colorKey()) this.legendChip(legend, k.color, k.label, k.edit);
@@ -3449,7 +3454,9 @@ export class GanttView extends ItemView {
   // completed and ⚠ overdue. What the heading already says isn't repeated: grouped by assignee, the heading's person is left out and the others follow a "+";
   // grouped by tag, the heading's tag is left out. In an export the ✓ is drawn in the name column, so only people and tags follow the bar
   private drawLabel(g: SVGElement, t: Task, x: number, cy: number, group: StatusGroup | undefined, heading: string): void {
-    const people = besideHeading(t.assignees, "assignees", this.groupBy, heading);
+    // 表に担当者の列が出ていれば、頭文字の丸も名前も繰り返さない / with the Assignee column in the table, neither initials nor names are repeated here
+    const listed = !this.bare && this.visibleColumns().some((c) => c.id === "assignee");
+    const people = listed ? [] : besideHeading(t.assignees, "assignees", this.groupBy, heading);
     const shown = people.slice(0, MAX_AVATARS);
     shown.forEach((a, k) => {
       const c = this.assigneeColor(a);
@@ -3459,16 +3466,16 @@ export class GanttView extends ItemView {
     });
     if (shown.length) x += 18 + (shown.length - 1) * 10;
     const others = people.length < t.assignees.length; // 見出しの人を省いた / the heading's person was left out
-    // 担当者の列が出ているときは名前を繰り返さず、頭文字の丸だけ / with the Assignee column shown, the initials are enough (no repeated names)
-    const who = !this.bare && this.visibleColumns().some((c) => c.id === "assignee") ? "" : people.map(linkLabel).join(", ");
+    const who = people.map(linkLabel).join(", ");
     let text = who && others ? `+ ${who}` : who;
-    // 名前は左の表に常に見えるので繰り返さない。印だけ付ける（期限切れは色だけに頼らず ⚠）/ the name is always in the table on the left, so only the marks are added (overdue gets a ⚠, not colour alone)
-    const live = !this.bare && group !== "completed" && !this.disabled.has(t.path);
-    const mark = this.bare ? "" : group === "completed" ? "✓" : live && isUrgent(t) && group !== "cancelled" ? "⚡" : live && isOverdue(t, this.plugin.settings.statuses, this.today()) ? "⚠" : "";
+    // 完了（淡いバー）と期限切れ（赤い縁と今日までの尾）はバーそのものが言うので印を足さない。急ぎはバーに表れないので ⚡
+    // done (a faded bar) and overdue (a red edge and a tail to today) are said by the bar itself, so no mark is added; urgency, which the bar doesn't show, gets ⚡
+    const mark = !this.bare && group !== "completed" && group !== "cancelled" && !this.disabled.has(t.path) && isUrgent(t) ? "⚡" : "";
     text = [mark, text].filter(Boolean).join(" ");
     if (text) g.appendChild(this.svgEl("text", { x, y: cy + 4, class: "ogantt-bar-label", "font-size": LABEL_PX })).textContent = text;
     // タグはラベルの後ろに小さな札で、タグの色で控えめに（表示メニューで隠せる）/ tags follow the label as small pills, quietly in their colour (hidden from the Display menu)
-    if (!this.showTags) return;
+    // 表にタグの列が出ていれば繰り返さない / not repeated while the table has a Tags column
+    if (!this.showTags || (!this.bare && this.visibleColumns().some((c) => c.id === "tags"))) return;
     const tags = besideHeading(t.tags, "tags", this.groupBy, heading);
     if (!tags.length) return;
     let px = text ? x + this.textWidth(text, LABEL_PX) + 8 : x;
@@ -5046,8 +5053,9 @@ export class GanttView extends ItemView {
       let y = parseInt(base.slice(0, 4), 10);
       let m = parseInt(base.slice(5, 7), 10); // 1-based
       let act = active; // 次のクリックで設定する端点 / endpoint the next click sets
-      // ロケールの曜日略称を、ロケールの週の始まり（日曜・月曜など）から / localized minimal weekday names, from the locale's first day of the week
-      const firstDay = moment.localeData().firstDayOfWeek();
+      // 週は稼働日の始まりから（金土休みなら日曜、土日休みなら月曜）。曜日の略称は表示言語で / the week starts with the first workday (Sunday after a Friday and Saturday off, Monday after Saturday and Sunday); weekday names in the UI language
+      const work = scheduleOptions(this.plugin.settings).cal;
+      const firstDay = weekStart(work);
       const wk = [...moment.weekdaysMin().slice(firstDay), ...moment.weekdaysMin().slice(0, firstDay)];
       const monthTitle = dateFormat({ year: "numeric", month: "long" }); // 表示言語の「2026年10月」「October 2026」/ the UI language's month title
 
@@ -5104,6 +5112,7 @@ export class GanttView extends ItemView {
           const ds = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
           const cell = grid.createEl("button", { cls: "ogantt-cal-day", text: String(d) });
           if (ds === todayStr) cell.addClass("is-today");
+          if (!isWorkday(dayIndex(ds), work)) cell.addClass("is-off"); // 休みの日は控えめに / days off are quieter
           if (ds === state.start) cell.addClass("is-range-start");
           if (ds === state.end) cell.addClass("is-range-end");
           if (state.start && state.end && ds > state.start && ds < state.end) cell.addClass("is-in-range");
