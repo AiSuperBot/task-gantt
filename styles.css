@@ -199,11 +199,6 @@ button.ogantt-title {
   margin-left: auto;
   font-size: var(--font-ui-small);
 }
-.ogantt-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
 /* 表示メニューのボタン（アイコン＋「表示」＋▾）/ the Display menu button (icon + "Display" + caret) */
 button.ogantt-opt-gear {
   gap: 4px;
@@ -487,11 +482,6 @@ button.ogantt-filter-chip-x {
 .ogantt-datemenu-check input[type="checkbox"] {
   margin: 0;
   cursor: pointer;
-}
-.ogantt-datemenu-empty {
-  padding: 3px 6px;
-  color: var(--text-muted);
-  font-size: 0.9em;
 }
 /* 削除ボタンは右端へ / push the remove button to the right */
 .ogantt-datemenu-del {
@@ -1693,11 +1683,6 @@ input.ogantt-cell-input[type="number"] {
   gap: 4px 8px;
 }
 /* カンバンの「カード N 枚中 M 枚が完了」/ a kanban's "M of N cards done" */
-.ogantt-progress-note {
-  flex-basis: 100%;
-  font-size: 0.85em;
-  color: var(--text-muted);
-}
 .ogantt-progress-field input[type="range"] {
   flex: 1;
   width: auto;
@@ -2091,16 +2076,6 @@ input.ogantt-swatch {
 
 /* ── 実行ボード（カンバン）：行の目印と詳細パネルの要約。ガントの階層（シェブロン・字下げ）とは別の見た目 ──
    the execution board (kanban): the row cue and the panel summary; a different look from the Gantt hierarchy (chevron, indent) ── */
-.ogantt-group-next {
-  flex: 0 1000 auto; /* 件数より先に縮む / shrinks before the counts */
-  font-weight: 400;
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
 .ogantt-cards {
   color: var(--text-muted);
 }
@@ -2131,13 +2106,6 @@ button.ogantt-board-cue:hover {
   flex: none;
   width: 12px;
   height: 12px;
-}
-.ogantt-board-cue-label {
-  flex: 0 1 auto; /* カードの文字の後で縮む / shrinks after the card text */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
 }
 .ogantt-board-cue-count {
   flex: none;

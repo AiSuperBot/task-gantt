@@ -59,12 +59,17 @@ export function attentionOf(t: Task, statuses: StatusDef[], today: number): stri
 }
 
 // 統合フィルタを filterMatch（all=AND / any=OR）で結合して絞り込む / narrow tasks by filters combined with AND/OR
+// 値をまだ選んでいない絞り込み（追加した直後）は何も絞らない：空の「次のどれか」は全部落とし、「どれでも」では空の名前が全部通してしまう
+// a filter with nothing chosen yet (just added) filters nothing: an empty "is" would drop everything, and in "any" mode an empty name would let everything through
+const isSet = (f: Filter): boolean => (f.kind === "text" ? f.value.trim() !== "" : f.kind === "category" ? f.op === "empty" || f.op === "notEmpty" || f.values.length > 0 : true);
+
 export function applyFilters(tasks: Task[], filters: Filter[], match: FilterMatch, statuses: StatusDef[], today: number): Task[] {
-  if (filters.length === 0) return tasks;
+  const set = filters.filter(isSet);
+  if (set.length === 0) return tasks;
   return tasks.filter((t) =>
     match === "any"
-      ? filters.some((f) => matchFilter(t, f, statuses, today))
-      : filters.every((f) => matchFilter(t, f, statuses, today))
+      ? set.some((f) => matchFilter(t, f, statuses, today))
+      : set.every((f) => matchFilter(t, f, statuses, today))
   );
 }
 

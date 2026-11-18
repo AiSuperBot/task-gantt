@@ -63,7 +63,7 @@ import {
   ProgressLineRow,
   Tick,
 } from "./timeline";
-import { PALETTE, distinctColors, hashColor, inkOn, resolveTagColor } from "./colors";
+import { distinctColors, hashColor, inkOn, resolveTagColor } from "./colors";
 import { closePopovers, openPopover, paletteInto, pickColor, pickIcon } from "./popover";
 import { ConfirmModal, PickModal, ChoiceModal } from "./modals";
 import { linkLabel } from "./links";
@@ -471,11 +471,12 @@ export class GanttView extends ItemView {
     // ペインの大きさが変わったら（ウィンドウ・サイドバー・詳細パネルの開閉）見える行を描き足し、Fit は幅に合わせ直す（パネルの開閉では合わせ直さない）
     // when the pane resizes (window, sidebars, the detail panel opening or closing) draw any newly visible rows, and re-fit in Fit (not for the panel)
     const ro = new (this.contentEl.win as Window & typeof globalThis).ResizeObserver(() => { // ビューの窓のもの（ポップアウトでも）/ the view's own window's (popouts too)
-      // 隠れている間に見送った読み直しを、見えた今する / the reload skipped while hidden happens now that the tab shows
-      if (this.stale && this.contentEl.isShown()) return void this.refresh();
       // 隠れたタブで描き直していたら、見えた今スクロール位置を戻す / a redraw done while the tab was hidden gets its scroll position now that it shows
       if (this.pendingScroll && this.boardMain?.clientHeight) this.applyScroll(this.boardMain, this.pendingScroll);
       this.paintWindow?.();
+      // 隠れている間に見送った読み直しを、見えた今する（位置を戻した後で：読み直しはその位置を引き継ぐ）/ the reload skipped while hidden happens now
+      // that the tab shows (after the position is restored: the reload keeps it)
+      if (this.stale && this.contentEl.isShown()) return void this.refresh();
       // 最初の描画（boardKey が決まる）までは合わせ直さない：まだタスクが無いので「空」と出てしまう / no re-fit before the first render (with no tasks yet it would show "empty")
       if (this.zoom !== "Fit" || this.boardKey === null || this.fitBase() === this.fitWidth) return;
       if (this.fitTimer != null) window.clearTimeout(this.fitTimer);
@@ -584,10 +585,10 @@ export class GanttView extends ItemView {
     if (opened) {
       this.boardKey = this.folder;
       this.loadBoard();
+      this.closeDetail(); // 先に：閉じると描き直すので、その後で前のボードの表示を忘れる / first: closing redraws, so the old board's view is forgotten after it
       this.pad = { before: 0, after: 0 };
       this.boardMain = null;
       this.cursor = 0;
-      this.closeDetail();
       this.retitle();
       // 履歴も新しく（前のボードの履歴は画面に無いファイルを書き戻してしまう）/ a fresh history too (the old one would rewrite files that aren't on screen)
       this.undoStack = [];
@@ -896,7 +897,7 @@ export class GanttView extends ItemView {
     if (!main.clientHeight) return void (this.pendingScroll = at);
     this.pendingScroll = null;
     main.scrollTop = at.top;
-    main.scrollLeft = (at.day - this.range.min) * this.ppd - (main.clientWidth - this.tableWidth()) / 2;
+    main.scrollLeft = this.dayX(at.day) - (main.clientWidth - this.tableWidth()) / 2;
     this.scrollMemo = this.scrollOf(main);
   }
 
@@ -1114,11 +1115,7 @@ export class GanttView extends ItemView {
     const foot = card.createDiv({ cls: "ogantt-kcard-foot" });
     this.excTag(foot, this.exceptionsOf(t), this.layout === "board", 2);
     if (t.kind === "kanban") this.boardCue(foot, t);
-    const kids = this.kids.get(t.path) ?? [];
-    if (kids.length) {
-      const sum = subtaskSummary(kids, statuses);
-      foot.createSpan({ cls: "ogantt-subtask-sum", text: `${sum.done}/${sum.total}`, attr: { title: tr().execComplete(sum.done, sum.total) } });
-    }
+    this.subtaskPill(foot, this.kids.get(t.path) ?? []);
     // 自分の仕事とのつながりは向きを言葉で（印だけだと URL に見える）/ the link to my work says which way in words (an icon alone reads as a URL)
     const link = this.linked.get(t.path);
     if (link) {
@@ -1522,7 +1519,6 @@ export class GanttView extends ItemView {
   private renderFilterBar(): void {
     const host = this.filterHost;
     host.empty();
-    const s = this.plugin.settings;
     const filters = this.filters;
     // 行頭のラベル（フィルタ行だと分かる見出し）/ a leading label so the row reads as "Filters"
     setIcon(host.createSpan({ cls: "ogantt-filterbar-ico" }), "filter");
@@ -1623,7 +1619,7 @@ export class GanttView extends ItemView {
   private builtinPresets(): FilterPreset[] {
     const today: DateValue = { kind: "preset", preset: "today" };
     const open: Filter = { kind: "category", field: "statusGroup", op: "isNot", values: ["completed", "cancelled"] };
-    const me = (this.app.loadLocalStorage(ME_KEY) as string | null)?.trim();
+    const me = this.me();
     return [
       // 役割ごとの入口（グループ化も切り替える）：概要＝残っている仕事をプロジェクト（フォルダ）ごと、チーム＝同じものを人ごと。日付の無い仕事・先の仕事も入る。
       // 今後 2 週間＝これから始まる仕事（フィルタのチップがそのまま範囲を言う）
@@ -1669,6 +1665,7 @@ export class GanttView extends ItemView {
     const s = this.plugin.settings;
     s.filterPresets.push({ name, filterMatch: this.filterMatch, filters: JSON.parse(JSON.stringify(this.filters)) as Filter[] });
     this.commitFilters();
+    this.saveSoon(); // プリセットはプラグインの設定に（タブの絞り込みと違い、レイアウトには入らない）/ presets live in the plugin settings, not in the layout like a tab's filters
   }
 
   // プリセットのポップオーバー（組み込み＋マイプリセット＋保存/クリア）/ presets popover
@@ -1691,7 +1688,7 @@ export class GanttView extends ItemView {
             item.createEl("button", { cls: "ogantt-preset-apply", text: p.name }).onclick = () => { this.applyPreset(p); close(); };
             const del = item.createEl("button", { cls: "ogantt-preset-del", attr: { "aria-label": tr().presetDelete } });
             setIcon(del, "trash-2");
-            del.onclick = () => { s.filterPresets.splice(i, 1); this.commitFilters(); renderBody(); };
+            del.onclick = () => { s.filterPresets.splice(i, 1); this.commitFilters(); this.saveSoon(); renderBody(); };
           });
         }
         // 現在フィルタがあるとき：保存フォーム＋クリア / when filters exist: save form + clear
@@ -1752,7 +1749,6 @@ export class GanttView extends ItemView {
     if (f.op === "is" || f.op === "isNot") {
       const listEl = menu.createDiv({ cls: "ogantt-datemenu-checklist" });
       const values = this.filterFieldValues(f.field);
-      if (values.length === 0) { listEl.createDiv({ cls: "ogantt-datemenu-empty", text: tr().noneLabel }); return; }
       for (const [val, label] of values) {
         const item = listEl.createEl("label", { cls: "ogantt-datemenu-check" });
         const cb = item.createEl("input", { type: "checkbox" });
@@ -2467,7 +2463,7 @@ export class GanttView extends ItemView {
   // should, it was changed outside, so nothing is overwritten and a notice offers to go ahead anyway (`force` skips the check).
   // そのときも履歴は元の場所に残す（次の取り消しが古い操作を先に戻さないように）/ the entry then stays where it was, so the next undo can't skip past it
   private async replay(redo: boolean, force = false): Promise<void> {
-    if (this.historyRunning) return;
+    if (this.isBusy()) return; // 書き込み・ドラッグの最中に取り消さない / never undo in the middle of a write or a drag
     this.dropUndoToast();
     const stack = redo ? this.redoStack : this.undoStack;
     const entry = stack.pop();
@@ -2693,7 +2689,7 @@ export class GanttView extends ItemView {
     const bgLayer = layer("ogantt-bg-layer");
     // いまのスプリントの日付を淡く塗る（ボードと人の「いま」と同じ期間）/ the current sprint's dates get a faint wash (the same "now" as the Board and People)
     const sprint = this.currentSprint();
-    if (sprint) svg.insertBefore(this.svgEl("rect", { x: (sprint.from - this.range.min) * this.ppd, y: 0, width: (sprint.to - sprint.from + 1) * this.ppd, height: bodyH, class: "ogantt-sprint-band" }), bgLayer);
+    if (sprint) svg.insertBefore(this.svgEl("rect", { x: this.dayX(sprint.from), y: 0, width: (sprint.to - sprint.from + 1) * this.ppd, height: bodyH, class: "ogantt-sprint-band" }), bgLayer);
     // 行をたどる帯：載っている行をタイムラインの端から端まで淡く塗り、名前とバーを目で結ぶ / a band following the hovered row across the timeline, so a name and its bar line up
     const band = svg.appendChild(this.svgEl("rect", { x: 0, y: -ROW_H, width, height: ROW_H, class: "ogantt-row-band" }));
     this.drawToday(svg, width, bodyH);
@@ -2926,12 +2922,12 @@ export class GanttView extends ItemView {
       box.createSpan({ text: b.label }).style.left = `${tw}px`;
     });
     // 今日の札（線の真上）と、いまのスプリントの期間（軸の下端の線。名前は説明に）/ the Today pill above the line, and the current sprint's span along the axis's foot (its name in the tooltip)
-    const today = (this.today() - this.range.min) * this.ppd;
+    const today = this.dayX(this.today());
     if (today >= 0 && today <= width) axis.createDiv({ cls: "ogantt-today-pill", text: tr().today }).style.left = `${today}px`;
     const sprint = this.currentSprint();
     if (sprint) {
       const span = axis.createDiv({ cls: "ogantt-sprint-span", attr: { title: sprint.task.name, "aria-label": sprint.task.name } });
-      span.style.left = `${(sprint.from - this.range.min) * this.ppd}px`;
+      span.style.left = `${this.dayX(sprint.from)}px`;
       span.style.width = `${(sprint.to - sprint.from + 1) * this.ppd}px`;
     }
   }
@@ -3054,10 +3050,7 @@ export class GanttView extends ItemView {
       this.excTag(nameTd, all, statusGroupOf(statuses, t.status) === "deferred" && this.visibleColumns().some((c) => c.id === "status"));
       // ガントの階層（シェブロンと字下げ）：親は終わったサブタスクの数だけ。行は開けば見える
       // the Gantt hierarchy (chevron and indent): a parent shows only how many subtasks are done; the rows are there on expanding
-      if (kids.length) {
-        const sum = subtaskSummary(kids, this.plugin.settings.statuses);
-        nameTd.createSpan({ cls: "ogantt-subtask-sum", text: `${sum.done}/${sum.total}`, attr: { title: tr().execComplete(sum.done, sum.total) } });
-      }
+      this.subtaskPill(nameTd, kids);
       // 実行ボード（カンバン）は別の層：カードは行にせず、開くための目印を 1 つだけ / the execution board (kanban) is a separate layer: no rows for its cards, just one cue that opens it
       if (t.kind === "kanban") this.boardCue(nameTd, t);
       // 詳細パネルがこのタスクで開いている状態でのダブルクリック＝その場でリネーム。
@@ -3248,12 +3241,22 @@ export class GanttView extends ItemView {
   }
 
   private xOf(dateStr: string): number {
-    return (dayIndex(dateStr) - this.range.min) * this.ppd;
+    return this.dayX(dayIndex(dateStr));
+  }
+
+  // 通日番号の x / a day index's x
+  private dayX(day: number): number {
+    return (day - this.range.min) * this.ppd;
+  }
+
+  // from から to までのバーの幅（両端の日を含む。細すぎると掴めないので 6px 以上）/ the width of a bar from `from` to `to`, both days included (at least 6 px, to stay grabbable)
+  private spanW(from: string, to: string): number {
+    return Math.max((dayIndex(to) - dayIndex(from) + 1) * this.ppd, 6);
   }
 
   // 今日の線 / today marker
   private drawToday(svg: SVGElement, width: number, height: number): void {
-    const x = (this.today() - this.range.min) * this.ppd;
+    const x = this.dayX(this.today());
     if (x >= 0 && x <= width) svg.appendChild(this.svgEl("line", { x1: x, y1: 0, x2: x, y2: height, class: "ogantt-today" }));
   }
 
@@ -3277,7 +3280,7 @@ export class GanttView extends ItemView {
     bg.appendChild(this.svgEl("rect", { x: 0, y: i * ROW_H, width, height: ROW_H, class: "ogantt-grid-group" }));
     if (!row.span) return;
     const gx = this.xOf(row.span.start);
-    const gw = Math.max((dayIndex(row.span.end) - dayIndex(row.span.start) + 1) * this.ppd, 6);
+    const gw = this.spanW(row.span.start, row.span.end);
     const gy = i * ROW_H + ROW_H / 2 - 3;
     const color = this.groupColor(this.groupBy, row.group);
     for (const el of [
@@ -3294,7 +3297,7 @@ export class GanttView extends ItemView {
   // 稲妻線：今日を基準に、各行の「実績到達点」を結ぶ折れ線。左へ折れる＝遅れ / 右＝進み
   // progress line: joins each row's achieved-progress point against today; left = behind, right = ahead
   private drawProgressLine(svg: SVGElement, width: number, height: number): void {
-    const basisX = (this.today() - this.range.min) * this.ppd;
+    const basisX = this.dayX(this.today());
     if (basisX < 0 || basisX > width) return; // 基準日が範囲外＝結ぶ軸がない / no basis to anchor to
     const lineRows: ProgressLineRow[] = this.rows.map((row) => {
       // グループ行とロールアップ行はサマリー（自分の進捗を持たない）ので素通し
@@ -3308,7 +3311,7 @@ export class GanttView extends ItemView {
       if (!Number.isFinite(x)) return {}; // 不正な日付で折れ線が壊れないように / a bad date must not break the polyline
       if (t.milestone) return { startX: x, width: 0, progress: t.progress };
       const endStr = anchorEnd(t) ?? aStart;
-      const w = Math.max((dayIndex(endStr) - dayIndex(aStart) + 1) * this.ppd, 6);
+      const w = this.spanW(aStart, endStr);
       return { startX: x, width: Number.isFinite(w) ? w : 0, progress: t.progress };
     });
     const pts = buildProgressLine(lineRows, basisX, ROW_H, height);
@@ -3357,7 +3360,7 @@ export class GanttView extends ItemView {
     // rollup on: draw a parent as a full bar spanning its whole subtree (not its own bar)
     if (this.rollup && row.span) {
       const sx = this.xOf(row.span.start);
-      const sw = Math.max((dayIndex(row.span.end) - dayIndex(row.span.start) + 1) * this.ppd, 6);
+      const sw = this.spanW(row.span.start, row.span.end);
       const rg = this.svgEl("g", { class: "ogantt-bar-g ogantt-rollup-g" + (t.path === this.selectedPath ? " is-selected" : ""), "data-path": t.path });
       rg.appendChild(this.svgEl("rect", { x: sx, y, width: sw, height: h, rx: 4, class: "ogantt-bar ogantt-rollup-bar", fill: fill(t) }));
       this.drawLabel(rg, t, sx + sw + LABEL_GAP, cyMid, group, row.group);
@@ -3392,7 +3395,7 @@ export class GanttView extends ItemView {
       lx = x - r;
       rx = x + r;
     } else {
-      const w = Math.max((dayIndex(anchorEnd(t) ?? aStart) - dayIndex(aStart) + 1) * this.ppd, 6);
+      const w = this.spanW(aStart, anchorEnd(t) ?? aStart);
       const rect = g.appendChild(this.svgEl("rect", { x, y, width: w, height: h, rx: 4, class: "ogantt-bar", fill: color }));
       const p = Math.min(100, t.progress ?? 0);
       const prog = p > 0 ? g.appendChild(this.svgEl("rect", { x, y, width: (w * p) / 100, height: h, rx: 4, class: "ogantt-bar-progress" })) : null;
@@ -3418,7 +3421,7 @@ export class GanttView extends ItemView {
     }
     // 期限を過ぎて終わっていない仕事は、期限から今日の終わりまで赤い尾を引く（今日の辺りを見ていても遅れが見える）
     // late work trails a red tail from its due date through today, so it shows while the view is at today
-    const todayEnd = (this.today() - this.range.min + 1) * this.ppd;
+    const todayEnd = this.dayX(this.today() + 1);
     const tail = overdue && todayEnd > rx ? todayEnd : rx;
     if (tail > rx) g.appendChild(this.svgEl("rect", { x: rx, y: cyMid - 2, width: tail - rx, height: 4, rx: 2, class: "ogantt-late-tail" }));
     this.drawLabel(g, t, tail + LABEL_GAP, cyMid, group, row.group);
@@ -4362,6 +4365,13 @@ export class GanttView extends ItemView {
     return add;
   }
 
+  // 終わったサブタスクの数の札（キャンセルは数えない。数えるものが無ければ出さない：全部キャンセルでも「0/0」にしない）
+  // the done-subtasks pill (cancelled ones don't count; none shows when nothing counts, so all-cancelled isn't "0/0")
+  private subtaskPill(host: HTMLElement, kids: Task[]): void {
+    const sum = subtaskSummary(kids, this.plugin.settings.statuses);
+    if (sum.total) host.createSpan({ cls: "ogantt-subtask-sum", text: `${sum.done}/${sum.total}`, attr: { title: tr().execComplete(sum.done, sum.total) } });
+  }
+
   // 担当者のアバター（頭文字の丸）/ an assignee avatar (initials in a circle)
   private avatar(parent: HTMLElement, who: string): void {
     const c = this.assigneeColor(who);
@@ -4703,8 +4713,9 @@ export class GanttView extends ItemView {
       bodyWrap.removeClass("is-editing");
       await renderPreview();
     })());
+    if (seq !== this.detailSeq) return; // 待つ間に別のタスクが開いた：その欄を錠で閉じない / another task opened meanwhile: its fields aren't locked
     this.lockIfReadOnly(d, t.path);
-    if (seq === this.detailSeq) d.scrollTop = keepScroll;
+    d.scrollTop = keepScroll;
   }
 
   // タスクのノートを開く。ファイルで開くので、名前に # があっても見出しへのリンクと取り違えない
@@ -5373,7 +5384,7 @@ export class GanttView extends ItemView {
       if (zoom !== "Month") {
         const cal = scheduleOptions(this.plugin.settings).cal;
         for (let d = this.range.min; d <= this.range.max; d++) {
-          if (!isWorkday(d, cal)) tl.appendChild(this.svgEl("rect", { x: (d - this.range.min) * this.ppd, width: this.ppd, height: bodyH, class: "x-off" }));
+          if (!isWorkday(d, cal)) tl.appendChild(this.svgEl("rect", { x: this.dayX(d), width: this.ppd, height: bodyH, class: "x-off" }));
         }
       }
       const groupBg = tl.appendChild(this.svgEl("g", {}));

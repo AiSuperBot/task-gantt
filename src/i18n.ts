@@ -96,8 +96,6 @@ interface Strings {
   presetClear: string; // フィルタをクリア / clear filters
   presetDelete: string; // プリセットを削除 / delete preset
   presetNoDates: string; // 日付なし（バーなし）/ no dates (no bar)
-  presetHasDates: string; // 日付あり / has dates
-  presetOverdue: string; // 期限切れ / overdue
   presetUnassigned: string; // 未割り当て / unassigned
   // 名前（テキスト）フィルタ / name (text) filter
   fieldName: string; // 名前 / Name
@@ -114,7 +112,6 @@ interface Strings {
   setStatusGroup: string; // 設定のグループ欄 / the group field in settings
   setNoCompletedStatus: string; // 完了グループが空のときの注意書き / warning when Completed is empty
   presetCompleted: string; // 完了済み / Completed
-  presetIncomplete: string; // 未完了 / Incomplete
   // 種類・アイコン・色・担当者（多値）/ task kinds, icons, colours, assignees (multi-valued)
   newTaskKindAria: string; // 種類を選んで新規作成 / new task of a chosen kind
   kindNote: string;
@@ -675,8 +672,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "フィルタをクリア",
     presetDelete: "プリセットを削除",
     presetNoDates: "日付なし（バーなし）",
-    presetHasDates: "日付あり",
-    presetOverdue: "期限切れ",
     presetUnassigned: "未割り当て",
     fieldName: "名前",
     textOpContains: "を含む",
@@ -691,7 +686,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "グループ",
     setNoCompletedStatus: "「完了」グループのステータスがありません。プリセットの「完了済み」は常に 0 件になります。",
     presetCompleted: "完了済み",
-    presetIncomplete: "未完了",
     newTaskKindAria: "種類を選んで新規作成",
     kindNote: "ノート",
     kindKanban: "カンバン",
@@ -1068,8 +1062,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "Clear filters",
     presetDelete: "Delete preset",
     presetNoDates: "No dates (no bar)",
-    presetHasDates: "Has dates",
-    presetOverdue: "Overdue",
     presetUnassigned: "Unassigned",
     fieldName: "Name",
     textOpContains: "contains",
@@ -1084,7 +1076,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "Group",
     setNoCompletedStatus: "No status belongs to the Completed group, so the Completed preset always comes back empty.",
     presetCompleted: "Completed",
-    presetIncomplete: "Incomplete",
     newTaskKindAria: "New task as…",
     kindNote: "Note",
     kindKanban: "Kanban board",
@@ -1461,8 +1452,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "清除筛选",
     presetDelete: "删除预设",
     presetNoDates: "无日期（无甘特条）",
-    presetHasDates: "有日期",
-    presetOverdue: "已逾期",
     presetUnassigned: "未分配",
     fieldName: "名称",
     textOpContains: "包含",
@@ -1477,7 +1466,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "分组",
     setNoCompletedStatus: "没有状态属于「已完成」组，因此「已完成」预设始终为空。",
     presetCompleted: "已完成",
-    presetIncomplete: "未完成",
     newTaskKindAria: "按类型新建任务",
     kindNote: "笔记",
     kindKanban: "看板",
@@ -1854,8 +1842,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "清除篩選",
     presetDelete: "刪除預設",
     presetNoDates: "無日期（無甘特條）",
-    presetHasDates: "有日期",
-    presetOverdue: "已逾期",
     presetUnassigned: "未指派",
     fieldName: "名稱",
     textOpContains: "包含",
@@ -1870,7 +1856,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "群組",
     setNoCompletedStatus: "沒有狀態屬於「已完成」群組，因此「已完成」預設一律為空。",
     presetCompleted: "已完成",
-    presetIncomplete: "未完成",
     newTaskKindAria: "依類型新增任務",
     kindNote: "筆記",
     kindKanban: "看板",
@@ -2247,8 +2232,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "필터 지우기",
     presetDelete: "프리셋 삭제",
     presetNoDates: "날짜 없음(막대 없음)",
-    presetHasDates: "날짜 있음",
-    presetOverdue: "기한 초과",
     presetUnassigned: "미할당",
     fieldName: "이름",
     textOpContains: "포함",
@@ -2263,7 +2246,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "그룹",
     setNoCompletedStatus: "「완료」 그룹에 속한 상태가 없어 「완료됨」 프리셋은 항상 비어 있습니다.",
     presetCompleted: "완료됨",
-    presetIncomplete: "미완료",
     newTaskKindAria: "유형을 골라 새 작업",
     kindNote: "노트",
     kindKanban: "칸반 보드",
@@ -2640,8 +2622,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "Effacer les filtres",
     presetDelete: "Supprimer le préréglage",
     presetNoDates: "Sans dates (sans barre)",
-    presetHasDates: "Avec dates",
-    presetOverdue: "En retard",
     presetUnassigned: "Non attribué",
     fieldName: "Nom",
     textOpContains: "contient",
@@ -2656,7 +2636,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "Groupe",
     setNoCompletedStatus: "Aucun statut n'appartient au groupe Terminé : le préréglage « Terminées » restera toujours vide.",
     presetCompleted: "Terminées",
-    presetIncomplete: "Non terminées",
     newTaskKindAria: "Nouvelle tâche de type…",
     kindNote: "Note",
     kindKanban: "Tableau Kanban",
@@ -3033,8 +3012,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "Borrar filtros",
     presetDelete: "Eliminar ajuste",
     presetNoDates: "Sin fechas (sin barra)",
-    presetHasDates: "Con fechas",
-    presetOverdue: "Vencidas",
     presetUnassigned: "Sin asignar",
     fieldName: "Nombre",
     textOpContains: "contiene",
@@ -3049,7 +3026,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "Grupo",
     setNoCompletedStatus: "Ningún estado pertenece al grupo Completado, por lo que el preajuste «Completadas» siempre estará vacío.",
     presetCompleted: "Completadas",
-    presetIncomplete: "Sin completar",
     newTaskKindAria: "Nueva tarea de tipo…",
     kindNote: "Nota",
     kindKanban: "Tablero Kanban",
@@ -3426,8 +3402,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     presetClear: "Очистить фильтры",
     presetDelete: "Удалить пресет",
     presetNoDates: "Без дат (без полосы)",
-    presetHasDates: "С датами",
-    presetOverdue: "Просроченные",
     presetUnassigned: "Без исполнителя",
     fieldName: "Имя",
     textOpContains: "содержит",
@@ -3442,7 +3416,6 @@ const STRINGS: Record<Lang, () => Strings> = {
     setStatusGroup: "Группа",
     setNoCompletedStatus: "Ни один статус не входит в группу «Завершено», поэтому пресет «Завершённые» всегда будет пустым.",
     presetCompleted: "Завершённые",
-    presetIncomplete: "Незавершённые",
     newTaskKindAria: "Новая задача типа…",
     kindNote: "Заметка",
     kindKanban: "Канбан-доска",

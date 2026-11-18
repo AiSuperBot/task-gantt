@@ -325,8 +325,18 @@ export class GanttSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  // 打ち終えたときに保存する欄で、まだ保存していない変更があるか / whether a field saved once typed holds a change not saved yet
+  private dirty = false;
+
   private save(): void {
+    this.dirty = false;
     void this.plugin.saveSettings();
+  }
+
+  // 閉じるとき、打っている途中の欄の変更も保存する（Esc で閉じると change が来ない）/ on closing, save what a field still being typed holds (closing with Esc fires no change)
+  hide(): void {
+    if (this.dirty) this.save();
+    super.hide();
   }
 
   // 設定画面の外（表の右クリックなど）から色を変えたときに、開いていれば描き直す
@@ -635,7 +645,7 @@ export class GanttSettingTab extends PluginSettingTab {
         })());
       })
       .addText((t) => {
-        t.setPlaceholder(tr().setStatusLabel).setValue(st.label).onChange((v) => { st.label = v; }); // 保存は確定時（下）/ saved on commit (below)
+        t.setPlaceholder(tr().setStatusLabel).setValue(st.label).onChange((v) => { st.label = v; this.dirty = true; }); // 保存は確定時（下）/ saved on commit (below)
         // 名前で覚えている見出しのアイコン・畳み状態は、打ち終えたとき（確定時）にまとめて付け替える / the heading icon and collapse state kept by name move once, on commit
         let was = st.label;
         t.inputEl.addEventListener("change", () => {
@@ -694,7 +704,7 @@ export class GanttSettingTab extends PluginSettingTab {
         t.inputEl.addEventListener("change", () => this.commitCustomFieldKey(f, t));
       })
       .addText((t) => {
-        t.setPlaceholder(tr().setCfLabel).setValue(f.label).onChange((v) => { f.label = v; });
+        t.setPlaceholder(tr().setCfLabel).setValue(f.label).onChange((v) => { f.label = v; this.dirty = true; });
         t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存（打つたびに全ボードを描き直さない）/ saved once typed, not redrawing every board per key
       })
       .addDropdown((d) => {
@@ -896,7 +906,7 @@ export class GanttSettingTab extends PluginSettingTab {
   private ctlWebhook(setting: Setting, key: "discordWebhook" | "slackWebhook" | "teamsWebhook", placeholder: string): void {
     const n = this.plugin.settings.notify;
     setting.addText((t) => {
-      t.setPlaceholder(placeholder).setValue(n[key]).onChange((v) => { n[key] = v.trim(); });
+      t.setPlaceholder(placeholder).setValue(n[key]).onChange((v) => { n[key] = v.trim(); this.dirty = true; });
       t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存 / saved once typed
     });
   }
@@ -922,7 +932,7 @@ export class GanttSettingTab extends PluginSettingTab {
   private ctlGcalClientId(setting: Setting): void {
     const g = this.plugin.settings.gcal;
     setting.addText((t) => {
-      t.setValue(g.clientId).onChange((v) => { g.clientId = v.trim(); });
+      t.setValue(g.clientId).onChange((v) => { g.clientId = v.trim(); this.dirty = true; });
       t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存 / saved once typed
     });
   }

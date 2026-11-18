@@ -186,5 +186,9 @@ check("next to start: earliest start after today; today, past and undated don't 
   nextToStart([U({ name: "past", start: "2024-09-01" }), U({ name: "today", start: "2024-10-01" }), U({ name: "later", start: "2024-10-20" }), U({ name: "soon", start: "2024-10-03" }), U({ name: "none" })], OCT1)?.name === "soon"
   && nextToStart([U({ name: "none" })], OCT1) === undefined);
 
+// 値をまだ選んでいない絞り込みは何も絞らない / a filter with nothing chosen yet filters nothing
+check("an 'is' filter with no value yet doesn't blank the board", names(applyFilters(ALL, [cat("status", "is", [])], "all", STATUSES, TODAY)) === names(ALL));
+check("in 'any' mode an empty name filter doesn't let everything through", names(applyFilters(ALL, [{ kind: "text", op: "contains", value: " " }, cat("status", "is", ["done"])], "any", STATUSES, TODAY)) === "Beta");
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
