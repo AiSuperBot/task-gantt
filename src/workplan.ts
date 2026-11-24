@@ -122,7 +122,8 @@ export function fitText(text: string, w: number, h: number, max: number, two = f
     if (em < widest) [split, widest] = [`${a}\n${b}`, em];
   }
   const size2 = Math.min(max, wPt / widest, hPt / (2 * LINE));
-  const best = split && size2 > one + 1 ? { text: split, size: size2 } : { text, size: one };
+  // two lines when that reads clearly bigger, or when one line can't be read at all and two can
+  const best = split && (size2 > one + 1 || (one < MIN_PT && size2 >= MIN_PT)) ? { text: split, size: size2 } : { text, size: one };
   if (best.size >= MIN_PT) return { text: best.text, size: Math.floor(best.size * 2) / 2 };
   if (hPt / LINE < MIN_PT) return { text: "", size: MIN_PT };
   const chars = [...text];
@@ -237,7 +238,8 @@ interface Item {
   name: string; // ✓ first when done
   padL: number;
   padR: number;
-  beside?: Fit; // its name beside it: a milestone's, or a box's too narrow for it
+  inside: number; // the room for its name inside its box, in inches
+  beside?: Fit; // its name beside it: a milestone's, or a box's too narrow (or, in a low lane, too short) for it
 }
 // where it sits in its row: its box (the diamond, or its days, at least MIN_BOX wide) and [from, to) with a name beside it, in days; its lane
 interface Placed {
@@ -290,6 +292,7 @@ export function buildWorkPlan({ tasks, settings, period, board, today }: WorkPla
       name,
       padL,
       padR,
+      inside,
       beside: t.milestone || inside < MIN_INSIDE || !whole ? fitText(name, BESIDE.w, LANE_MIN - LANE_GAP, BESIDE.size) : undefined,
     });
   }
@@ -320,31 +323,44 @@ export function buildWorkPlan({ tasks, settings, period, board, today }: WorkPla
     return { placed, lanes: ends.length };
   };
   const byTask = new Map(items.map((it) => [it.t, it]));
-  const rows = byPerson(items.map((it) => it.t), [], WP_TEXT.unassigned).map(([who, ts]) => ({ who, ...pack(ts.map((t) => byTask.get(t)!)) }));
-
-  // one slide while every lane gets LANE_MIN, else as many as it takes (a row taller than a slide goes on over the next, by lanes);
-  // every slide gets the lane height of the fullest one, up to LANE_MAX
   const room = BOTTOM - TOP;
   const cap = Math.floor((room - ROW_PAD) / LANE_MIN);
-  const chunks = rows.flatMap((r) =>
-    Array.from({ length: Math.max(1, Math.ceil(r.lanes / cap)) }, (_, k) => ({
-      who: r.who,
-      lanes: Math.min(cap, r.lanes - k * cap),
-      placed: r.placed.filter((p) => Math.floor(p.lane / cap) === k).map((p) => ({ ...p, lane: p.lane - k * cap })),
-    }))
-  );
-  const pageRows: (typeof chunks)[] = [[]];
-  let used = 0;
-  for (const c of chunks) {
-    const h = c.lanes * LANE_MIN + ROW_PAD;
-    if (used + h > room + 1e-9 && pageRows[pageRows.length - 1].length) {
-      pageRows.push([]);
-      used = 0;
+  // the rows laid out with the names as they stand, and the lane height that comes of it
+  const lay = () => {
+    const rows = byPerson(items.map((it) => it.t), [], WP_TEXT.unassigned).map(([who, ts]) => ({ who, ...pack(ts.map((t) => byTask.get(t)!)) }));
+    // one slide while every lane gets LANE_MIN, else as many as it takes (a row taller than a slide goes on over the next, by lanes);
+    // every slide gets the lane height of the fullest one, up to LANE_MAX
+    const chunks = rows.flatMap((r) =>
+      Array.from({ length: Math.max(1, Math.ceil(r.lanes / cap)) }, (_, k) => ({
+        who: r.who,
+        lanes: Math.min(cap, r.lanes - k * cap),
+        placed: r.placed.filter((p) => Math.floor(p.lane / cap) === k).map((p) => ({ ...p, lane: p.lane - k * cap })),
+      }))
+    );
+    const pageRows: (typeof chunks)[] = [[]];
+    let used = 0;
+    for (const c of chunks) {
+      const h = c.lanes * LANE_MIN + ROW_PAD;
+      if (used + h > room + 1e-9 && pageRows[pageRows.length - 1].length) {
+        pageRows.push([]);
+        used = 0;
+      }
+      pageRows[pageRows.length - 1].push(c);
+      used += h;
     }
-    pageRows[pageRows.length - 1].push(c);
-    used += h;
+    const laneH = Math.min(LANE_MAX, ...pageRows.map((p) => (room - p.length * ROW_PAD) / Math.max(1, p.reduce((sum, c) => sum + c.lanes, 0))));
+    return { pageRows, laneH };
+  };
+  // a name that fits its box on two lines is cut short when the lanes come out too low for two lines. Such names go beside their
+  // boxes too and the rows are laid out again; that can add lanes and lower them further, so until nothing is cut (each round moves
+  // at least one name out, so it ends)
+  let { pageRows, laneH } = lay();
+  for (let round = 0; round < items.length; round++) {
+    const cut = items.filter((it) => !it.beside && fitText(it.name, it.inside, laneH - LANE_GAP - 0.02, BAR_PT, true).text.replace("\n", " ") !== it.name);
+    if (!cut.length) break;
+    for (const it of cut) it.beside = fitText(it.name, BESIDE.w, LANE_MIN - LANE_GAP, BESIDE.size);
+    ({ pageRows, laneH } = lay());
   }
-  const laneH = Math.min(LANE_MAX, ...pageRows.map((p) => (room - p.length * ROW_PAD) / Math.max(1, p.reduce((sum, c) => sum + c.lanes, 0))));
 
   const pages = pageRows.map((chunkRows): PlanPage => {
     let y = TOP;

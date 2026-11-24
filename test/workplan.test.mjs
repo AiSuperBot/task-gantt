@@ -143,6 +143,15 @@ const blip = barOf(tiny, "Blip");
 check("a box too narrow for a few letters shows its name beside it", blip.text === "" && blip.beside?.text === "Blip" && blip.beside.x + blip.beside.w < blip.x);
 const short = barOf(plan([task({ name: "Session timeout fix", start: "2027-02-01", end: "2027-02-05", assignees: ["Dana"] })]), "Session timeout fix");
 check("a name too long for its box even small, over two lines, shows beside it whole, not cut short", short.text === "" && short.beside?.text === "Session timeout fix");
+check("fit: two lines when one line can't be read at all, even if two aren't clearly bigger (was cut short: DB Adap…)", fitText("DB Adapter", 0.608, 0.25, 13, true).text === "DB\nAdapter" && fitText("DB Adapter", 0.608, 0.25, 13, true).size >= MIN_PT);
+// a crowded half-year: seventeen boxes over the same days for one person, so the lanes come out at their lowest
+const HALF = { start: "2027-01-01", end: "2027-06-30", label: "" };
+const busy = plan(Array.from({ length: 17 }, (_, i) => task({ name: i ? `Job ${i}` : "DB Adapter", start: "2027-03-01", end: "2027-03-12", assignees: ["P0"] })), HALF);
+const busyBars = busy.pages.flatMap((pg) => pg.rows.flatMap((r) => r.bars));
+const db = barOf(busy, "DB Adapter");
+const roomIn = db.w - db.padL - db.padR;
+check("the case: the name fits its box over two lines, but the lanes are too low for two lines", fitText("DB Adapter", roomIn, 1, 13, true).text === "DB\nAdapter" && fitText("DB Adapter", roomIn, db.h - 0.02, 13, true).text.endsWith("…"));
+check("then the name goes beside its box, whole; no name on the slide is cut short", db.text === "" && db.beside?.text === "DB Adapter" && busyBars.every((x) => !x.text.endsWith("…")));
 
 // ── pages ──
 const crowd = Array.from({ length: 30 }, (_, i) => [
