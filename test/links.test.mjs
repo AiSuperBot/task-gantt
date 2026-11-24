@@ -1,4 +1,3 @@
-// wikilink 解析（parseWikilink / linkLabel / wikilinkQuery / fmText）の検証
 // Tests for wikilink parsing (parseWikilink / linkLabel / wikilinkQuery / fmText)
 import { parseWikilink, linkLabel, linkTarget, wikilinkQuery, fmText, fmList } from "./links.mjs";
 
@@ -18,18 +17,18 @@ function check(name, cond) {
 check("plain text is not a link", parseWikilink("kei") === null);
 check("empty link is not a link", parseWikilink("[[]]") === null);
 check("text around a link is not a single link", parseWikilink("see [[a]]") === null);
-const w = parseWikilink("[[People/田中#Profile|Tanaka]]");
-check("linkpath", w?.linkpath === "People/田中");
+const w = parseWikilink("[[People/Kei Tanaka#Profile|Tanaka]]");
+check("linkpath", w?.linkpath === "People/Kei Tanaka");
 check("subpath", w?.subpath === "#Profile");
 check("alias", w?.alias === "Tanaka");
-check("linkTarget keeps the subpath", linkTarget(w) === "People/田中#Profile");
+check("linkTarget keeps the subpath", linkTarget(w) === "People/Kei Tanaka#Profile");
 check("surrounding spaces are ignored", parseWikilink("  [[a]] ")?.linkpath === "a");
 
 // ── linkLabel ──
 check("label of plain text", linkLabel("kei") === "kei");
-check("label uses the alias", linkLabel("[[People/田中|Tanaka]]") === "Tanaka");
-check("label falls back to the file name", linkLabel("[[People/田中]]") === "田中");
-check("label drops .md", linkLabel("[[People/田中.md]]") === "田中");
+check("label uses the alias", linkLabel("[[People/Kei Tanaka|Tanaka]]") === "Tanaka");
+check("label falls back to the file name", linkLabel("[[People/Kei Tanaka]]") === "Kei Tanaka");
+check("label drops .md", linkLabel("[[People/Kei Tanaka.md]]") === "Kei Tanaka");
 
 // ── wikilinkQuery ──
 check("no [[", wikilinkQuery("abc") === null);
@@ -43,15 +42,15 @@ check("latest [[ wins", wikilinkQuery("[[a]] [[b")?.start === 6);
 // ── fmText ──
 check("undefined stays undefined", fmText(undefined) === undefined);
 check("string passes through", fmText("[[a]]") === "[[a]]");
-check("unquoted YAML wikilink is restored", fmText([["田中"]]) === "[[田中]]");
+check("unquoted YAML wikilink is restored", fmText([["Kei Tanaka"]]) === "[[Kei Tanaka]]");
 check("numbers become text", fmText(3) === "3");
 
-// ── fmList（担当者など多値）/ fmList (multi-valued fields such as assignees) ──
+// ── fmList (multi-valued fields such as assignees) ──
 const list = (v) => JSON.stringify(fmList(v));
 check("unset is an empty list", list(undefined) === "[]" && list("") === "[]");
 check("a single value is a one-item list", list("kei") === '["kei"]');
 check("a list stays a list, trimmed and deduplicated", list([" kei", "ana", "kei"]) === '["kei","ana"]');
-check("an unquoted wikilink is one item", list([["田中"]]) === '["[[田中]]"]');
+check("an unquoted wikilink is one item", list([["Kei Tanaka"]]) === '["[[Kei Tanaka]]"]');
 check("a list of unquoted wikilinks", list([[["a"]], [["b"]]]) === '["[[a]]","[[b]]"]');
 check("a list holding one unquoted wikilink", list([[["a"]]]) === '["[[a]]"]');
 

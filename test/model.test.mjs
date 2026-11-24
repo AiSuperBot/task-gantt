@@ -1,4 +1,3 @@
-// buildRows / マイルストーン判定 / span 集約 の検証
 // Tests for buildRows, milestone detection, and group span rollup
 import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName, applyStatus, cardDoneOn, cardLabel, seeSteps } from "./model.mjs";
 
@@ -14,12 +13,12 @@ function check(name, cond) {
   }
 }
 
-// カンバンの進捗：100% は全部、0% は 1 枚も無いときだけ / kanban progress: 100% only when all are done, 0% only when none are
-check("cardProgress 199/200 は 99", cardProgress(199, 200) === 99);
-check("cardProgress 全部で 100", cardProgress(200, 200) === 100);
-check("cardProgress 1/201 は 1", cardProgress(1, 201) === 1);
-check("cardProgress 0 枚は 0", cardProgress(0, 5) === 0);
-// Obsidian のメタデータ（見出し・リスト項目・区切り線）を本文から作る小さな代役 / a small stand-in for Obsidian's metadata (headings, list items, thematic breaks)
+// kanban progress: 100% only when all are done, 0% only when none are
+check("cardProgress 199/200 is 99", cardProgress(199, 200) === 99);
+check("cardProgress all done is 100", cardProgress(200, 200) === 100);
+check("cardProgress 1/201 is 1", cardProgress(1, 201) === 1);
+check("cardProgress 0 cards is 0", cardProgress(0, 5) === 0);
+// a small stand-in for Obsidian's metadata (headings, list items, thematic breaks)
 function fakeCache(text) {
   const cache = { headings: [], listItems: [], sections: [] };
   let offset = 0;
@@ -36,29 +35,29 @@ function fakeCache(text) {
 }
 const lanesOf = (text) => kanbanLanes(...fakeCache(text)).map((l) => `${l.title}:${l.cards.map((c) => `${c.text}${c.done ? "✓" : ""}`).join("+")}`).join(" | ");
 
-// 列の中のどの箇条書きもカード（チェックの有無・記号を問わない）/ any bullet in a lane is a card, checkbox or not
-check("kanbanLanes: 箇条書きはすべてカード", lanesOf(["## Todo", "- idea", "+ [x] done", "1. [ ] numbered", "## Done", "- [x] shipped"].join("\n")) === "Todo:idea+done✓+numbered | Done:shipped✓");
-// アーカイブ（*** の後の ## Archive）は列にも数にも入らない / the archive (## Archive after ***) is neither a lane nor counted
+// any bullet in a lane is a card, checkbox or not
+check("kanbanLanes: every bullet is a card", lanesOf(["## Todo", "- idea", "+ [x] done", "1. [ ] numbered", "## Done", "- [x] shipped"].join("\n")) === "Todo:idea+done✓+numbered | Done:shipped✓");
+// the archive (## Archive after ***) is neither a lane nor counted
 const archived = ["## Doing", "- [ ] a", "- [ ] b", "## Done", "- [x] c", "", "***", "", "## Archive", "", "- [x] old 1", "- [x] old 2"].join("\n");
-check("kanbanLanes: アーカイブは数えない", lanesOf(archived) === "Doing:a+b | Done:c✓");
-check("kanbanLanes: 文字なしでも数は同じ", kanbanLanes(fakeCache(archived)[0]).flatMap((l) => l.cards).length === 3);
+check("kanbanLanes: the archive isn't counted", lanesOf(archived) === "Doing:a+b | Done:c✓");
+check("kanbanLanes: the same count without the text", kanbanLanes(fakeCache(archived)[0]).flatMap((l) => l.cards).length === 3);
 
-// パネルからカードのチェックを付け外し：その行だけ、同じカードのときだけ / ticking a card from the panel: that line only, and only while it's the same card
+// ticking a card from the panel: that line only, and only while it's the same card
 const board = ["## Doing", "- [ ] a [[x|y]]", "- b", "## Done", "- [x] c\r"].join("\n");
 const cardLine = (text) => kanbanLanes(...fakeCache(text)).flatMap((l) => l.cards).find((c) => c.text === "a [[x|y]]").line;
-check("setCardDone: チェックを付ける", setCardDone(board, cardLine(board), "a [[x|y]]", true) === board.replace("- [ ] a", "- [x] a"));
-check("setCardDone: チェックの無いカードには付ける", setCardDone(board, 2, "b", true) === board.replace("- b", "- [x] b"));
-check("setCardDone: CRLF の行も外せる", setCardDone(board, 4, "c", false) === board.replace("- [x] c", "- [ ] c"));
-check("withoutName: 名前と区切りを外す", withoutName("DB Adapter — כתיבת מתאם", "DB Adapter") === "כתיבת מתאם");
-check("withoutName: 区切りが無ければそのまま", withoutName("DB Adaptery x", "DB Adapter") === "DB Adaptery x");
-check("withoutName: 名前だけのカードはそのまま", withoutName("DB Adapter", "DB Adapter") === "DB Adapter");
-check("setCardDone: 行が別のカードなら書かない", setCardDone(board, 2, "a [[x|y]]", true) === null);
-// チェックしてもカードに何も書き足さない。外すと前の版や Tasks プラグインの「✅ 日付」は消える / a tick adds nothing to the card; an untick removes an earlier "✅ date"
+check("setCardDone: ticks the box", setCardDone(board, cardLine(board), "a [[x|y]]", true) === board.replace("- [ ] a", "- [x] a"));
+check("setCardDone: a card without a checkbox gets one", setCardDone(board, 2, "b", true) === board.replace("- b", "- [x] b"));
+check("setCardDone: unticks a CRLF line too", setCardDone(board, 4, "c", false) === board.replace("- [x] c", "- [ ] c"));
+check("withoutName: drops the name and the separator", withoutName("DB Adapter — כתיבת מתאם", "DB Adapter") === "כתיבת מתאם");
+check("withoutName: no separator, no change", withoutName("DB Adaptery x", "DB Adapter") === "DB Adaptery x");
+check("withoutName: a card that is only the name stays", withoutName("DB Adapter", "DB Adapter") === "DB Adapter");
+check("setCardDone: writes nothing when the line holds another card", setCardDone(board, 2, "a [[x|y]]", true) === null);
+// a tick adds nothing to the card; an untick removes an earlier "✅ date"
 check("setCardDone: a tick adds no text", setCardDone(board, 2, "b", true) === board.replace("- b", "- [x] b"));
 const dated = board.replace("- [x] c\r", "- [x] c ✅ 2026-11-15 ✅ 2026-11-16\r");
 check("setCardDone: an untick removes every ✅ date, keeping CRLF", setCardDone(dated, 4, "c ✅ 2026-11-15 ✅ 2026-11-16", false) === board.replace("- [x] c\r", "- [ ] c\r"));
 check("setCardDone: a tick keeps a ✅ date already there", setCardDone(dated, 4, "c ✅ 2026-11-15 ✅ 2026-11-16", true) === dated);
-// 手順のチェックを見た日（この端末が初めて見た日）/ the day this computer first saw a step ticked
+// the day this computer first saw a step ticked
 const C = (text, done) => ({ text, done });
 const base = seeSteps(undefined, [C("a", true), C("b", false)], "2026-11-18", "2026-10-19");
 check("seeSteps: a board seen for the first time dates nothing", base.done.join() === "a" && Object.keys(base.on).length === 0);
@@ -68,175 +67,177 @@ check("seeSteps: unticking drops the date", seeSteps(next, [C("b", false)], "202
 check("seeSteps: an archived step keeps its date", seeSteps(next, [C("a", true)], "2026-11-20", "2026-10-21").on.b === "2026-11-19");
 check("seeSteps: old dates are let go", seeSteps(next, [C("a", true), C("b", true)], "2026-12-25", "2026-11-25").on.b === undefined);
 check("seeSteps: a step already dated keeps its first day", seeSteps(next, [C("a", true), C("b", true)], "2026-11-21", "2026-10-22").on.b === "2026-11-19");
-check("cardDoneOn: ✅ の日付を読む", cardDoneOn("Connection pool ✅ 2026-11-14") === "2026-11-14" && cardDoneOn("Connection pool") === undefined);
-check("cardLabel: ✅ の日付は見せない", cardLabel("[[Connection pool|מאגר חיבורים]] ✅ 2026-11-14") === "מאגר חיבורים");
+check("cardDoneOn: reads the ✅ date", cardDoneOn("Connection pool ✅ 2026-11-14") === "2026-11-14" && cardDoneOn("Connection pool") === undefined);
+check("cardLabel: hides the ✅ date", cardLabel("[[Connection pool|מאגר חיבורים]] ✅ 2026-11-14") === "מאגר חיבורים");
 
-// ステータスと終えた日（完了のグループに入った日）/ the status and its completion day (the day it entered the Completed group)
-const ST = [{ id: "todo", label: "To do", color: "#888", group: "active" }, { id: "done", label: "Done", color: "#0a0", group: "completed" }, { id: "shipped", label: "Shipped", color: "#0b0", group: "completed" }];
-const KEYS = { status: "status", completed: "completed" };
+// the status and its completion day (the day it entered the Completed group)
+const ST = [{ id: "todo", label: "To do", color: "#888", group: "active" }, { id: "done", label: "Done", color: "#0a0", group: "completed" }, { id: "shipped", label: "Shipped", color: "#0b0", group: "completed" }, { id: "blocked", label: "Blocked", color: "#e44", group: "deferred" }, { id: "waiting", label: "Waiting", color: "#e84", group: "deferred" }];
+const KEYS = { status: "status", completed: "completed", blocker: "blocker" };
 const fmAfter = (fm, id, today) => (applyStatus(fm, KEYS, ST, id, today), JSON.stringify(fm));
-check("applyStatus: 完了に入るとその日を書く", fmAfter({ status: "todo" }, "done", "2026-11-15") === '{"status":"done","completed":"2026-11-15"}');
-check("applyStatus: 完了どうしの移動では日付を保つ", fmAfter({ status: "done", completed: "2026-11-10" }, "shipped", "2026-11-15") === '{"status":"shipped","completed":"2026-11-10"}');
-check("applyStatus: 完了から出ると日付を消す", fmAfter({ status: "done", completed: "2026-11-10" }, "todo", "2026-11-15") === '{"status":"todo"}');
-check("applyStatus: ステータスを消すと日付も", fmAfter({ status: "done", completed: "2026-11-10" }, undefined, "2026-11-15") === "{}");
-check("applyStatus: 日付の無い完了には書く", fmAfter({ status: "done" }, "done", "2026-11-15") === '{"status":"done","completed":"2026-11-15"}');
+check("applyStatus: entering the Completed group writes the day", fmAfter({ status: "todo" }, "done", "2026-11-15") === '{"status":"done","completed":"2026-11-15"}');
+check("applyStatus: moving between completed statuses keeps the date", fmAfter({ status: "done", completed: "2026-11-10" }, "shipped", "2026-11-15") === '{"status":"shipped","completed":"2026-11-10"}');
+check("applyStatus: leaving the Completed group clears the date", fmAfter({ status: "done", completed: "2026-11-10" }, "todo", "2026-11-15") === '{"status":"todo"}');
+check("applyStatus: clearing the status clears the date too", fmAfter({ status: "done", completed: "2026-11-10" }, undefined, "2026-11-15") === "{}");
+check("applyStatus: a completed status without a date gets one", fmAfter({ status: "done" }, "done", "2026-11-15") === '{"status":"done","completed":"2026-11-15"}');
+check("applyStatus: the blocker reason stays while the task stays in the Deferred group", fmAfter({ status: "blocked", blocker: "security review" }, "waiting", "2026-11-15") === '{"status":"waiting","blocker":"security review"}');
+check("applyStatus: leaving the Deferred group clears the blocker reason", fmAfter({ status: "blocked", blocker: "security review" }, "todo", "2026-11-15") === '{"status":"todo"}');
 
-// 担当者などの多値フィールドに 1 件足す・外す / adding or removing one entry of a multi-valued field
-check("listWith: 1 人に足すとリスト", JSON.stringify(listWith("Ana", "Ben", true)) === '["Ana","Ben"]');
-check("listWith: 同じ人（表示名が同じ）は足さない", listWith(["[[Ben]]"], "Ben", true) === undefined);
-check("listWith: 引用符なしの [[x]] は文字列にして残す", JSON.stringify(listWith([["Ana"]], "Ben", true)) === '["[[Ana]]","Ben"]');
-check("listWith: 外してもほかの値は書いたまま", JSON.stringify(listWith(["Ana", 7, "Ben"], "Ben", false)) === '["Ana",7]');
-check("listWith: リストはリストのまま", JSON.stringify(listWith(["Ana", "Ben"], "Ben", false)) === '["Ana"]');
-check("listWith: 最後の 1 人を外すと null（キーごと消す）", listWith("Ana", "Ana", false) === null);
-check("listWith: いない人は外せない（変更なし）", listWith("Ana", "Ben", false) === undefined);
+// adding or removing one entry of a multi-valued field
+check("listWith: adding to a single person makes a list", JSON.stringify(listWith("Ana", "Ben", true)) === '["Ana","Ben"]');
+check("listWith: the same person (same display name) isn't added", listWith(["[[Ben]]"], "Ben", true) === undefined);
+check("listWith: an unquoted [[x]] is kept, as text", JSON.stringify(listWith([["Ana"]], "Ben", true)) === '["[[Ana]]","Ben"]');
+check("listWith: removing one keeps the other values as written", JSON.stringify(listWith(["Ana", 7, "Ben"], "Ben", false)) === '["Ana",7]');
+check("listWith: a list stays a list", JSON.stringify(listWith(["Ana", "Ben"], "Ben", false)) === '["Ana"]');
+check("listWith: removing the last person gives null (the key goes)", listWith("Ana", "Ana", false) === null);
+check("listWith: removing someone who isn't there changes nothing", listWith("Ana", "Ben", false) === undefined);
 
 
-// 新しいステータス：id は名前から連番、色は未使用のパレット色 / a new status: id from the label (numbered), an unused palette colour
+// a new status: id from the label (numbered), an unused palette colour
 const st0 = [{ id: "todo", label: "To do", color: "#ef4444", group: "active" }];
 const st1 = newStatus(st0, "In review");
-check("newStatus: id は名前から", st1.id === "in-review" && st1.label === "In review" && st1.group === "active");
-check("newStatus: 使っていない色", st1.color !== "#ef4444");
-check("newStatus: 同じ名前は連番", newStatus([...st0, st1], "In review").id === "in-review-2");
+check("newStatus: the id comes from the label", st1.id === "in-review" && st1.label === "In review" && st1.group === "active");
+check("newStatus: an unused colour", st1.color !== "#ef4444");
+check("newStatus: the same label gets numbered", newStatus([...st0, st1], "In review").id === "in-review-2");
 
-// マイルストーンは end のみ → anchor は end / milestone collapses to its due date
+// milestone collapses to its due date
 const ms = { milestone: true, end: "2026-02-10" };
 check("anchorStart(milestone)=end", anchorStart(ms) === "2026-02-10");
 check("anchorEnd(milestone)=end", anchorEnd(ms) === "2026-02-10");
 
-// 時刻のパース・タイムゾーン換算・結合 / time parsing, timezone conversion, combining
+// time parsing, timezone conversion, combining
 const eq = (p, date, time) => p != null && p.date === date && p.time === time;
-check("parseStored(日付のみ)", eq(parseStored("2026-06-12", "+09:00"), "2026-06-12", undefined));
-check("parseStored(naive はそのまま)", eq(parseStored("2026-06-12T09:30", "+00:00"), "2026-06-12", "09:30"));
-check("parseStored(1桁時)=07:00", eq(parseStored("2026-06-12T7:00", "+09:00"), "2026-06-12", "07:00"));
-check("parseStored(不正な時刻)=日付のみ", eq(parseStored("2026-06-12T25:00", "+09:00"), "2026-06-12", undefined));
-check("parseStored(不正値)=undefined", parseStored("未定", "+09:00") === undefined);
+check("parseStored(date only)", eq(parseStored("2026-06-12", "+09:00"), "2026-06-12", undefined));
+check("parseStored(naive stays as is)", eq(parseStored("2026-06-12T09:30", "+00:00"), "2026-06-12", "09:30"));
+check("parseStored(one-digit hour)=07:00", eq(parseStored("2026-06-12T7:00", "+09:00"), "2026-06-12", "07:00"));
+check("parseStored(invalid time)=date only", eq(parseStored("2026-06-12T25:00", "+09:00"), "2026-06-12", undefined));
+check("parseStored(invalid value)=undefined", parseStored("TBD", "+09:00") === undefined);
 check("parseStored(null)=undefined", parseStored(null, "+09:00") === undefined);
-check("parseStored(同一TZ)", eq(parseStored("2026-06-12T09:00+09:00", "+09:00"), "2026-06-12", "09:00"));
+check("parseStored(same TZ)", eq(parseStored("2026-06-12T09:00+09:00", "+09:00"), "2026-06-12", "09:00"));
 check("parseStored(+09:00→GMT)", eq(parseStored("2026-06-12T09:00+09:00", "+00:00"), "2026-06-12", "00:00"));
 check("parseStored(Z→+09:00)", eq(parseStored("2026-06-12T09:00Z", "+09:00"), "2026-06-12", "18:00"));
-check("parseStored(日付またぎ)", eq(parseStored("2026-06-12T01:00+09:00", "-05:00"), "2026-06-11", "11:00"));
-check("parseStored(30分TZ)", eq(parseStored("2026-06-12T09:00+09:00", "+05:30"), "2026-06-12", "05:30"));
-check("combineDateTime(オフセット付与)", combineDateTime("2026-06-12", "09:30", "+09:00") === "2026-06-12T09:30+09:00");
-check("combineDateTime(負オフセット)", combineDateTime("2026-06-12", "09:30", "-05:00") === "2026-06-12T09:30-05:00");
-check("combineDateTime(日付のみ)", combineDateTime("2026-06-12", "", "+09:00") === "2026-06-12");
-check("combineDateTime(日付なし)=undefined", combineDateTime(undefined, "09:30", "+09:00") === undefined);
-// 往復: 書いた値を読み戻すと同じ表示になる / round-trip: write then read back yields the same display
-check("往復(書き→読み)", eq(parseStored(combineDateTime("2026-06-12", "09:30", "+09:00"), "+09:00"), "2026-06-12", "09:30"));
+check("parseStored(crosses into another day)", eq(parseStored("2026-06-12T01:00+09:00", "-05:00"), "2026-06-11", "11:00"));
+check("parseStored(half-hour TZ)", eq(parseStored("2026-06-12T09:00+09:00", "+05:30"), "2026-06-12", "05:30"));
+check("combineDateTime(adds the offset)", combineDateTime("2026-06-12", "09:30", "+09:00") === "2026-06-12T09:30+09:00");
+check("combineDateTime(negative offset)", combineDateTime("2026-06-12", "09:30", "-05:00") === "2026-06-12T09:30-05:00");
+check("combineDateTime(date only)", combineDateTime("2026-06-12", "", "+09:00") === "2026-06-12");
+check("combineDateTime(no date)=undefined", combineDateTime(undefined, "09:30", "+09:00") === undefined);
+// round-trip: write then read back yields the same display
+check("round-trip(write→read)", eq(parseStored(combineDateTime("2026-06-12", "09:30", "+09:00"), "+09:00"), "2026-06-12", "09:30"));
 
-// 絶対時刻への変換（通知トリガー用）/ wall clock → absolute instant (for notification triggers)
+// wall clock → absolute instant (for notification triggers)
 check("toInstant(+09:00)", toInstant("2026-06-12", "09:00", "+09:00") === Date.UTC(2026, 5, 12, 0, 0));
 check("toInstant(GMT)", toInstant("2026-06-12", "09:00", "+00:00") === Date.UTC(2026, 5, 12, 9, 0));
 check("toInstant(-05:00)", toInstant("2026-06-12", "09:00", "-05:00") === Date.UTC(2026, 5, 12, 14, 0));
 
-// 多階層: お掃除 > 床掃除 / お風呂掃除 / multi-level nesting
+// multi-level nesting
 const tasks = [
-  { path: "p/お掃除/床掃除/掃き掃除.md", name: "掃き掃除", groups: ["お掃除", "床掃除"], start: "2026-02-01", end: "2026-02-03", after: [], milestone: false },
-  { path: "p/お掃除/床掃除/拭き掃除.md", name: "拭き掃除", groups: ["お掃除", "床掃除"], start: "2026-02-04", end: "2026-02-07", after: [], milestone: false },
-  { path: "p/お掃除/お風呂掃除/排水溝清掃.md", name: "排水溝清掃", groups: ["お掃除", "お風呂掃除"], start: "2026-02-08", end: "2026-02-10", after: [], milestone: false },
-  { path: "p/お掃除/お風呂掃除/完了報告.md", name: "完了報告", groups: ["お掃除", "お風呂掃除"], end: "2026-02-10", after: [], milestone: true },
+  { path: "p/Cleaning/Floor/Sweeping.md", name: "Sweeping", groups: ["Cleaning", "Floor"], start: "2026-02-01", end: "2026-02-03", after: [], milestone: false },
+  { path: "p/Cleaning/Floor/Mopping.md", name: "Mopping", groups: ["Cleaning", "Floor"], start: "2026-02-04", end: "2026-02-07", after: [], milestone: false },
+  { path: "p/Cleaning/Bath/Drain.md", name: "Drain", groups: ["Cleaning", "Bath"], start: "2026-02-08", end: "2026-02-10", after: [], milestone: false },
+  { path: "p/Cleaning/Bath/Report.md", name: "Report", groups: ["Cleaning", "Bath"], end: "2026-02-10", after: [], milestone: true },
 ];
 
 const rows = buildRows(tasks);
 const groupRows = rows.filter((r) => r.kind === "group");
 const taskRows = rows.filter((r) => r.kind === "task");
-check("グループ行が 3 つ（お掃除/床掃除/お風呂掃除）", groupRows.length === 3);
-check("タスク行が 4 つ", taskRows.length === 4);
+check("three group rows (Cleaning/Floor/Bath)", groupRows.length === 3);
+check("four task rows", taskRows.length === 4);
 
 const top = rows[0];
-check("先頭は お掃除（depth 0）", top.kind === "group" && top.group === "お掃除" && top.depth === 0);
-check("お掃除 span = 2/1..2/10", top.span?.start === "2026-02-01" && top.span?.end === "2026-02-10");
+check("Cleaning comes first (depth 0)", top.kind === "group" && top.group === "Cleaning" && top.depth === 0);
+check("Cleaning span = 2/1..2/10", top.span?.start === "2026-02-01" && top.span?.end === "2026-02-10");
 
-const floor = groupRows.find((r) => r.group === "床掃除");
-check("床掃除 は depth 1", floor.depth === 1);
-check("床掃除 span = 2/1..2/7", floor.span?.start === "2026-02-01" && floor.span?.end === "2026-02-07");
+const floor = groupRows.find((r) => r.group === "Floor");
+check("Floor is depth 1", floor.depth === 1);
+check("Floor span = 2/1..2/7", floor.span?.start === "2026-02-01" && floor.span?.end === "2026-02-07");
 
-const bath = groupRows.find((r) => r.group === "お風呂掃除");
-check("お風呂掃除 span = 2/8..2/10", bath.span?.start === "2026-02-08" && bath.span?.end === "2026-02-10");
+const bath = groupRows.find((r) => r.group === "Bath");
+check("Bath span = 2/8..2/10", bath.span?.start === "2026-02-08" && bath.span?.end === "2026-02-10");
 
-// 床掃除フォルダ直後にその配下タスクが depth 2 で並ぶ / its tasks at depth 2
+// its tasks at depth 2
 const floorIdx = rows.indexOf(floor);
-check("床掃除の次行はタスク(depth 2)", rows[floorIdx + 1].kind === "task" && rows[floorIdx + 1].depth === 2);
+check("the row after Floor is a task (depth 2)", rows[floorIdx + 1].kind === "task" && rows[floorIdx + 1].depth === 2);
 
-// 折りたたみ: お掃除 を畳むと子が消える / collapse hides children
-const collapsedRows = buildRows(tasks, new Set(["お掃除"]));
-check("お掃除を畳むと行は1つ（お掃除のみ）", collapsedRows.length === 1 && collapsedRows[0].group === "お掃除");
+// collapse hides children
+const collapsedRows = buildRows(tasks, new Set(["Cleaning"]));
+check("collapsing Cleaning leaves one row (Cleaning itself)", collapsedRows.length === 1 && collapsedRows[0].group === "Cleaning");
 
-// 床掃除だけ畳む / collapse only 床掃除
-const c2 = buildRows(tasks, new Set(["お掃除/床掃除"]));
-check("床掃除を畳むと掃き掃除/拭き掃除が消える", !c2.some((r) => r.task?.name === "掃き掃除"));
-check("床掃除を畳んでもお風呂掃除のタスクは残る", c2.some((r) => r.task?.name === "排水溝清掃"));
+// collapse only Floor
+const c2 = buildRows(tasks, new Set(["Cleaning/Floor"]));
+check("collapsing Floor hides Sweeping/Mopping", !c2.some((r) => r.task?.name === "Sweeping"));
+check("collapsing Floor keeps the Bath tasks", c2.some((r) => r.task?.name === "Drain"));
 
-// フォルダ直下のタスクはサブフォルダより先（後だと直前のサブフォルダの中に見える）
 // a folder's own tasks come before its subfolders (after them they'd read as part of the subfolder above)
 const mixed = buildRows([
   { path: "p/Root task.md", name: "Root task", groups: [], start: "2026-02-01", end: "2026-02-01", milestone: false },
   { path: "p/A/In A.md", name: "In A", groups: ["A"], start: "2026-02-02", end: "2026-02-02", milestone: false },
 ]);
-check("ルート直下のタスクがフォルダより先", mixed[0].kind === "task" && mixed[0].task.name === "Root task" && mixed[1].group === "A");
+check("tasks at the root come before the folders", mixed[0].kind === "task" && mixed[0].task.name === "Root task" && mixed[1].group === "A");
 
-// ----- カンバン本文 / kanban bodies -----
-check("カンバン: 列とカードと完了", lanesOf(["## To do", "", "- [ ] Header", "- [ ] Footer", "  - [x] nested, not a card", "", "## Done", "", "**Complete**", "- [x] Setup"].join("\n")) === "To do:Header+Footer | Done:Setup✓");
-check("カンバン: 列より前のリストは無視", lanesOf("- [ ] stray\n## L\n- card") === "L:card");
+// ----- kanban bodies -----
+check("kanban: lanes, cards and done", lanesOf(["## To do", "", "- [ ] Header", "- [ ] Footer", "  - [x] nested, not a card", "", "## Done", "", "**Complete**", "- [x] Setup"].join("\n")) === "To do:Header+Footer | Done:Setup✓");
+check("kanban: a list before the first lane is ignored", lanesOf("- [ ] stray\n## L\n- card") === "L:card");
 
-// カンバンの今と次のカード / a kanban's current and next card
+// a kanban's current and next card
 const KS = [{ id: "todo", label: "To do", group: "active" }, { id: "in-progress", label: "In progress", group: "active" }, { id: "blocked", label: "Blocked", group: "deferred" }, { id: "done", label: "Done", group: "completed" }];
 const lane = (title, ...cards) => ({ title, cards: cards.map((c) => ({ text: c.replace(/^x /, ""), done: c.startsWith("x ") })) });
-check("カンバン: 「始めた」列の最初の未チェックが今", JSON.stringify(kanbanStep([lane("To do", "a"), lane("In progress", "x b", "c"), lane("Done", "x d")], KS, "in-progress")) === '{"card":"c","stage":"In progress","now":true}');
-check("カンバン: 今が無ければ止めた・完了の列を飛ばして次", JSON.stringify(kanbanStep([lane("Blocked", "z"), lane("To do", "x a", "b"), lane("In progress", "x c")], KS, "in-progress")) === '{"card":"b","stage":"To do"}');
-check("カンバン: 工程の列（ステータスでない）は順に読む・書式は外す", JSON.stringify(kanbanStep([lane("שלב 1", "x א"), lane("שלב 2", "[[DB|חיבור]] @{2026-11-10}")], KS, "in-progress")) === '{"card":"חיבור","stage":"שלב 2"}');
-check("カンバン: 全部済みなら何も無し", JSON.stringify(kanbanStep([lane("To do", "x a")], KS, "in-progress")) === "{}");
+check("kanban: now is the first unticked card in the started lane", JSON.stringify(kanbanStep([lane("To do", "a"), lane("In progress", "x b", "c"), lane("Done", "x d")], KS, "in-progress")) === '{"card":"c","stage":"In progress","now":true}');
+check("kanban: with no current card, next skips the blocked and done lanes", JSON.stringify(kanbanStep([lane("Blocked", "z"), lane("To do", "x a", "b"), lane("In progress", "x c")], KS, "in-progress")) === '{"card":"b","stage":"To do"}');
+check("kanban: step lanes (not statuses) are read in order, formatting stripped", JSON.stringify(kanbanStep([lane("שלב 1", "x א"), lane("שלב 2", "[[DB|חיבור]] @{2026-11-10}")], KS, "in-progress")) === '{"card":"חיבור","stage":"שלב 2"}');
+check("kanban: nothing when every card is done", JSON.stringify(kanbanStep([lane("To do", "x a")], KS, "in-progress")) === "{}");
 
-// ----- サブタスク（parent ネスト）/ subtask nesting -----
+// ----- subtask nesting -----
 const sub = [
   { path: "p/F/Parent.md", name: "Parent", groups: ["F"], start: "2026-03-01", end: "2026-03-02", after: [], milestone: false },
   { path: "p/F/Child.md", name: "Child", groups: ["F"], start: "2026-03-05", end: "2026-03-08", after: [], milestone: false, parent: "p/F/Parent.md" },
 ];
-// nest=true で親子ツリー / nest by parent
+// nest by parent
 const nestRows = buildRows(sub, new Set(), [], undefined, true);
 const pRow = nestRows.find((r) => r.task?.name === "Parent");
 const cRow = nestRows.find((r) => r.task?.name === "Child");
-check("親行は hasChildren", pRow.hasChildren === true);
-check("子は親より1段深い", cRow.depth === pRow.depth + 1);
-check("親のロールアップ span = 3/1..3/8", pRow.span?.start === "2026-03-01" && pRow.span?.end === "2026-03-08");
+check("the parent row hasChildren", pRow.hasChildren === true);
+check("the child is one level deeper than the parent", cRow.depth === pRow.depth + 1);
+check("the parent's rollup span = 3/1..3/8", pRow.span?.start === "2026-03-01" && pRow.span?.end === "2026-03-08");
 
-// 親を畳むと子が消える（キー＝親パス）/ collapsing the parent hides the child
+// collapsing the parent hides the child
 const nestCollapsed = buildRows(sub, new Set(["p/F/Parent.md"]), [], undefined, true);
-check("親を畳むと子が消える", !nestCollapsed.some((r) => r.task?.name === "Child"));
-// 入れ子の子には sub の印 / a nested child is marked sub
-check("入れ子の子だけ sub", cRow.sub === true && !pRow.sub);
+check("collapsing the parent hides the child", !nestCollapsed.some((r) => r.task?.name === "Child"));
+// a nested child is marked sub
+check("only the nested child is sub", cRow.sub === true && !pRow.sub);
 
-// nest=false（既定）では親子は同じ深さのフラット / without nesting, siblings stay flat
+// without nesting, siblings stay flat
 const flatRows = buildRows(sub);
-check("nest無効なら親子は同じ depth", flatRows.find((r) => r.task?.name === "Parent").depth === flatRows.find((r) => r.task?.name === "Child").depth);
+check("without nesting, parent and child share a depth", flatRows.find((r) => r.task?.name === "Parent").depth === flatRows.find((r) => r.task?.name === "Child").depth);
 
-// subtreePaths は自分＋子孫 / subtree includes self + descendants
-check("subtreePaths は親＋子", JSON.stringify(subtreePaths(sub, "p/F/Parent.md").sort()) === JSON.stringify(["p/F/Child.md", "p/F/Parent.md"]));
+// subtree includes self + descendants
+check("subtreePaths is the parent + its child", JSON.stringify(subtreePaths(sub, "p/F/Parent.md").sort()) === JSON.stringify(["p/F/Child.md", "p/F/Parent.md"]));
 
-// ── ステータスグループ / status groups ──
-// 移行時の推測：id かラベルのどちらかが当たれば分類される / the migration guess matches id or label
-check("推測: done → completed", inferStatusGroup("done", "Done") === "completed");
-check("推測: 完了 → completed", inferStatusGroup("kanryo", "完了") === "completed");
-check("推測: cancelled → cancelled", inferStatusGroup("cancelled", "Cancelled") === "cancelled");
-check("推測: 中止 → cancelled", inferStatusGroup("chushi", "中止") === "cancelled");
-check("推測: on hold → deferred", inferStatusGroup("on-hold", "On hold") === "deferred");
-check("推測: blocked → deferred", inferStatusGroup("blocked", "Blocked") === "deferred");
-check("推測: 保留 → deferred", inferStatusGroup("horyu", "保留") === "deferred");
-check("推測: in progress → active", inferStatusGroup("in-progress", "In progress") === "active");
-check("推測: 未知の語は active", inferStatusGroup("review", "レビュー中") === "active");
-// completed を先に見るので "完了待ち" のような複合語は completed 側 / completed wins on the first hit
-check("推測: 大文字小文字を無視", inferStatusGroup("DONE", "DONE") === "completed");
+// ── status groups ──
+// the migration guess matches id or label
+check("guess: done → completed", inferStatusGroup("done", "Done") === "completed");
+check("guess: בוצע → completed", inferStatusGroup("butza", "בוצע") === "completed");
+check("guess: cancelled → cancelled", inferStatusGroup("cancelled", "Cancelled") === "cancelled");
+check("guess: בוטל → cancelled", inferStatusGroup("butal", "בוטל") === "cancelled");
+check("guess: on hold → deferred", inferStatusGroup("on-hold", "On hold") === "deferred");
+check("guess: blocked → deferred", inferStatusGroup("blocked", "Blocked") === "deferred");
+check("guess: בהמתנה → deferred", inferStatusGroup("hamtana", "בהמתנה") === "deferred");
+check("guess: in progress → active", inferStatusGroup("in-progress", "In progress") === "active");
+check("guess: בביצוע (in progress) → active, not done", inferStatusGroup("bebitzua", "בביצוע") === "active");
+check("guess: an unknown word → active", inferStatusGroup("review", "בבדיקה") === "active");
+// completed wins on the first hit
+check("guess: case is ignored", inferStatusGroup("DONE", "DONE") === "completed");
 
 const statusDefs = [
   { id: "todo", label: "To do", color: "#000", group: "active" },
   { id: "done", label: "Done", color: "#000", group: "completed" },
 ];
-check("statusGroupOf: 定義済み id", statusGroupOf(statusDefs, "done") === "completed");
-check("statusGroupOf: ステータス未設定は undefined", statusGroupOf(statusDefs, undefined) === undefined);
-check("statusGroupOf: 空文字は undefined", statusGroupOf(statusDefs, "") === undefined);
-// 設定に無い id は「分類不能」。完了に寄せると完了フィルタが嘘をつく / unknown ids stay unclassified
-check("statusGroupOf: 未定義 id は undefined", statusGroupOf(statusDefs, "ghost") === undefined);
+check("statusGroupOf: a defined id", statusGroupOf(statusDefs, "done") === "completed");
+check("statusGroupOf: no status is undefined", statusGroupOf(statusDefs, undefined) === undefined);
+check("statusGroupOf: an empty string is undefined", statusGroupOf(statusDefs, "") === undefined);
+// unknown ids stay unclassified
+check("statusGroupOf: an unknown id is undefined", statusGroupOf(statusDefs, "ghost") === undefined);
 
-// successorClosure は schedule.test.mjs へ移動 / successorClosure moved to schedule.test.mjs
+// successorClosure moved to schedule.test.mjs
 
 // ── Custom field ──
 {
@@ -244,41 +245,41 @@ check("statusGroupOf: 未定義 id は undefined", statusGroupOf(statusDefs, "gh
   const cf = (id, key, type = "text") => ({ id, key, label: "", type });
   const settings = { keys, customFields: [cf("a", "client"), cf("b", " "), cf("c", "due"), cf("d", "tags"), cf("e", "client"), cf("f", "budget", "number")] };
   const issues = customFieldIssues(settings);
-  check("cf: 空キーは empty", issues.get("b") === "empty");
-  check("cf: 設定済みの組み込みキー（期限＝due）は reserved", issues.get("c") === "reserved");
-  check("cf: tags は reserved", issues.get("d") === "reserved");
-  check("cf: 2 つ目の同じキーは duplicate", issues.get("e") === "duplicate" && !issues.has("a"));
-  check("cf: 有効なものだけ定義順に", validCustomFields(settings).map((f) => f.id).join(",") === "a,f");
+  check("cf: an empty key is empty", issues.get("b") === "empty");
+  check("cf: a configured built-in key (the due date = due) is reserved", issues.get("c") === "reserved");
+  check("cf: tags is reserved", issues.get("d") === "reserved");
+  check("cf: the second use of a key is duplicate", issues.get("e") === "duplicate" && !issues.has("a"));
+  check("cf: only the valid ones, in definition order", validCustomFields(settings).map((f) => f.id).join(",") === "a,f");
 
   check("cf read: text", readCustomValue("ACME", "text", "system") === "ACME");
-  check("cf read: text の数値は文字列に", readCustomValue(42, "text", "system") === "42");
-  check("cf read: text のリストは配列のまま", JSON.stringify(readCustomValue(["a", "", "b"], "text", "system")) === JSON.stringify(["a", "b"]));
-  check("cf read: 空・null は undefined", readCustomValue("", "text", "system") === undefined && readCustomValue(null, "number", "system") === undefined);
+  check("cf read: a number in a text field becomes a string", readCustomValue(42, "text", "system") === "42");
+  check("cf read: a list in a text field stays an array", JSON.stringify(readCustomValue(["a", "", "b"], "text", "system")) === JSON.stringify(["a", "b"]));
+  check("cf read: empty or null is undefined", readCustomValue("", "text", "system") === undefined && readCustomValue(null, "number", "system") === undefined);
   check("cf read: number", readCustomValue("12.5", "number", "system") === 12.5 && readCustomValue(3, "number", "system") === 3);
-  check("cf read: 数値にならないものは undefined", readCustomValue("abc", "number", "system") === undefined);
-  check("cf read: date は日付部分のみ", readCustomValue("2024-05-06T10:30", "date", "system") === "2024-05-06");
-  check("cf read: 日付にならないものは undefined", readCustomValue("someday", "date", "system") === undefined);
+  check("cf read: a non-number is undefined", readCustomValue("abc", "number", "system") === undefined);
+  check("cf read: a date keeps only the date part", readCustomValue("2024-05-06T10:30", "date", "system") === "2024-05-06");
+  check("cf read: a non-date is undefined", readCustomValue("someday", "date", "system") === undefined);
 
-  check("cf text: リストはカンマ区切り", customValueText(["a", "b"]) === "a, b" && customValueText(undefined) === "");
-  check("cf input: 空は削除", parseCustomInput("  ", "text", false) === undefined);
+  check("cf text: a list is comma-separated", customValueText(["a", "b"]) === "a, b" && customValueText(undefined) === "");
+  check("cf input: empty deletes", parseCustomInput("  ", "text", false) === undefined);
   check("cf input: number", parseCustomInput(" 7 ", "number", false) === 7);
-  check("cf input: 数値にならない number は書かない(null)", parseCustomInput("x", "number", false) === null);
-  check("cf input: 元がリストの text はリストに戻す", JSON.stringify(parseCustomInput("a, b ,", "text", true)) === JSON.stringify(["a", "b"]));
-  check("cf input: 元が単一値の text はそのまま", parseCustomInput("a, b", "text", false) === "a, b");
+  check("cf input: a number that doesn't parse isn't written (null)", parseCustomInput("x", "number", false) === null);
+  check("cf input: text that was a list goes back to a list", JSON.stringify(parseCustomInput("a, b ,", "text", true)) === JSON.stringify(["a", "b"]));
+  check("cf input: text that was a single value stays as is", parseCustomInput("a, b", "text", false) === "a, b");
 }
 
-// 本文とフロントマターの切り分け（CRLF・中身の無い ---/---・フロントマター無し）/ splitting body and frontmatter (CRLF, an empty ---/---, none at all)
-check("bodyOf: 普通のフロントマター", bodyOf("---\na: 1\n---\nhello\n") === "hello");
+// splitting body and frontmatter (CRLF, an empty ---/---, none at all)
+check("bodyOf: ordinary frontmatter", bodyOf("---\na: 1\n---\nhello\n") === "hello");
 check("bodyOf: CRLF", bodyOf("---\r\na: 1\r\n---\r\nhello\r\n") === "hello");
-check("bodyOf: 中身の無い ---/--- は本文に出さない", bodyOf("---\n---\nhello") === "hello" && bodyOf("---\n---") === "");
-check("bodyOf: 先頭行の字下げは残す（空行だけ外す）", bodyOf("---\na: 1\n---\n\n    code\n    more\n") === "    code\n    more");
-check("bodyOf: フロントマター無し", bodyOf("hello\n---\nx") === "hello\n---\nx");
-check("withBody: フロントマターの直後に空行を足さない", withBody("---\na: 1\n---\nold\n", "new") === "---\na: 1\n---\nnew\n");
-check("withBody: CRLF のフロントマターはそのまま", withBody("---\r\na: 1\r\n---\r\nold", "new") === "---\r\na: 1\r\n---\r\nnew\n");
-check("withBody: 中身の無い ---/--- を保つ・本文を空にできる", withBody("---\n---", "x") === "---\n---\nx\n" && withBody("---\na: 1\n---\nold", "") === "---\na: 1\n---\n");
-check("withBody: フロントマター無し", withBody("old", "new") === "new\n");
+check("bodyOf: an empty ---/--- stays out of the body", bodyOf("---\n---\nhello") === "hello" && bodyOf("---\n---") === "");
+check("bodyOf: keeps the first line's indent (drops only blank lines)", bodyOf("---\na: 1\n---\n\n    code\n    more\n") === "    code\n    more");
+check("bodyOf: no frontmatter", bodyOf("hello\n---\nx") === "hello\n---\nx");
+check("withBody: adds no blank line right after the frontmatter", withBody("---\na: 1\n---\nold\n", "new") === "---\na: 1\n---\nnew\n");
+check("withBody: CRLF frontmatter stays as is", withBody("---\r\na: 1\r\n---\r\nold", "new") === "---\r\na: 1\r\n---\r\nnew\n");
+check("withBody: keeps an empty ---/---, and the body can be emptied", withBody("---\n---", "x") === "---\n---\nx\n" && withBody("---\na: 1\n---\nold", "") === "---\na: 1\n---\n");
+check("withBody: no frontmatter", withBody("old", "new") === "new\n");
 
-check("movePaths: ファイルとフォルダの改名に付いて行く", movePaths(["A/x.md", "A/sub/y.md", "B.md", "AB.md"], "A", "Z").join() === "Z/x.md,Z/sub/y.md,B.md,AB.md" && movePaths(["B.md"], "B.md", "C.md")[0] === "C.md");
+check("movePaths: follows file and folder renames", movePaths(["A/x.md", "A/sub/y.md", "B.md", "AB.md"], "A", "Z").join() === "Z/x.md,Z/sub/y.md,B.md,AB.md" && movePaths(["B.md"], "B.md", "C.md")[0] === "C.md");
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

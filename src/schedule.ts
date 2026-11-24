@@ -1,39 +1,34 @@
-// 稼働日カレンダー・Duration（期間）・依存による後続の連動（すべて純粋関数）
 // workday calendar, task duration, and dependency cascading (all pure functions)
 import type { Task, DepType, StatusDef } from "./types";
 import { dayIndex, dayToStr } from "./timeline";
 
-// 稼働日カレンダー。off＝休日の曜日（0=日 … 6=土）/ workday calendar; off = non-working weekdays (0 = Sun … 6 = Sat)
+// workday calendar; off = non-working weekdays (0 = Sun … 6 = Sat)
 export interface WorkCalendar {
   off: number[];
 }
 
-// 通日番号の曜日（1970-01-01 は木曜）/ weekday of a day index (1970-01-01 was a Thursday)
+// weekday of a day index (1970-01-01 was a Thursday)
 export function weekday(day: number): number {
   return (((day + 4) % 7) + 7) % 7;
 }
 
-// 全曜日が休みの設定は無効として「毎日が稼働日」に倒す（無限ループ防止）
 // a calendar with every weekday off is treated as "every day works" (avoids endless loops)
 function offSet(cal: WorkCalendar): Set<number> {
   const s = new Set(cal.off);
   return s.size >= 7 ? new Set() : s;
 }
 
-// 週の初日：休みが明けた最初の曜日（土日休みなら月曜、金土休みなら日曜、休みが無ければ月曜）
 // a week's first day: the first day after the days off (Monday after Sat+Sun, Sunday after Fri+Sat, Monday with none)
 export function weekStart(cal: WorkCalendar): number {
   const off = offSet(cal);
   return !off.size || off.has(0) ? 1 : (Math.max(...off) + 1) % 7;
 }
 
-// 2.16 までは土日が既定で、ほかの設定と一緒に保存されていた：その値だけを一度、新しい既定（金土）へ移す
 // up to 2.16, Sat+Sun was the default and got saved with every other setting: move just that value, once, to the new default (Fri+Sat)
 export function migrateWeekend(off: number[], migrated: boolean | undefined): number[] {
   return !migrated && [...off].sort().join() === "0,6" ? [5, 6] : off;
 }
 
-// 休日を塗る CSS グラデーション（1 週間周期で繰り返す）。firstDay はタイムライン左端の通日番号
 // a CSS gradient shading the non-working days, repeating every week; firstDay is the day index at the timeline's left edge
 export function offDayGradient(firstDay: number, cal: WorkCalendar, ppd: number, color: string): string {
   const first = weekday(firstDay);
@@ -41,7 +36,7 @@ export function offDayGradient(firstDay: number, cal: WorkCalendar, ppd: number,
     .map((w) => (w - first + 7) % 7)
     .sort((a, b) => a - b)
     .map((k) => `transparent ${k * ppd}px, ${color} ${k * ppd}px, ${color} ${(k + 1) * ppd}px, transparent ${(k + 1) * ppd}px`);
-  // 繰り返しの周期は「最初の色の位置〜最後の位置」なので、0px から始めて 1 週間ちょうどにする / a repeating gradient's period runs from its first stop to its last, so start at 0px to make it exactly one week
+  // a repeating gradient's period runs from its first stop to its last, so start at 0px to make it exactly one week
   return stops.length ? `repeating-linear-gradient(to right, transparent 0px, ${stops.join(", ")}, transparent ${7 * ppd}px)` : "none";
 }
 
@@ -49,21 +44,20 @@ export function isWorkday(day: number, cal: WorkCalendar): boolean {
   return !offSet(cal).has(weekday(day));
 }
 
-// day 以降で最初の稼働日（day 自身を含む）/ the first workday on or after `day`
+// the first workday on or after `day`
 export function nextWorkday(day: number, cal: WorkCalendar): number {
   const off = offSet(cal);
   while (off.has(weekday(day))) day++;
   return day;
 }
 
-// day 以前で最後の稼働日（day 自身を含む）/ the last workday on or before `day`
+// the last workday on or before `day`
 export function prevWorkday(day: number, cal: WorkCalendar): number {
   const off = offSet(cal);
   while (off.has(weekday(day))) day--;
   return day;
 }
 
-// [start, end] に含まれる稼働日数（両端を含む。end < start は 0）
 // workdays within [start, end], both ends included (0 when end < start)
 export function workdaysBetween(start: number, end: number, cal: WorkCalendar): number {
   if (end < start) return 0;
@@ -75,7 +69,6 @@ export function workdaysBetween(start: number, end: number, cal: WorkCalendar): 
   return n;
 }
 
-// day から n 稼働日進めた日（負なら戻る）。day が休日でも数え方は同じ（着地は必ず稼働日）
 // the day n workdays after `day` (before it when n < 0); always lands on a workday
 export function addWorkdays(day: number, n: number, cal: WorkCalendar): number {
   const off = offSet(cal);
@@ -88,18 +81,16 @@ export function addWorkdays(day: number, n: number, cal: WorkCalendar): number {
   return day;
 }
 
-// 開始日から n 稼働日かかるときの期限日（開始日が休日なら次の稼働日から数える・n は 1 以上）
 // the due date for an n-workday task starting on `start` (counting from the next workday if start is off; n ≥ 1)
 export function endForDuration(start: number, n: number, cal: WorkCalendar): number {
   return addWorkdays(nextWorkday(start, cal), Math.max(1, n) - 1, cal);
 }
 
-// 期限日から逆算した開始日（endForDuration の逆）/ the start date back from a due date (the inverse of endForDuration)
+// the start date back from a due date (the inverse of endForDuration)
 export function startForDuration(end: number, n: number, cal: WorkCalendar): number {
   return addWorkdays(prevWorkday(end, cal), -(Math.max(1, n) - 1), cal);
 }
 
-// タスクの Duration（稼働日数）。マイルストーンは 0、日付が揃っていなければ undefined
 // a task's duration in workdays: 0 for a milestone, undefined unless both dates are set
 export function taskDuration(t: Pick<Task, "start" | "end" | "milestone">, cal: WorkCalendar): number | undefined {
   if (t.milestone) return 0;
@@ -107,17 +98,14 @@ export function taskDuration(t: Pick<Task, "start" | "end" | "milestone">, cal: 
   return workdaysBetween(dayIndex(t.start), dayIndex(t.end), cal);
 }
 
-// 期間 n の入力を解釈する（"4" / "4d" / "4 days" など）。1 以上の整数でなければ null
-// parse a duration entry ("4", "4d", "4 days" …); null unless it's a whole number ≥ 1
+// parse a duration entry ("4", "4d", "4 days", "4 ימים", "4 י׳" …); null unless it's a whole number ≥ 1
 export function parseDuration(raw: string): number | null {
-  const m = raw.trim().match(/^(\d+)\s*[a-z\u3040-\u30FF\u4E00-\u9FFF]*$/i);
+  const m = raw.trim().match(/^(\d+)\s*[a-z\u0590-\u05FF]*$/i);
   if (!m) return null;
   const n = parseInt(m[1], 10);
   return n >= 1 ? n : null;
 }
 
-// 期間を保って開始日を移したときの期限日（Wrike 流：開始日の変更はバーの平行移動）。
-// 期間 0（休日だけに置かれたタスク）はカレンダー上の長さを保つ
 // the due date after moving the start while keeping the duration (Wrike: changing the start moves the bar).
 // a zero-workday task (sitting only on days off) keeps its calendar length instead
 export function shiftEnd(oldStart: string, oldEnd: string, newStart: string, cal: WorkCalendar): string {
@@ -128,8 +116,6 @@ export function shiftEnd(oldStart: string, oldEnd: string, newStart: string, cal
   return dayToStr(dur > 0 ? endForDuration(s1, dur, cal) : s1 + (e0 - s0));
 }
 
-// 日付の編集結果に Wrike 流の規則を当てる：開始日だけを変えたら（期限日は元のまま）期間を保って期限日も動かす。
-// 期限日を変えた・どちらかが未設定・マイルストーンのときは入力どおり
 // apply Wrike's rule to a date edit: when only the start changed (the due date is untouched), move the due date
 // too, keeping the duration. Otherwise (the due date changed, a date is unset, a milestone) keep the input as is
 export function keepDurationOnStartChange(
@@ -139,34 +125,32 @@ export function keepDurationOnStartChange(
 ): string {
   if (orig.milestone || !orig.start || !orig.end || !next.start || !next.end) return next.end;
   if (next.start === orig.start) return next.end;
-  // 範囲カレンダーは期限日を越えた開始日を選ぶと期限日を開始日へ引きずる。これも「開始日だけの変更」とみなす
   // the range calendar drags the due date along when the new start passes it; treat that as a start-only change too
   const dragged = next.end === next.start && next.start > orig.end;
   if (next.end !== orig.end && !dragged) return next.end;
   return shiftEnd(orig.start, orig.end, next.start, cal);
 }
 
-// ----- 依存による後続の連動 / cascading dates along dependencies -----
+// ----- cascading dates along dependencies -----
 
 export interface ScheduleOptions {
   cal: WorkCalendar;
-  // FS の後続を押し出すか（先行が遅れて重なったときだけ動かす）/ push FS successors (only when the predecessor now overlaps them)
+  // push FS successors (only when the predecessor now overlaps them)
   fs: boolean;
 }
 
-// 設定からスケジュールの条件を作る / build schedule options from the settings
+// build schedule options from the settings
 export function scheduleOptions(s: { nonWorkingDays: number[]; autoScheduleFS: boolean }): ScheduleOptions {
   return { cal: { off: s.nonWorkingDays }, fs: s.autoScheduleFS };
 }
 
 type Span = { start?: string; end?: string };
 
-// この依存が連動の対象か / whether this dependency type cascades
+// whether this dependency type cascades
 function cascades(type: DepType, fs: boolean): boolean {
   return type === "SS" || type === "FF" || (type === "FS" && fs);
 }
 
-// 依存が守られていないか。連動（align）と同じ決まりで、FS は先行の期限の翌稼働日より前に始まると、SS は先行より前に始まると、FF は先行より前に終わると違反
 // whether a dependency is broken, by the cascade's own rule (align): FS starts before the workday after the predecessor's due date,
 // SS starts before the predecessor starts, FF ends before it ends
 export function depViolated(succ: Span & { milestone: boolean }, pred: Span & { milestone: boolean }, type: DepType, cal: WorkCalendar): boolean {
@@ -180,13 +164,12 @@ export function depViolated(succ: Span & { milestone: boolean }, pred: Span & { 
   return dayIndex(se) < dayIndex(pe);
 }
 
-// pred → succ の依存を足すと循環になるか（succ から後続をたどって pred に着くなら輪になる）
 // whether adding pred → succ would close a loop (it does when pred can already be reached from succ)
 export function wouldLoop(tasks: Task[], predPath: string, succPath: string): boolean {
   return predPath === succPath || successorClosure(tasks, succPath, true).includes(predPath);
 }
 
-// roots から連動する依存でたどれる範囲に循環があるか / whether a loop can be reached from the roots along dependencies that cascade
+// whether a loop can be reached from the roots along dependencies that cascade
 function hasLoop(tasks: Task[], roots: string[], fs: boolean): boolean {
   const next = new Map<string, string[]>();
   for (const t of tasks) {
@@ -209,7 +192,6 @@ function hasLoop(tasks: Task[], roots: string[], fs: boolean): boolean {
   return roots.some(visit);
 }
 
-// 連動しうる後続タスク（推移的・自分は含まない）。Undo のスナップショット対象を書き込み前に決めるために使う
 // successors that may be moved, transitively (excluding the root); used to pick undo snapshot targets before writing
 export function successorClosure(tasks: Task[], rootPath: string, fs = false): string[] {
   const out: string[] = [];
@@ -228,10 +210,6 @@ export function successorClosure(tasks: Task[], rootPath: string, fs = false): s
   return out;
 }
 
-// 先行 pred に対する後続 target の新しい日付（動かないなら null）
-//   FS: 押し出しのみ。先行の期限の翌稼働日より前に始まっていたら、そこへ期間を保って移す
-//   SS / FF: 先行の開始 / 期限にぴったり揃える（期間は稼働日で保つ）
-// マイルストーンは固定日なので依存では動かさない
 // the successor's new dates against predecessor pred (null when it stays put):
 //   FS: push only — if it starts before the workday after pred's due date, move it there, keeping its duration
 //   SS / FF: snap to pred's start / due date (the duration is kept in workdays)
@@ -263,8 +241,6 @@ function align(target: Span & { milestone: boolean }, pred: Span & { milestone: 
   return { start: dayToStr(next.start), end: dayToStr(next.end) };
 }
 
-// roots を起点に依存をたどり、動かすべき後続の新しい日付を求める。依存が輪になっていると日付が決まらない（回すほど先へ押し出す）ので、
-// その場合は null で何も動かさない。tasks は書き換えない。roots 自身の日付は呼び出し側で更新済みのものを使う
 // walk dependencies from the roots and work out new dates for successors that must move. Dependencies in a loop have no answer (each
 // pass pushes further), so a loop returns null and nothing moves. `tasks` isn't mutated; the roots' own dates are taken as already updated
 export function cascadeDates(tasks: Task[], roots: string[], opts: ScheduleOptions): Map<string, { start: string; end: string }> | null {
@@ -272,7 +248,6 @@ export function cascadeDates(tasks: Task[], roots: string[], opts: ScheduleOptio
   const cur = new Map<string, Span & { milestone: boolean }>(tasks.map((t) => [t.path, { start: t.start, end: t.end, milestone: t.milestone }]));
   const changes = new Map<string, { start: string; end: string }>();
   const queue = [...roots];
-  // 輪が無くても伝わり方の上限は置く（菱形の依存は同じタスクを何度か通る）。超えたら途中までは書かず、何も動かさない
   // a cap on propagation even without a loop (diamond-shaped dependencies pass the same task a few times); past it, nothing moves rather than a partial result
   let guard = 20 * tasks.length + 100;
   while (queue.length) {
@@ -296,15 +271,12 @@ export function cascadeDates(tasks: Task[], roots: string[], opts: ScheduleOptio
   return changes;
 }
 
-// ── 日付による自動ステータス / automatic status by date ──
+// ── automatic status by date ──
 
-// 自動ステータスが最後に見たノートの日付とステータス（ノートのパスごと）。日付が同じなのにステータスが違えば、手で変えた（か取り消した）ので触らない。
-// pin は 2.15 までの記録から移したもの：記録した日付のままのあいだ、そのタスクのステータスには触れない
 // what automatic status last saw for a note (per path): its dates and status. Same dates but another status means it was set by hand (or undone),
 // so it's left alone. A `pin` comes from a record up to 2.15: while the task keeps the dates recorded there, its status isn't touched
 export type AutoFired = Record<string, { dates: string; status: string } | { pin: { start?: string; end?: string } }>;
 
-// 2.14 の undone・2.15 の fired（決まりごとの日付）を今の形へ：どれも「その日付のあいだ触れない」pin にする（手で決めたステータスを上書きしない）
 // carry 2.14's `undone` and 2.15's `fired` (a date per rule) into the current shape: each becomes a pin, "leave alone while these dates stand",
 // so an upgrade never rewrites a status set by hand
 export function migrateAutoFired(fired: unknown, undone: unknown): AutoFired {
@@ -324,7 +296,7 @@ export function migrateAutoFired(fired: unknown, undone: unknown): AutoFired {
   return out;
 }
 
-// 自動ステータスの設定（空の id・空の一覧は既定）/ the automatic-status setup (an empty id or list means the default)
+// the automatic-status setup (an empty id or list means the default)
 export interface AutoStatusConfig {
   started: string;
   finished: string;
@@ -332,9 +304,6 @@ export interface AutoStatusConfig {
   fired?: AutoFired;
 }
 
-// 設定を今のステータス一覧で解決する。開始後は「進行中」グループ（既定は in-progress、無ければ 2 つ目の進行中）、
-// 完了後は「完了」グループ（既定は done、無ければ最初の完了）、未着手は「進行中」グループのうち開始後以外（既定は最初の 1 つ）。
-// 選んだ id が一覧から消えていれば既定へ。当てはまるものが無ければその決まりは動かない
 // resolve the setup against the current statuses: the started target is an active status (default in-progress, else the second active
 // one), the finished target a completed status (default done, else the first completed one), and the not-started statuses active ones other
 // than the started target (default: the first). A picked id that's no longer listed falls back to the default; with nothing that fits, that rule doesn't run
@@ -348,16 +317,11 @@ export function autoStatusTargets(statuses: StatusDef[], cfg: AutoStatusConfig):
   return { started, finished, notStarted: wanted.length ? wanted : firstActive ? [firstActive] : [] };
 }
 
-// 日付の印（開始日と、ノートに書かれた期限日）。描くために開始日を写した期限日は数えない
 // the dates' fingerprint (the start and the due date written in the note); a due date copied from the start for drawing doesn't count
 function datesOf(t: Task): string {
   return `${t.start ?? ""}|${t.endFilled ? "" : t.end ?? ""}`;
 }
 
-// 日付に合わせたステータス（パス → 行き先と日付の印）。today は設定タイムゾーンでの今日。
-// 開始日が先なら未着手（未着手の一覧の先頭）、開始日〜期限日のあいだ（期限日が無ければ開始日から）は開始後、期限日を過ぎたら完了後。後ろへも戻す。
-// 今のステータスがもう当てはまる組（未着手の一覧・ほかの進行中・完了グループ）なら動かさない。延期・中止・不明のステータス、日付の無いタスクには触れない。
-// 前回見たときと日付が同じでステータスだけ違うノートは、手で変えた（取り消した）ので触らない（日付が変わるまで）
 // the status that matches the dates (path → target and the dates' fingerprint); `today` is today in the configured timezone. Before the start:
 // not started (the first not-started status); from the start through the due date (from the start on, with no due date): started; past the
 // due date: finished. Tasks move back too. A status already in the matching kind (a not-started one, another active one, the completed group)
@@ -386,24 +350,22 @@ export function autoStatusChanges(tasks: Task[], statuses: StatusDef[], cfg: Aut
   return out;
 }
 
-// ステータスの id が変わった・消えた（to = null）ときに、行き先と未着手の一覧を付け替える（cfg をその場で書き換える）
 // carry a renamed (or deleted: to = null) status id into the targets and the not-started list (cfg is updated in place)
 export function renameAutoStatusId(cfg: AutoStatusConfig, from: string, to: string | null): void {
   if (!from || from === to) return;
   if (cfg.started === from) cfg.started = to ?? "";
   if (cfg.finished === from) cfg.finished = to ?? "";
   cfg.notStarted = cfg.notStarted.flatMap((id) => (id !== from ? [id] : to ? [to] : []));
-  // 記録も（古い id のままだと「手で変えた」と読まれ、そのノートだけ自動で動かなくなる）/ the records too (left on the old id they read as hand edits, and those notes stop moving)
+  // the records too (left on the old id they read as hand edits, and those notes stop moving)
   for (const r of Object.values(cfg.fired ?? {})) if ("status" in r && r.status === from) r.status = to ?? "";
 }
 
-// 当たった記録のうち、ノートが残っている分だけ（日付が変わった記録は効かないが、日付を戻したときのために残す）
 // the fired records whose note still exists (a record for an old date has no effect, but is kept in case the date is moved back)
 export function keepAutoFired(fired: AutoFired, exists: (path: string) => boolean): AutoFired {
   return Object.fromEntries(Object.entries(fired).filter(([p]) => exists(p)));
 }
 
-// リネーム・移動に記録を付いて行かせる（フォルダなら配下ごと）。変えたら true / let the records follow a rename or move (a folder takes its contents along); true when any moved
+// let the records follow a rename or move (a folder takes its contents along); true when any moved
 export function moveAutoFired(fired: AutoFired, from: string, to: string): boolean {
   let moved = false;
   for (const p of Object.keys(fired)) {

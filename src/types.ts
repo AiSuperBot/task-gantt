@@ -1,177 +1,168 @@
-// 中核データ型 / Core data types
+// Core data types
 
-// ステータスグループ（Wrike 準拠の 4 種・固定）。ユーザーは種類を増やせない：
-// 増やせると「完了とは何か」が曖昧になり、完了/未完了のプリセットが意味を失うため。
 // status group: Wrike's four, fixed. Users can't add more — an open-ended set would blur
 // what "completed" means and hollow out the completed/incomplete presets.
 export type StatusGroup = "active" | "completed" | "deferred" | "cancelled";
 export const STATUS_GROUPS: StatusGroup[] = ["active", "completed", "deferred", "cancelled"];
 
-// ステータス定義（設定でカスタマイズ可能）/ Status definition (customizable in settings)
+// Status definition (customizable in settings)
 export interface StatusDef {
-  id: string; // フロントマター status 値と対応 / matches the `status` frontmatter value
+  id: string; // matches the `status` frontmatter value
   label: string;
-  color: string; // バー色 / bar color (CSS color)
-  group: StatusGroup; // 所属グループ（1 ステータス＝1 グループ）/ owning group (exactly one)
+  color: string; // bar color (CSS color)
+  group: StatusGroup; // owning group (exactly one)
 }
 
-// 依存の種類（SF は未対応）/ dependency type (SF unsupported)
+// dependency type (SF unsupported)
 export type DepType = "FS" | "SS" | "FF";
 
-// 依存（先行タスクへの参照＋種類）/ a dependency: predecessor path + type
+// a dependency: predecessor path + type
 export interface Dep {
-  path: string; // 先行タスクのパス（解決済み）/ resolved predecessor path
+  path: string; // resolved predecessor path
   type: DepType;
 }
 
-// タスクの種類。どれも 1 つのノート（フロントマターが源泉）で、カンバンは Kanban プラグイン形式の本文、
-// キャンバスはフロントマターのリンク先 .canvas を中身として持つ
 // a task's kind. Each is still one note (frontmatter stays the source of truth): a kanban's body is in the
 // Kanban plugin's format, and a canvas task's content is the .canvas its frontmatter links to
 export type TaskKind = "note" | "kanban" | "canvas";
 
-// 1 ファイル = 1 タスク / one file = one task
+// one file = one task
 export interface Task {
-  path: string; // ファイルパス（一意キー）/ file path (unique key)
-  name: string; // ファイル名（拡張子なし）/ basename without extension
-  groups: string[]; // スコープから見たフォルダ階層 / folder chain relative to the scope
+  path: string; // file path (unique key)
+  name: string; // basename without extension
+  groups: string[]; // folder chain relative to the scope
   start?: string; // YYYY-MM-DD
   end?: string; // YYYY-MM-DD
-  // 時刻（任意）。frontmatter が "YYYY-MM-DDTHH:mm" のとき設定される。レイアウトは日単位のまま
   // optional time of day, set when frontmatter is "YYYY-MM-DDTHH:mm"; layout stays day-based
   startTime?: string; // HH:mm
   endTime?: string; // HH:mm
-  // 期限日が無く、描くために開始日を写した（日付で動く決まりは期限日として数えない）/ no due date in the note: end was copied from start for drawing (date rules don't count it)
+  // no due date in the note: end was copied from start for drawing (date rules don't count it)
   endFilled?: boolean;
-  interrupts?: string[]; // 急ぎ仕事が割り込んだタスク（解決済みパス・「急ぎにする」で書く）/ tasks this urgent work interrupted (resolved paths; written by "Mark as urgent")
-  priority?: string; // 優先度（urgent / expedite / דחוף なら割り込みの急ぎ仕事）/ priority (urgent / expedite / דחוף = urgent interrupting work)
-  status?: string; // StatusDef.id を参照
-  completed?: string; // 完了のグループに入った日 YYYY-MM-DD（無ければ不明）/ the day it entered the Completed group, YYYY-MM-DD (absent: unknown)
-  // 担当者（多値・フロントマターは単一値でもリストでも可）/ assignees (multi-valued; frontmatter may hold one value or a list)
+  interrupts?: string[]; // tasks this urgent work interrupted (resolved paths; written by "Mark as urgent")
+  priority?: string; // priority (urgent / expedite / דחוף = urgent interrupting work)
+  status?: string; // a StatusDef.id
+  completed?: string; // the day it entered the Completed group, YYYY-MM-DD (absent: unknown)
+  blocker?: string; // what it is waiting for (while in the Deferred group)
+  // assignees (multi-valued; frontmatter may hold one value or a list)
   assignees: string[];
-  kind: TaskKind; // ノート / カンバン / キャンバス / note, kanban or canvas
-  canvas?: string; // キャンバス型の実体（.canvas のパス）/ a canvas task's .canvas file path
-  deps: Dep[]; // 先行タスクへの依存（解決済み）/ resolved dependencies on predecessors
+  kind: TaskKind; // note, kanban or canvas
+  canvas?: string; // a canvas task's .canvas file path
+  deps: Dep[]; // resolved dependencies on predecessors
   progress?: number; // 0-100
-  // カンバンのカード数（チェック済み・全体）。カードがあれば進捗はここから計算する
   // a kanban's cards (checked, all); when it has cards, progress is worked out from them
   cards?: { done: number; total: number };
   milestone: boolean;
-  parent?: string; // 親タスクのパス（解決済み）/ resolved parent task path
-  tags: string[]; // タグ（# 抜き・本文/フロントマター両方を統合）/ tags (without #, frontmatter + inline)
-  // Custom field の値（キーは CustomField.id）。未設定のフィールドは持たない
+  parent?: string; // resolved parent task path
+  tags: string[]; // tags (without #, frontmatter + inline)
   // custom field values keyed by CustomField.id; unset fields are absent
   custom: Record<string, CustomValue>;
 }
 
-// ── Custom field（設定で宣言する任意のフロントマターキー。テーブルの列になる）──
 // ── custom fields: user-declared frontmatter keys, shown as table columns ──
 export type CustomFieldType = "text" | "number" | "date";
 export interface CustomField {
-  // 追加時に発番する不変の id。列 id（cf:<id>）に使うので、キー名を変えても列の表示・幅・並べ替えが外れない
   // a stable id minted on creation; column ids (cf:<id>) use it, so renaming the key keeps visibility, width and sort
   id: string;
-  key: string; // フロントマターのキー / frontmatter key
-  label: string; // 列見出し（空ならキー名）/ column header (falls back to the key)
+  key: string; // frontmatter key
+  label: string; // column header (falls back to the key)
   type: CustomFieldType;
 }
-// text のリスト値は配列のまま持ち、表示はカンマ区切り・書き戻しは配列 / a text list stays an array: shown comma-joined, written back as a list
+// a text list stays an array: shown comma-joined, written back as a list
 export type CustomValue = string | number | string[];
 
-// ── 日付フィルタ（Wrike 風の 開始日/期限日 絞り込み）/ date filter (Wrike-style start/due filtering) ──
-// 対象フィールド（開始日 / 期限日）/ target field (start date / due date)
+// ── date filter (Wrike-style start/due filtering) ──
+// target field (start date / due date)
 export type DateField = "start" | "end";
-// 演算子（画像7の7種）/ operators (the 7 shown in the Wrike UI)
+// operators (the 7 shown in the Wrike UI)
 export type DateOp =
-  | "is" // 一致 / equals
-  | "before" // より前 / strictly before
-  | "after" // より後 / strictly after
-  | "onOrBefore" // 以前 / on or before
-  | "onOrAfter" // 以後 / on or after
-  | "empty" // 未設定 / no date
-  | "notEmpty"; // 設定あり / has a date
-// 相対日の単位・方向 / relative-date unit & direction
+  | "is" // equals
+  | "before" // strictly before
+  | "after" // strictly after
+  | "onOrBefore" // on or before
+  | "onOrAfter" // on or after
+  | "empty" // no date
+  | "notEmpty"; // has a date
+// relative-date unit & direction
 export type DateUnit = "day" | "week" | "month";
 export type DateDir = "ago" | "fromNow";
-// 値（演算子により選べる種類が変わる）/ the value (which kinds are allowed depends on the operator)
+// the value (which kinds are allowed depends on the operator)
 export type DateValue =
-  | { kind: "preset"; preset: "yesterday" | "today" | "tomorrow" } // クイック / quick presets
-  | { kind: "specific"; date: string } // 具体日（ISO YYYY-MM-DD）/ a fixed calendar date
-  | { kind: "relative"; amount: number; unit: DateUnit; dir: DateDir } // 相対日（今日基準・毎回再計算）/ relative to today, recomputed each render
-  | { kind: "range"; from: string; to: string }; // 期間（op="is" のみ・ISO 両端）/ a date range (op "is" only)
-// 日付フィルタ 1 件 / one date filter (start/due)
+  | { kind: "preset"; preset: "yesterday" | "today" | "tomorrow" } // quick presets
+  | { kind: "specific"; date: string } // a fixed calendar date
+  | { kind: "relative"; amount: number; unit: DateUnit; dir: DateDir } // relative to today, recomputed each render
+  | { kind: "range"; from: string; to: string }; // a date range (op "is" only)
+// one date filter (start/due)
 export interface DateFilterItem {
   kind: "date";
   field: DateField;
   op: DateOp;
-  value?: DateValue; // empty/notEmpty では未使用 / unused for empty/notEmpty
+  value?: DateValue; // unused for empty/notEmpty
 }
 
-// ── カテゴリ系フィルタ（ステータス/ステータスグループ/担当者/タグ）/ category filter ──
+// ── category filter ──
 export type CategoryField = "status" | "statusGroup" | "assignee" | "tag" | "attention"; // attention = blocked / overdue / urgent
-// と一致 / 以外 / 未設定 / 設定あり / is / is not / is empty / is not empty
+// is / is not / is empty / is not empty
 export type CategoryOp = "is" | "isNot" | "empty" | "notEmpty";
 export interface CategoryFilter {
   kind: "category";
   field: CategoryField;
   op: CategoryOp;
-  // is/isNot の対象値（フィールド内は OR）。ステータスは id、ステータスグループは StatusGroup を格納
   // selected values (OR within the field); status stores ids, statusGroup stores StatusGroup values
   values: string[];
 }
 
-// ── テキスト系フィルタ（タスク名）/ text filter (task name) ──
+// ── text filter (task name) ──
 export type TextField = "name";
-// と一致 / 以外 / を含む / を含まない / で始まる / で終わる
+// is / is not / contains / does not contain / starts with / ends with
 export type TextOp = "is" | "isNot" | "contains" | "notContains" | "startsWith" | "endsWith";
 export interface TextFilter {
   kind: "text";
   field: TextField;
   op: TextOp;
-  value: string; // 空文字は素通し（絞り込まない）/ empty string = no effect
+  value: string; // empty string = no effect
 }
 
-// 統合フィルタ（カテゴリ or 日付 or テキスト）と結合方法 / a unified filter + how multiple filters combine
+// a unified filter + how multiple filters combine
 export type Filter = CategoryFilter | DateFilterItem | TextFilter;
 export type FilterMatch = "all" | "any"; // all=AND / any=OR
 
-// フィルタ構成のプリセット（filters＋一致条件をひとまとめに）/ a saved filter configuration
+// a saved filter configuration
 export interface FilterPreset {
   name: string;
   filters: Filter[];
   filterMatch: FilterMatch;
-  groupBy?: "folder" | "status" | "assignee" | "tag"; // 組み込みの役割別プリセットだけ：グループ化も切り替える / built-in role presets only: switch the grouping too
+  groupBy?: "folder" | "status" | "assignee" | "tag"; // built-in role presets only: switch the grouping too
 }
 
-// グループ（フォルダ）見出し or タスク、を一列に並べた表示行 / a display row
+// a display row
 export interface Row {
   kind: "group" | "task";
-  group: string; // グループ行＝フォルダ名 / folder name for group rows
-  depth: number; // 入れ子の深さ（インデント用）/ nesting depth for indentation
-  key?: string; // グループ行の一意キー（折りたたみ用）/ unique folder key for collapse state
+  group: string; // folder name for group rows
+  depth: number; // nesting depth for indentation
+  key?: string; // unique folder key for collapse state
   task?: Task;
-  // グループ行/親タスク行のまとめバー範囲（配下の集約）/ rolled-up span for a group or parent-task row
+  // rolled-up span for a group or parent-task row
   span?: { start: string; end: string };
-  tasks?: Task[]; // グループ行の配下のタスク（見出しの件数用）/ a group row's tasks underneath (for the heading counts)
-  sub?: boolean; // 親の下に入れ子で出ているサブタスク / a subtask nested under its parent
-  hasChildren?: boolean; // 親タスク行（子サブタスクを持つ）/ a parent task row (has subtasks)
+  tasks?: Task[]; // a group row's tasks underneath (for the heading counts)
+  sub?: boolean; // a subtask nested under its parent
+  hasChildren?: boolean; // a parent task row (has subtasks)
 }
 
-// 専用ビューに渡す状態（タブごと）/ state passed to the dedicated view (one per tab)
+// state passed to the dedicated view (one per tab)
 export interface GanttViewState {
-  folder: string; // 表示対象フォルダのパス / scoped folder path ("" = vault root)
-  layout?: Layout; // 見せ方（無ければタイムライン）/ how the tab shows the board (timeline when absent)
-  filters?: Filter[]; // このタブの絞り込み（無ければ前の版の全体の絞り込み）/ this tab's filters (absent: the global ones of earlier versions)
+  folder: string; // scoped folder path ("" = vault root)
+  layout?: Layout; // how the tab shows the board (timeline when absent)
+  filters?: Filter[]; // this tab's filters (absent: the global ones of earlier versions)
   filterMatch?: FilterMatch;
 }
 
-// タイムライン（表＋ガント）・ボード（ステータスの列のカード）・チーム（人ごとのカード）
 // the timeline (table + Gantt), the board (cards in one column per status) or the team (one card per person)
 export type Layout = "timeline" | "board" | "team";
 
 export const VIEW_TYPE_GANTT = "task-gantt-view";
-// Fit = ペイン幅に収まるよう自動スケール / Fit = auto-scale to the pane width
+// Fit = auto-scale to the pane width
 export type ZoomMode = "Day" | "Week" | "Month" | "Fit";
 
-// 表示用の日付フォーマット（保存値は常に ISO YYYY-MM-DD）/ display-only date format (stored value stays ISO)
-export type DateFormat = "YYYY/MM/DD" | "DD/MM/YYYY" | "MM/DD/YYYY";
+// display-only date format (stored value stays ISO)
+// "ddd D MMM" reads at a glance ("Tue 24 Nov"); the others are numeric
+export type DateFormat = "ddd D MMM" | "YYYY/MM/DD" | "DD/MM/YYYY" | "MM/DD/YYYY";

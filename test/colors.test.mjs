@@ -1,4 +1,3 @@
-// 担当者の自動の色（distinctColors）の検証
 // Tests for the automatic assignee colours (distinctColors)
 import { distinctColors } from "./colors.mjs";
 
@@ -14,7 +13,7 @@ function check(name, cond) {
   }
 }
 
-// ハッシュの色相だけでは Ben と Kei がほぼ同じ色になっていた / with hashed hues alone, Ben and Kei came out nearly the same colour
+// with hashed hues alone, Ben and Kei came out nearly the same colour
 const team = ["Ana", "Ben", "Ben Carter", "Dana", "Kei"];
 const colors = distinctColors(team);
 check("5 people get 5 different colours", new Set(colors.values()).size === 5);
@@ -22,7 +21,7 @@ check("the same order gives the same colours", JSON.stringify([...distinctColors
 const ten = Array.from({ length: 10 }, (_, i) => `Person ${i}`);
 check("10 people never share a colour", new Set(distinctColors(ten).values()).size === 10);
 check("an 11th person still gets a colour", distinctColors([...ten, "Extra"]).get("Extra")?.startsWith("#"));
-// 手で選んだ色はほかの人に回さない / a colour picked by hand isn't handed to anyone else
+// a colour picked by hand isn't handed to anyone else
 const picked = [...colors.values()][0];
 check("a picked colour is never given to someone else", ![...distinctColors(["Ben", "Dana", "Kei"], [picked.toUpperCase()]).values()].includes(picked));
 check("the order names come in doesn't matter", JSON.stringify([...distinctColors([...team].reverse())].sort()) === JSON.stringify([...colors].sort()));

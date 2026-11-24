@@ -2,10 +2,10 @@
 status: superseded by ADR-0004
 ---
 
-# 描画エンジンに frappe-gantt を採用 / frappe-gantt as the rendering engine
+# frappe-gantt as the rendering engine
 
-ガントの描画（バーのドラッグ/リサイズ、依存矢印、日〜月のズーム）は frappe-gantt（MIT・バニラ SVG・フレームワーク非依存）をベースに実装する。自作 SVG や DHTMLX/SVAR は採らない。
+The Gantt's rendering (dragging and resizing bars, dependency arrows, day-to-month zoom) is built on frappe-gantt (MIT, vanilla SVG, framework-independent). Home-made SVG and DHTMLX/SVAR are not adopted.
 
-**なぜ / Why:** ドラッグ計算・依存矢印の経路描画・ズームといった「重いが定型」な部分を実証済みライブラリで賄える。`on_date_change` 等のコールバックを YAML 書き戻しに接続できる。自作は工数最大、DHTMLX は商用/GPL ライセンスとバンドル肥大が Obsidian プラグイン配布と相性が悪い。
+**Why:** The "heavy but standard" parts, such as the drag math, routing the dependency arrows and zooming, come from a proven library. Callbacks such as `on_date_change` can be wired to the YAML write-back. Building it ourselves costs the most effort, and DHTMLX's commercial/GPL license and bundle bloat are a poor fit for distributing an Obsidian plugin.
 
-**トレードオフ / Trade-off:** 担当者/ステータスの色分けや細部 UI はカスタム CSS で補強が必要で、細かな振る舞いはライブラリの実装に依存する。親子ロールアップは標準では不得手なため、当面サブタスクは「グループ見出しのみ」に留める（[ADR-0001] の方針と整合）。
+**Trade-off:** Coloring by assignee or status and the finer UI details need reinforcing with custom CSS, and fine-grained behavior depends on the library's implementation. Parent/child rollups are not something it does well out of the box, so for now subtasks stay "group headings only" (consistent with the direction of [ADR-0001]).

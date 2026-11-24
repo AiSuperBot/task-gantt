@@ -1,69 +1,69 @@
 # Obsidian Gantt
 
-プロジェクト管理ツールのようなタスク管理 UI を Obsidian で実現するプラグイン。1 ファイル = 1 タスクとし、フォルダ配下を「表＋タイムライン」ガントで表示・編集する。
+A plugin that brings a task-management UI like a project-management tool's to Obsidian. One file = one task, and a folder's contents are shown and edited as a "table + timeline" Gantt.
 
 ## Language
 
 **Task**:
-1 つの Markdown ファイル。スケジュール情報（開始・終了・ステータス・担当・先行タスク）はフロントマターが源泉、本文（Body）がタスク説明。ガント上では 1 本のバー（または菱形＝マイルストーン）と表の 1 行に対応する。
+One Markdown file. Its frontmatter is the source of truth for the schedule (start, end, status, assignee, predecessor tasks), and its body (Body) is the task description. On the Gantt it is one bar (or a diamond = milestone) and one table row.
 _Avoid_: Event, Item, Issue, Note
 
 **Board**:
-設定した親フォルダ配下を集計した、表＋タイムラインのガント画面全体。リボンアイコンから開く専用ビュー。
+The whole table + timeline Gantt screen, gathering everything under the configured parent folder. A dedicated view opened from the ribbon icon.
 _Avoid_: Plan, Chart, Timeline, View
 
 **Group**:
-親フォルダ直下のサブフォルダ。表とタイムラインで「グループ見出し行」として配下の Task をまとめる。
+A subfolder directly under the parent folder. In the table and the timeline it gathers the Tasks inside it under a "group heading row".
 _Avoid_: Section, Folder, Category, List
 
 **Body**:
-Task（ファイル）の本文。フロントマターを除いた Markdown 本体。詳細パネルに表示する。
+The body of a Task (file): the Markdown content without the frontmatter. Shown in the detail panel.
 _Avoid_: Description, Content, Note
 
 **Dependency**:
-Task 間の先行 / 後続関係。フロントマターの `after`（先行 Task への wikilink 配列）で表し、タイムライン上に矢印として描く。先行の日付が変わると、SS/FF の後続は先行へ揃い、FS の後続は重なったときだけ後ろへ押し出される（設定でオフにできる・引き戻しはしない）。どちらも Duration を保つ。Subtask（親子）とは別概念。
+A predecessor / successor relationship between Tasks. Written as the frontmatter `after` (an array of wikilinks to predecessor Tasks) and drawn as arrows on the timeline. When a predecessor's dates change, SS/FF successors line up with the predecessor, and FS successors are pushed later only when they overlap it (this can be turned off in settings; successors are never pulled back). Either way they keep their Duration. A separate concept from Subtask (parent/child).
 _Avoid_: Link, Relation, Blocker, Predecessor
 
 **Duration**:
-Task の期間。開始日から期限日までの**稼働日数**（両端を含む・休日の曜日は数えない）。フロントマターには持たず、`start` / `end` から都度計算する（日付が源泉）。期間を変えると開始日を保って期限日が動き、開始日だけを変えると期間を保って期限日も動く（Wrike 流）。マイルストーンは期間を持たない。
+The length of a Task: the number of **workdays** from its start date to its due date (both ends included; the weekdays set as non-working days are not counted). Not kept in frontmatter; worked out from `start` / `end` each time (the dates are the source of truth). Changing the duration keeps the start date and moves the due date; changing only the start date keeps the duration and moves the due date along with it (as Wrike does). Milestones have no duration.
 _Avoid_: Length, Span, Estimate
 
 **Workday**:
-稼働日。設定の「休日の曜日」（既定は土・日）以外の日。Duration と、Dependency による後続の連動はすべて稼働日で数える。祝日（特定の日付）はまだ扱わない。
+A working day: any day other than the weekdays in the "Non-working days" setting (Friday and Saturday by default, a Sunday-to-Thursday week). Duration and the moving of successors through a Dependency are all counted in workdays. Public holidays (specific dates) are not handled yet.
 _Avoid_: Business day, Working day
 
 **Subtask**:
-親 Task を持つ Task。フロントマターの `parent`（親 Task への単一 wikilink）で表し、表では親 Task の直下に入れ子表示する（サブサブ＝任意の深さ）。子は親と同じ Group（フォルダ）に同居し、ドラッグ＆ドロップで親へ寄せると親のフォルダへ移動する。Dependency（先行/後続）や Group（フォルダ）とは別の階層軸。
+A Task that has a parent Task. Written as the frontmatter `parent` (a single wikilink to the parent Task); in the table it is nested directly under its parent Task (sub-subtasks too, to any depth). A child lives in the same Group (folder) as its parent, and dragging and dropping it onto a parent moves it into the parent's folder. A hierarchy axis separate from Dependency (predecessor/successor) and Group (folder).
 _Avoid_: Child, Sub-item, Nested task
 
 **Rollup**:
-親 Task の配下（子孫 Task）の期間を集約して 1 本のサマリーバーで示す表示。ボード全体のトグル（既定 OFF）で切替え、対象は親 Task のバーのみ。OFF のとき親 Task は自分の日付で描く。Group（フォルダ）行のサマリーバーは常時集約で、このトグルの対象外。
+A display that gathers the dates of everything under a parent Task (its descendant Tasks) into one summary bar. Switched by a board-wide toggle (OFF by default), and it applies to parent Tasks' bars only. While it is OFF, a parent Task is drawn with its own dates. The summary bars of Group (folder) rows always roll up and are not affected by this toggle.
 _Avoid_: Summary, Aggregate, Parent bar
 
 **Assignee**:
-Task の担当者。**多値**で、フロントマター `assignee` は単一値でもリストでもよい（1 人のときは単一値のまま書く）。担当者が 2 人以上の Task が**共有タスク**で、担当者でグループ化すると各担当者のグループへ重複表示する（Tag と同じ追加的な複数所属。担当者グループへの D&D は担当者の追加）。
+The person responsible for a Task. **Multi-valued**: the frontmatter `assignee` may be a single value or a list (with one person it is written as a single value). A Task with two or more assignees is a **shared task**; grouped by assignee, it appears in each assignee's group (the same additive multiple membership as Tag; a drag and drop onto an assignee group adds that assignee).
 _Avoid_: Owner, Member, Person
 
 **Task kind**:
-Task の中身の種類。**ノート**（既定）・**カンバン**（Kanban プラグイン形式の本文。フロントマター `kanban-plugin: board`）・**キャンバス**（フロントマター `canvas` がリンクする `.canvas` が中身）の 3 種。どの種類でも Task は 1 つのノートで、スケジュール情報はそのフロントマターが源泉（`.canvas` 自体は Task にならない）。
+The kind of content a Task holds, one of three: **Note** (the default), **Kanban** (a body in the Kanban plugin's format; frontmatter `kanban-plugin: board`) and **Canvas** (the content is the `.canvas` that the frontmatter `canvas` links to). Whatever its kind, a Task is one note, and that note's frontmatter is the source of truth for the schedule (the `.canvas` itself never becomes a Task).
 _Avoid_: Type, Format, Template
 
 **Status**:
-Task の進行状態（例: To do / In progress / Done）。設定で定義し、バー色に反映する。
+The progress state of a Task (e.g. To do / In progress / Done). Defined in settings and reflected in the bar color.
 _Avoid_: State, Phase
 
 **Status group**:
-Status が属する 4 種の分類（アクティブ / 完了 / 延期 / キャンセル）。Wrike に倣った**固定の 4 種**でユーザーは増やせず、各 Status はちょうど 1 つに属する。「完了 / 未完了」の判定はこのグループだけを根拠にし、Status の id やラベルからは推測しない。フロントマターには持たず、設定の Status 定義から都度引く。
+The four classes a Status belongs to (Active / Completed / Deferred / Cancelled). **A fixed set of four**, modelled on Wrike, that users can't add to; every Status belongs to exactly one. Whether a task is completed or not is decided by this group alone, never guessed from a Status's id or label. Not kept in frontmatter; looked up from the Status definitions in settings each time.
 _Avoid_: Category, Bucket, Phase
 
 **Inline edit**:
-テーブルのセルをダブルクリックして、その場で値を編集する操作。**テーブルに表示できる列はすべて Inline edit に対応する**（列を追加するときは表示用の描画とエディタをセットで実装する）。Enter／フォーカス外れで保存、Esc で取消し、値が変わっていなければ書き込まない。編集可能セルのシングルクリックは行を選ぶだけ（詳細パネルは開かない）なので、詳細パネルを開く導線はタスク名セルと Bar のクリック、行での Enter が担う。タスク名セルだけは、詳細パネルがそのタスクで開いている状態でダブルクリックするとその場でリネームできる（閉じている状態では 1 回目のクリックでパネルが開くだけ）。列は `src/columns.ts` の列定義として実装し、name 以外は描画とエディタが型で必須。
+Editing a value in place by double-clicking a table cell. **Every column the table can show supports Inline edit** (a new column ships with both its display rendering and its editor). Enter or losing focus saves, Esc cancels, and nothing is written when the value hasn't changed. A single click on an editable cell only selects the row (it doesn't open the detail panel), so the detail panel is opened by clicking the task name cell or the Bar, or by pressing Enter on the row. The task name cell alone can be renamed in place, by double-clicking it while the detail panel is open on that task (while the panel is closed, the first click only opens the panel). Columns are implemented as column definitions in `src/columns.ts`, whose types require a renderer and an editor for every column except name.
 _Avoid_: Quick edit, Cell edit, Direct edit
 
 **Custom field**:
-ユーザーが設定で宣言する任意のフロントマターキー（`key` / 表示ラベル / 型 text・number・date）。テーブルの列として表示・ソートできる。ビルトイン列（開始・期限・担当者・ステータス）と同じ「列定義」の仕組みに乗る。
+Any frontmatter key the user declares in settings (`key` / display label / type text, number or date). It can be shown and sorted as a table column. It runs on the same "column definition" mechanism as the built-in columns (Start, Due, Assignee, Status).
 _Avoid_: Property, Attribute, Metadata
 
 **Tag**:
-Obsidian ネイティブのタグ（フロントマター `tags:` ＋ 本文 `#tag`）。多値で、フィルタ・グループ化・タグ列に使う。Group（フォルダ＝排他・1か所）に対し、タグは**追加的な複数所属**（タググループへの D&D で付与、グループ化時は複数グループへ重複表示）。読み取りは本文 `#tag` も含むが、追加・削除はフロントマター `tags:` に対して行う。
+Obsidian's native tags (frontmatter `tags:` + body `#tag`). Multi-valued; used by filters, grouping and the Tags column. Where a Group (folder) is exclusive, one place only, tags are **additive multiple membership** (a drag and drop onto a tag group adds the tag; when grouped, a task appears in several groups). Reading includes body `#tag`s, but tags are added and removed in the frontmatter `tags:`.
 _Avoid_: Label, Category, Keyword

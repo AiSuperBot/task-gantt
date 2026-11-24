@@ -1,6 +1,5 @@
-// 日付フィルタの解決・判定（resolveDateValue / matchDate）と稲妻線ジオメトリの検証
 // Tests for date-filter resolution/matching and progress-line geometry
-import { revealSpan, resolveDateValue, matchDate, dayIndex, dayToStr, todayIndex, progressLineX, buildProgressLine, buildTicks, buildBands, computeRange, extendChunk, extendLimit, growPad, padRange, padToCover, nearEdge, fixedOffset } from "./timeline.mjs";
+import { revealSpan, resolveDateValue, matchDate, dayIndex, dayToStr, todayIndex, progressLineX, buildProgressLine, buildTicks, buildBands, computeRange, extendChunk, extendLimit, growPad, padRange, padToCover, nearEdge, fixedOffset, formatDate } from "./timeline.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -14,7 +13,7 @@ function check(name, cond) {
   }
 }
 
-// 固定の「今日」を通日番号で用意（2026-07-19）/ a fixed `today` day index
+// a fixed `today` day index
 const TODAY = dayIndex("2026-07-19");
 const idx = (iso) => dayIndex(iso);
 
@@ -25,159 +24,161 @@ check("preset tomorrow", resolveDateValue({ kind: "preset", preset: "tomorrow" }
 check("specific", resolveDateValue({ kind: "specific", date: "2026-08-01" }, TODAY).from === idx("2026-08-01"));
 check("relative 3 day fromNow", resolveDateValue({ kind: "relative", amount: 3, unit: "day", dir: "fromNow" }, TODAY).from === TODAY + 3);
 check("relative 2 week ago", resolveDateValue({ kind: "relative", amount: 2, unit: "week", dir: "ago" }, TODAY).from === TODAY - 14);
-// 暦月：2026-07-19 + 1 month = 2026-08-19 / calendar month
+// calendar month
 check("relative 1 month fromNow = 8/19", resolveDateValue({ kind: "relative", amount: 1, unit: "month", dir: "fromNow" }, TODAY).from === idx("2026-08-19"));
 check("relative 1 month ago = 6/19", resolveDateValue({ kind: "relative", amount: 1, unit: "month", dir: "ago" }, TODAY).from === idx("2026-06-19"));
-// 暦月の桁上げ：2026-07-19 + 12 month = 2027-07-19 / month carries into next year
+// month carries into next year
 check("relative 1 month from Jan 31 stays in Feb", resolveDateValue({ kind: "relative", amount: 1, unit: "month", dir: "fromNow" }, idx("2026-01-31")).from === idx("2026-02-28"));
 check("relative 12 month fromNow = 2027-07-19", resolveDateValue({ kind: "relative", amount: 12, unit: "month", dir: "fromNow" }, TODAY).from === idx("2027-07-19"));
 const range = resolveDateValue({ kind: "range", from: "2026-07-01", to: "2026-07-31" }, TODAY);
-check("range 両端", range.from === idx("2026-07-01") && range.to === idx("2026-07-31"));
+check("range both ends", range.from === idx("2026-07-01") && range.to === idx("2026-07-31"));
 
 // ── matchDate ──
 const day = (iso) => idx(iso);
 const F = (op, value) => ({ field: "start", op, value });
 
-// is / before / after / onOrBefore / onOrAfter（value = tomorrow 基準）/ operator boundaries
+// operator boundaries
 const tom = { kind: "preset", preset: "tomorrow" }; // = TODAY+1
-check("is 一致", matchDate(TODAY + 1, F("is", tom), TODAY) === true);
-check("is 不一致", matchDate(TODAY, F("is", tom), TODAY) === false);
-check("before 真", matchDate(TODAY, F("before", tom), TODAY) === true);
-check("before 境界は偽", matchDate(TODAY + 1, F("before", tom), TODAY) === false);
-check("after 真", matchDate(TODAY + 2, F("after", tom), TODAY) === true);
-check("after 境界は偽", matchDate(TODAY + 1, F("after", tom), TODAY) === false);
-check("onOrBefore 境界は真", matchDate(TODAY + 1, F("onOrBefore", tom), TODAY) === true);
-check("onOrBefore 真", matchDate(TODAY, F("onOrBefore", tom), TODAY) === true);
-check("onOrBefore 偽", matchDate(TODAY + 2, F("onOrBefore", tom), TODAY) === false);
-check("onOrAfter 境界は真", matchDate(TODAY + 1, F("onOrAfter", tom), TODAY) === true);
-check("onOrAfter 偽", matchDate(TODAY, F("onOrAfter", tom), TODAY) === false);
+check("is match", matchDate(TODAY + 1, F("is", tom), TODAY) === true);
+check("is no match", matchDate(TODAY, F("is", tom), TODAY) === false);
+check("before true", matchDate(TODAY, F("before", tom), TODAY) === true);
+check("before boundary is false", matchDate(TODAY + 1, F("before", tom), TODAY) === false);
+check("after true", matchDate(TODAY + 2, F("after", tom), TODAY) === true);
+check("after boundary is false", matchDate(TODAY + 1, F("after", tom), TODAY) === false);
+check("onOrBefore boundary is true", matchDate(TODAY + 1, F("onOrBefore", tom), TODAY) === true);
+check("onOrBefore true", matchDate(TODAY, F("onOrBefore", tom), TODAY) === true);
+check("onOrBefore false", matchDate(TODAY + 2, F("onOrBefore", tom), TODAY) === false);
+check("onOrAfter boundary is true", matchDate(TODAY + 1, F("onOrAfter", tom), TODAY) === true);
+check("onOrAfter false", matchDate(TODAY, F("onOrAfter", tom), TODAY) === false);
 
-// range（op="is"）/ range membership
+// range membership
 const rangeF = F("is", { kind: "range", from: "2026-07-01", to: "2026-07-31" });
-check("range 内は真", matchDate(day("2026-07-15"), rangeF, TODAY) === true);
-check("range 端(from)は真", matchDate(day("2026-07-01"), rangeF, TODAY) === true);
-check("range 端(to)は真", matchDate(day("2026-07-31"), rangeF, TODAY) === true);
-check("range 外は偽", matchDate(day("2026-08-01"), rangeF, TODAY) === false);
+check("inside the range is true", matchDate(day("2026-07-15"), rangeF, TODAY) === true);
+check("range edge (from) is true", matchDate(day("2026-07-01"), rangeF, TODAY) === true);
+check("range edge (to) is true", matchDate(day("2026-07-31"), rangeF, TODAY) === true);
+check("outside the range is false", matchDate(day("2026-08-01"), rangeF, TODAY) === false);
 
-// empty / notEmpty と 空日付の除外 / empty handling
-check("empty: 未設定は真", matchDate(undefined, F("empty"), TODAY) === true);
-check("empty: 設定ありは偽", matchDate(TODAY, F("empty"), TODAY) === false);
-check("notEmpty: 設定ありは真", matchDate(TODAY, F("notEmpty"), TODAY) === true);
-check("notEmpty: 未設定は偽", matchDate(undefined, F("notEmpty"), TODAY) === false);
-check("空日付は before で除外", matchDate(undefined, F("before", tom), TODAY) === false);
-check("空日付は onOrAfter で除外", matchDate(undefined, F("onOrAfter", tom), TODAY) === false);
+// empty handling
+check("empty: unset is true", matchDate(undefined, F("empty"), TODAY) === true);
+check("empty: set is false", matchDate(TODAY, F("empty"), TODAY) === false);
+check("notEmpty: set is true", matchDate(TODAY, F("notEmpty"), TODAY) === true);
+check("notEmpty: unset is false", matchDate(undefined, F("notEmpty"), TODAY) === false);
+check("an empty date is left out by before", matchDate(undefined, F("before", tom), TODAY) === false);
+check("an empty date is left out by onOrAfter", matchDate(undefined, F("onOrAfter", tom), TODAY) === false);
 
-// 値未完成のフィルタは素通し / incomplete filter = no effect
-check("value なしは素通し", matchDate(TODAY, { field: "start", op: "is" }, TODAY) === true);
+// incomplete filter = no effect
+check("no value lets everything through", matchDate(TODAY, { field: "start", op: "is" }, TODAY) === true);
 
-// ── 稲妻線 / progress line ──
-// 基準日 x=100 とし、幅 100 のバーを基準日の左右に置いて判定する
+// ── progress line ──
 // basis at x=100, with 100px-wide bars placed around it
 const BASIS = 100;
 const px = (row) => progressLineX(row, BASIS);
 
-// 完了は逸脱なし（バー位置に関係なく基準日）/ done never deviates
-check("完了(100%)は基準日", px({ startX: 0, width: 100, progress: 100 }) === BASIS);
-check("完了(超過値)も基準日", px({ startX: 0, width: 100, progress: 120 }) === BASIS);
+// done never deviates
+check("done (100%) is on the basis date", px({ startX: 0, width: 100, progress: 100 }) === BASIS);
+check("done (over 100%) is on the basis date too", px({ startX: 0, width: 100, progress: 120 }) === BASIS);
 
-// 進捗ありは「バー上の到達点」/ in-progress lands on the bar
-check("進捗50%はバー中央", px({ startX: 0, width: 100, progress: 50 }) === 50);
-check("進捗50%が基準日より右なら進み", px({ startX: 80, width: 100, progress: 50 }) === 130);
-check("進捗25%は遅れ側", px({ startX: 50, width: 100, progress: 25 }) === 75);
+// in-progress lands on the bar
+check("50% progress is mid-bar", px({ startX: 0, width: 100, progress: 50 }) === 50);
+check("50% progress right of the basis date is ahead", px({ startX: 80, width: 100, progress: 50 }) === 130);
+check("25% progress is on the behind side", px({ startX: 50, width: 100, progress: 25 }) === 75);
 
-// 未着手：開始日を過ぎていれば開始日まで遅れ、未来なら逸脱なし
 // not started: behind to the start date if past, no deviation if future
-check("未着手(未設定)で開始日が過去なら開始日", px({ startX: 40, width: 100 }) === 40);
-check("未着手(0%)で開始日が過去なら開始日", px({ startX: 40, width: 100, progress: 0 }) === 40);
-check("未着手で開始日が未来なら基準日", px({ startX: 160, width: 100 }) === BASIS);
+check("not started (unset) with a past start is on the start date", px({ startX: 40, width: 100 }) === 40);
+check("not started (0%) with a past start is on the start date", px({ startX: 40, width: 100, progress: 0 }) === 40);
+check("not started with a future start is on the basis date", px({ startX: 160, width: 100 }) === BASIS);
 
-// バーを持たない行（グループ行・日付なし）は素通し / rows without a bar pass through
-check("バーなしは素通し", px({}) === BASIS);
-check("バーなし(進捗つき)も素通し", px({ progress: 50 }) === BASIS);
+// rows without a bar pass through
+check("no bar passes through", px({}) === BASIS);
+check("no bar (with progress) passes through too", px({ progress: 50 }) === BASIS);
 
-// マイルストーン（幅 0）は 0%＝菱形位置 / 100%＝基準日
 // milestones (width 0): 0% sits on the diamond, 100% on the basis
-check("マイルストーン未達は菱形位置", px({ startX: 30, width: 0 }) === 30);
-check("マイルストーン達成は基準日", px({ startX: 30, width: 0, progress: 100 }) === BASIS);
+check("an unreached milestone sits on its diamond", px({ startX: 30, width: 0 }) === 30);
+check("a reached milestone is on the basis date", px({ startX: 30, width: 0, progress: 100 }) === BASIS);
 
-// 折れ線の組み立て：両端は基準日、各行は行中央 / polyline ends pinned to basis, points at row centers
+// polyline ends pinned to basis, points at row centers
 const line = buildProgressLine(
   [{ startX: 0, width: 100, progress: 50 }, {}, { startX: 40, width: 100 }],
   BASIS,
   30,
   90
 );
-check("折れ線の点数 = 行数+2", line.length === 5);
-check("折れ線の先頭は基準日の上端", line[0].x === BASIS && line[0].y === 0);
-check("折れ線の末尾は基準日の下端", line[4].x === BASIS && line[4].y === 90);
-check("1行目は行中央(y=15)で x=50", line[1].x === 50 && line[1].y === 15);
-check("2行目(バーなし)は基準日で y=45", line[2].x === BASIS && line[2].y === 45);
-check("3行目は開始日 x=40 で y=75", line[3].x === 40 && line[3].y === 75);
-check("行が空でも両端だけ返す", buildProgressLine([], BASIS, 30, 0).length === 2);
+check("polyline points = rows + 2", line.length === 5);
+check("the polyline starts at the top of the basis date", line[0].x === BASIS && line[0].y === 0);
+check("the polyline ends at the bottom of the basis date", line[4].x === BASIS && line[4].y === 90);
+check("row 1 at its center (y=15), x=50", line[1].x === 50 && line[1].y === 15);
+check("row 2 (no bar) on the basis date, y=45", line[2].x === BASIS && line[2].y === 45);
+check("row 3 on its start date x=40, y=75", line[3].x === 40 && line[3].y === 75);
+check("no rows still gives both ends", buildProgressLine([], BASIS, 30, 0).length === 2);
 
-// 日付軸：月初の目盛りが近くの月曜と重なるときは月初を残す（2026-11-01 は日曜、11-02 は月曜）
 // date axis: a month start that collides with a nearby Monday wins (2026-11-01 is a Sunday, 11-02 a Monday)
 const WD = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const lbl = (d, z) => (z === "Day" ? `${d.getUTCDate()} ${WD[d.getUTCDay()]}` : `${d.getUTCMonth() + 1}/${d.getUTCDate()}`);
 const wk = buildTicks({ min: dayIndex("2026-10-26"), max: dayIndex("2026-11-10") }, "Week", 16, lbl);
-check("週目盛り: 10/26, 11/1, 11/9（11/2 は 11/1 と重なるので省く）", wk.map((t) => t.label).join(" ") === "10/26 11/1 11/9");
-check("週目盛り: 月初は major", wk[1].major && !wk[0].major);
-// 金土休み（日〜木の週）なら週の初日は日曜 / with Fri+Sat off (a Sunday-to-Thursday week) the week ticks fall on Sundays
-check("週目盛り: 日曜始まり（11/8, 11/15）", buildTicks({ min: dayIndex("2026-11-02"), max: dayIndex("2026-11-16") }, "Week", 16, lbl, 0).map((t) => t.label).join(" ") === "11/8 11/15");
+check("week ticks: one per week on an even rhythm (10/26, 11/2, 11/9); the month band marks 11/1", wk.map((t) => t.label).join(" ") === "10/26 11/2 11/9");
+check("week ticks: a week starting on the 1st is major", buildTicks({ min: dayIndex("2026-11-01"), max: dayIndex("2026-11-20") }, "Week", 16, lbl, 0).map((t) => t.major).join() === "true,false,false");
+// with Fri+Sat off (a Sunday-to-Thursday week) the week ticks fall on Sundays
+check("week ticks: weeks starting on Sunday (11/8, 11/15)", buildTicks({ min: dayIndex("2026-11-02"), max: dayIndex("2026-11-16") }, "Week", 16, lbl, 0).map((t) => t.label).join(" ") === "11/8 11/15");
 const dayTicks = buildTicks({ min: dayIndex("2026-10-01"), max: dayIndex("2026-10-04") }, "Day", 20, lbl);
-check("日目盛り: 詰まりすぎる日は間引く", dayTicks.map((t) => t.label).join(" ") === "1 Th 3 Sa");
-// 目盛りの書式は呼び出し側（言語ごと）。日-月の順の言語でも月初の扱いは同じ / the caller owns the format; day-month locales behave the same
-const fr = new Intl.DateTimeFormat("fr", { day: "numeric", month: "short", timeZone: "UTC" });
-// 詳細パネルを開くとき、開いたタスクのバーを見せる / showing the opened task's bar as the detail panel opens
+check("day ticks: too crowded days are thinned out", dayTicks.map((t) => t.label).join(" ") === "1 Th 3 Sa");
+// the caller owns the format; day-month locales behave the same
+const he = new Intl.DateTimeFormat("he", { day: "numeric", month: "short", timeZone: "UTC" });
+// showing the opened task's bar as the detail panel opens
 check("revealSpan: a bar in view stays put", revealSpan(100, 500, 200, 300, 24) === 100);
 check("revealSpan: a bar the panel would hide moves just far enough", revealSpan(100, 500, 560, 640, 24) === 164);
 check("revealSpan: a bar left of the view moves just far enough", revealSpan(300, 500, 200, 260, 24) === 176);
 check("revealSpan: a bar longer than the view stays while it crosses it", revealSpan(100, 300, 0, 1000, 24) === 100);
 check("revealSpan: a long bar out of view shows its start", revealSpan(2000, 300, 0, 1000, 24) === -24);
-check("週目盛り: 書式は label 次第（fr）", buildTicks({ min: dayIndex("2026-11-01"), max: dayIndex("2026-11-02") }, "Week", 16, (d) => fr.format(d))[0].label === "1 nov.");
+check("week ticks: the format is up to the label (he)", buildTicks({ min: dayIndex("2026-11-01"), max: dayIndex("2026-11-02") }, "Week", 16, (d) => he.format(d), 0)[0].label === "1 בנוב׳");
 
-// 目盛りの上の帯：左端に今の月、月の区切りごとに見出し / the band: the current month at the left edge, then one per month
+// dates read at a glance: weekday, day, month by name; the year only outside the current one
+const NOV24 = dayIndex("2026-11-24");
+check("glance date: this year reads 'Tue 24 Nov'", formatDate("2026-11-24", "ddd D MMM", NOV24) === "Tue 24 Nov");
+check("glance date: another year drops the weekday and adds the year", formatDate("2027-01-05", "ddd D MMM", NOV24) === "5 Jan 2027");
+check("numeric formats are unchanged", formatDate("2026-11-24", "YYYY/MM/DD") === "2026/11/24" && formatDate("2026-11-24", "DD/MM/YYYY") === "24/11/2026");
+
+// the band: the current month at the left edge, then one per month
 const band = buildBands({ min: dayIndex("2026-10-10"), max: dayIndex("2026-12-05") }, "Week", 16, (d) => `${d.getUTCMonth() + 1}`);
-check("帯: 10 月（左端）・11 月・12 月", band.map((b) => b.label).join(" ") === "10 11 12" && band[0].x === 0 && band[1].major);
+check("band: October (left edge), November, December", band.map((b) => b.label).join(" ") === "10 11 12" && band[0].x === 0 && band[1].major);
 const yearBand = buildBands({ min: dayIndex("2026-11-10"), max: dayIndex("2027-02-01") }, "Month", 5, (d) => `${d.getUTCFullYear()}`);
-check("帯(Month): 年の区切りだけ", yearBand.map((b) => b.label).join(" ") === "2026 2027");
+check("band (Month): only the year breaks", yearBand.map((b) => b.label).join(" ") === "2026 2027");
 const tight = buildBands({ min: dayIndex("2026-10-30"), max: dayIndex("2026-11-20") }, "Week", 16, (d) => `${d.getUTCMonth() + 1}`);
-check("帯: すぐ月が替わるなら左端の見出しは省く", tight.map((b) => b.label).join(" ") === "11");
+check("band: no left-edge label when the month changes right away", tight.map((b) => b.label).join(" ") === "11");
 
-// 今日は端末の暦で数える（UTC だと時差のぶん前後にずれる）/ today follows the device calendar, not UTC
-check("todayIndex はローカルの日付", [0, 30, 23 * 60 + 30].every((min) => dayToStr(todayIndex(new Date(2026, 9, 23, 0, min))) === "2026-10-23"));
+// today follows the device calendar, not UTC
+check("todayIndex is the local date", [0, 30, 23 * 60 + 30].every((min) => dayToStr(todayIndex(new Date(2026, 9, 23, 0, min))) === "2026-10-23"));
 
-// 設定タイムゾーンの今日：固定オフセットなら端末に関係なくその地域の日付 / with a fixed offset, today is that zone's date whatever the device says
+// with a fixed offset, today is that zone's date whatever the device says
 const instant = new Date(Date.UTC(2026, 10, 3, 20, 30)); // 2026-11-03 20:30 UTC
-check("todayIndex: +09:00 は翌日", dayToStr(todayIndex(instant, "+09:00")) === "2026-11-04");
-check("todayIndex: -05:00 は同日", dayToStr(todayIndex(instant, "-05:00")) === "2026-11-03");
-check("todayIndex: -09:30 の朝", dayToStr(todayIndex(new Date(Date.UTC(2026, 10, 4, 5, 0)), "-09:30")) === "2026-11-03");
-check("todayIndex: system は端末の暦", todayIndex(new Date(2026, 9, 23, 23, 30), "system") === todayIndex(new Date(2026, 9, 23, 23, 30)));
+check("todayIndex: +09:00 is the next day", dayToStr(todayIndex(instant, "+09:00")) === "2026-11-04");
+check("todayIndex: -05:00 is the same day", dayToStr(todayIndex(instant, "-05:00")) === "2026-11-03");
+check("todayIndex: morning at -09:30", dayToStr(todayIndex(new Date(Date.UTC(2026, 10, 4, 5, 0)), "-09:30")) === "2026-11-03");
+check("todayIndex: system follows the device calendar", todayIndex(new Date(2026, 9, 23, 23, 30), "system") === todayIndex(new Date(2026, 9, 23, 23, 30)));
 
-// 終わりの無いタイムライン：端でのばす日数・上限・左にのばしたときのスクロールの補正 / the endless timeline: chunk, limit, and the scroll fix after growing on the left
+// the endless timeline: chunk, limit, and the scroll fix after growing on the left
 {
   const zero = { before: 0, after: 0 };
-  check("のばす日数: Day 4 週・Week 3 か月・Month 1 年・Fit なし", [extendChunk("Day"), extendChunk("Week"), extendChunk("Month"), extendChunk("Fit")].join() === "28,91,365,0");
-  check("growPad: 片側だけ 1 回分", JSON.stringify(growPad(zero, "before", "Week")) === '{"before":91,"after":0}');
-  check("growPad: 上限で止まり、それ以上は null", growPad({ before: extendLimit("Week") - 10, after: 0 }, "before", "Week").before === extendLimit("Week") && growPad({ before: extendLimit("Week"), after: 0 }, "before", "Week") === null);
-  check("growPad: Fit はのびない", growPad(zero, "after", "Fit") === null);
+  check("extendChunk: Day 4 weeks, Week 3 months, Month 1 year, Fit none", [extendChunk("Day"), extendChunk("Week"), extendChunk("Month"), extendChunk("Fit")].join() === "28,91,365,0");
+  check("growPad: one chunk, on one side only", JSON.stringify(growPad(zero, "before", "Week")) === '{"before":91,"after":0}');
+  check("growPad: stops at the limit, then null", growPad({ before: extendLimit("Week") - 10, after: 0 }, "before", "Week").before === extendLimit("Week") && growPad({ before: extendLimit("Week"), after: 0 }, "before", "Week") === null);
+  check("growPad: Fit doesn't grow", growPad(zero, "after", "Fit") === null);
   const base = { min: 100, max: 200 };
-  check("padRange: 前後に足す", JSON.stringify(padRange(base, { before: 28, after: 91 })) === '{"min":72,"max":291}');
-  check("padToCover: 範囲の外の日（今日など）が 1 回分の余裕つきで入る", JSON.stringify(padToCover(base, zero, 500, "Day")) === '{"before":0,"after":328}' && padToCover(base, zero, 10, "Month").before === 455);
-  check("padToCover: 範囲の中ほどなら変えない", JSON.stringify(padToCover(base, { before: 5, after: 7 }, 150, "Day")) === '{"before":5,"after":7}');
-  check("padToCover: 上限を超えても届かせる（明示の移動）", padToCover(base, zero, -5000, "Week").before > extendLimit("Week"));
-  // 端の帯から出るのに 100 日要るなら、1 回分（91 日）ずつ切り上げて 182 日を 1 度に / needing 100 days to leave the edge zone adds 182 (two 91-day chunks) at once
-  check("growPad: 端の帯から出る分を 1 度に（1 回分ずつ切り上げ）", growPad(zero, "after", "Week", 100).after === 182 && growPad(zero, "after", "Week", 0).after === 91);
-  check("fixedOffset: 固定オフセットは分、system は null", fixedOffset("+09:30") === 570 && fixedOffset("-05:00") === -300 && fixedOffset("system") === null);
-  check("nearEdge: 左端・右端・中ほど", nearEdge(100, 800, 5000, 800) === "before" && nearEdge(3500, 800, 5000, 800) === "after" && nearEdge(2000, 800, 5000, 800) === null);
+  check("padRange: adds before and after", JSON.stringify(padRange(base, { before: 28, after: 91 })) === '{"min":72,"max":291}');
+  check("padToCover: a day outside the range (like today) comes in, with one chunk to spare", JSON.stringify(padToCover(base, zero, 500, "Day")) === '{"before":0,"after":328}' && padToCover(base, zero, 10, "Month").before === 455);
+  check("padToCover: a day well inside the range changes nothing", JSON.stringify(padToCover(base, { before: 5, after: 7 }, 150, "Day")) === '{"before":5,"after":7}');
+  check("padToCover: reaches past the limit (an explicit jump)", padToCover(base, zero, -5000, "Week").before > extendLimit("Week"));
+  // needing 100 days to leave the edge zone adds 182 (two 91-day chunks) at once
+  check("growPad: enough to leave the edge zone at once (rounded up to whole chunks)", growPad(zero, "after", "Week", 100).after === 182 && growPad(zero, "after", "Week", 0).after === 91);
+  check("fixedOffset: a fixed offset in minutes, system is null", fixedOffset("+09:30") === 570 && fixedOffset("-05:00") === -300 && fixedOffset("system") === null);
+  check("nearEdge: left edge, right edge, middle", nearEdge(100, 800, 5000, 800) === "before" && nearEdge(3500, 800, 5000, 800) === "after" && nearEdge(2000, 800, 5000, 800) === null);
 }
 
-// 範囲は今日から 20 年より離れた日付（年の打ち間違い）を数えない / the range ignores dates more than 20 years from today (a mistyped year)
+// the range ignores dates more than 20 years from today (a mistyped year)
 {
   const today = dayIndex("2026-11-04");
   const r = computeRange([{ start: "1025-11-01", end: "2026-11-10" }, { start: "2026-11-01", end: "3026-01-01" }], today);
-  check("computeRange: 20 年より離れた日付は範囲に入れない", dayToStr(r.min) === "2026-10-29" && dayToStr(r.max) === "2026-11-17");
-  check("computeRange: 全部が遠い日付なら今日のまわり", computeRange([{ start: "1025-01-01", end: "1025-01-02" }], today).min === today - 7);
+  check("computeRange: dates more than 20 years away stay out of the range", dayToStr(r.min) === "2026-10-29" && dayToStr(r.max) === "2026-11-17");
+  check("computeRange: around today when every date is far away", computeRange([{ start: "1025-01-01", end: "1025-01-02" }], today).min === today - 7);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

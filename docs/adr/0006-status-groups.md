@@ -2,35 +2,35 @@
 status: accepted
 ---
 
-# ステータスに固定 4 種のグループ層を足す / A fixed four-group layer above statuses
+# A fixed four-group layer above statuses
 
-Status は「id / ラベル / 色」の平坦なリストで、**どれが完了かをアプリが知らなかった**。そのため「完了済み」「未完了」という最も基本的な絞り込みが作れない。Status の上に **Status group** という 1 レイヤーを足し、Wrike と同じ **4 種固定**（`active` / `completed` / `deferred` / `cancelled`）とする。各 Status はちょうど 1 グループに属し、グループは設定画面のドロップダウンで選ぶ。
+Statuses were a flat list of "id / label / color", and **the app didn't know which of them meant done**. So the most basic filters, "Completed" and "Incomplete", couldn't be built. One layer, the **Status group**, is added above Status, with **four fixed groups**, the same as Wrike's (`active` / `completed` / `deferred` / `cancelled`). Every Status belongs to exactly one group, picked from a dropdown in the settings tab.
 
-- **フィルタ項目**に「ステータスグループ」を追加（ステータス・担当者・タグと同じカテゴリ系フィルタ）。
-- **組み込みプリセット**に「完了済み」＝`group is completed`、「未完了」＝`group is not (completed, cancelled)` を追加。
-- 判定はグループのみを根拠にし、id やラベルの文字列（`done` 等）は実行時に一切見ない。
+- **Filter fields** gain "Status group" (a category filter, like Status, Assignee and Tag).
+- **Built-in presets** gain "Completed" = `group is completed` and "Incomplete" = `group is not (completed, cancelled)`.
+- The decision rests on the group alone: id and label strings (`done` and so on) are never looked at at runtime.
 
-**なぜ / Why:** 「完了」はユーザーごとに `done` / `Closed` / `リリース済み` と名前が違うので、名前から推測する実装はいずれ必ず外れる。かといって Status に `isDone` の真偽値を足すと、「キャンセル」と「保留」が同じ *not done* に潰れてしまい、「未完了＝残っている仕事」という一覧が作れない。Wrike の 4 分類は「作業が進むか / 終わったか / 止まっているか / 消えたか」を過不足なく分けており、この 4 つがあれば通知やダッシュボードの出し分けも同じ根拠で書ける。
+**Why:** "Done" goes by different names for different users (`done` / `Closed` / `Released`), so an implementation that guesses from names is bound to get it wrong sooner or later. Adding an `isDone` boolean to Status instead would squash "Cancelled" and "On hold" into the same *not done*, and no "Incomplete = work still left" list could be built. Wrike's four classes split "the work is moving / finished / stopped / gone" with nothing missing and nothing extra, and with these four, what notifications and dashboards show can be decided on the same basis too.
 
-**なぜ固定 4 種か / Why not user-defined:** グループを増やせると「完了とは何か」が再び曖昧になり、プリセットの意味が使う人ごとにずれる。分類の自由度は Status 側（無制限に追加可能）が既に担っているので、その上位層は固定でよい。
+**Why not user-defined:** If groups could be added, "what counts as done" would become ambiguous again, and the presets' meaning would drift from user to user. The freedom to classify is already provided by Status (any number can be added), so the layer above it can stay fixed.
 
-## 移行 / Migration
+## Migration
 
-2.9.0 より前の保存データに `group` は無い。読み込み時に **id とラベルの部分一致**で推測し（`completed` → `cancelled` → `deferred` の順に評価、いずれにも当たらなければ `active`）、以後は保存値を使う。推測は一度きりで、外れても設定画面で 1 クリック直せるため、起動時の通知は出さずリリースノートと README で告知する。既定ステータスは `todo` / `in-progress` → `active`、`blocked` → `deferred`（手が止まっている状態）、`done` → `completed`。
+Data saved before 2.9.0 has no `group`. On load it is guessed by **a partial match on the id and label** (evaluated in the order `completed` → `cancelled` → `deferred`; `active` when none matches), and the saved value is used from then on. The guess happens only once, and a wrong guess is fixed with one click in the settings tab, so there is no notice at startup; the release notes and the README announce it instead. The default statuses get `todo` / `in-progress` → `active`, `blocked` → `deferred` (work has stopped) and `done` → `completed`.
 
-## 決めごと / Decisions
+## Decisions
 
-- **「未完了」はキャンセルを含めない**。文字どおりなら「完了以外すべて」だが、中止したタスクは残っている仕事ではなく、それが混じる一覧は使えない。
-- **分類不能は完了に寄せない**。ステータス未設定、および設定に無い id は「グループなし」とし、完了フィルタからは外れ未完了フィルタには入る。分からないものを完了扱いにすると完了フィルタが嘘をつくため。
-- **「完了」グループが空でも禁止しない**。完了プリセットが 0 件になるだけなので、設定画面に注意書きを出すに留める（Wrike は必須にしているが、削除 UI を複雑にする割に得が無い）。
-- **日本語ラベルは Wrike の訳語に従わない**。Wrike JA は「有効 / 完了 / 延期 / 取り消し済み」だが、「有効」は設定画面の ON/OFF と読み違えるため **アクティブ / 完了 / 延期 / キャンセル** とする。
+- **"Incomplete" leaves Cancelled out.** Taken literally it would be "everything but completed", but a dropped task isn't work still left to do, and a list with those mixed in is of no use.
+- **What can't be classified isn't counted as completed.** A task with no status, or with an id that isn't in the settings, has "no group": it is left out of the Completed filter and included in the Incomplete one. Treating what is unknown as completed would make the Completed filter lie.
+- **An empty Completed group isn't forbidden.** All it does is leave the Completed preset empty, so the settings tab only shows a warning (Wrike makes it mandatory, but that would complicate the delete UI for no real gain).
+- **The Japanese labels don't follow Wrike's Japanese terms.** Wrike's Japanese UI calls the groups *yūkō / kanryō / enki / torikeshi-zumi*, but *yūkō* ("enabled") is easily misread as the ON/OFF of a settings screen, so the labels are **akutibu / kanryō / enki / kyanseru** ("active" and "cancel" as loanwords).
 
-## 退けた対案 / Considered options
+## Considered options
 
-- **Status に `isDone: boolean` を足す**：最小の変更だが、キャンセルと保留を区別できず「未完了」一覧が実用にならない。
-- **グループもユーザー定義**：柔軟だが、完了の意味がユーザーごとにずれてプリセットが共通の意味を持てない。
-- **フロントマターに group を書く**：Task ファイルに Status と重複する情報が増え、両者がずれたときの正解が決められない。グループは設定側の Status 定義から都度引く。
+- **Adding `isDone: boolean` to Status**: the smallest change, but Cancelled and On hold can't be told apart, so an "Incomplete" list is of no practical use.
+- **User-defined groups as well**: flexible, but what "done" means would drift from user to user, and presets couldn't share one meaning.
+- **Writing the group in frontmatter**: Task files would gain information duplicating Status, and when the two disagreed there would be no telling which is right. The group is looked up from the Status definitions in settings each time.
 
-## 補足 / Notes
+## Notes
 
-グループでのグループ化（`groupBy`）と、通知・稲妻線での完了タスクの扱いは本 ADR に含めない。どちらも `statusGroupOf()` を呼ぶだけで足せる、容易に可逆な UI 仕様のため。
+Grouping by status group (`groupBy`), and how notifications and the progress line treat completed tasks, are not part of this ADR: both are easily reversible UI specs that can be added just by calling `statusGroupOf()`.

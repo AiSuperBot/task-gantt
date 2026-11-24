@@ -1,4 +1,3 @@
-// フィルタ判定とグループ再マッピング（ビューから切り出した純粋関数）
 // Filter matching and group remapping (pure functions extracted from the view)
 import { Task, Filter, FilterMatch, StatusDef } from "./types";
 import { anchorStart, anchorEnd, statusGroupOf } from "./model";
@@ -7,13 +6,13 @@ import { linkLabel } from "./links";
 
 export type GroupBy = "folder" | "status" | "assignee" | "tag";
 
-// 統合フィルタ 1 件がタスクに合致するか / does one unified filter match a task
+// does one unified filter match a task
 export function matchFilter(t: Task, f: Filter, statuses: StatusDef[], today: number): boolean {
   if (f.kind === "date") {
     const iso = f.field === "start" ? anchorStart(t) : anchorEnd(t);
     return matchDate(iso ? dayIndex(iso) : undefined, f, today);
   }
-  // テキスト（タスク名）：大文字小文字を無視。空の入力は素通し / text (name): case-insensitive; empty query = no effect
+  // text (name): case-insensitive; empty query = no effect
   if (f.kind === "text") {
     const q = f.value.trim().toLowerCase();
     if (q === "") return true;
@@ -27,9 +26,7 @@ export function matchFilter(t: Task, f: Filter, statuses: StatusDef[], today: nu
       case "endsWith": return name.endsWith(q);
     }
   }
-  // カテゴリ（ステータス/グループ/担当者/タグ）：タスクの該当値集合を作って判定 / category: build the task's value set
-  // グループは status から都度引く。設定に無い id やステータス未設定は空集合＝「未設定」扱いになり、
-  // 「未完了（完了でもキャンセルでもない）」には含まれる
+  // category: build the task's value set
   // the group is derived from the status; an unknown id or no status yields an empty set, which
   // reads as "unset" — and therefore still counts as incomplete
   const group = f.field === "statusGroup" ? statusGroupOf(statuses, t.status) : undefined;
@@ -37,16 +34,14 @@ export function matchFilter(t: Task, f: Filter, statuses: StatusDef[], today: nu
     : f.field === "status" ? (t.status ? [t.status] : [])
     : f.field === "statusGroup" ? (group ? [group] : [])
       : f.field === "assignee" ? t.assignees.map(linkLabel)
-        : t.tags.map((x) => x.toLowerCase()); // タグは大文字小文字を区別しない（Obsidian と同じ）/ tags ignore case, as in Obsidian
+        : t.tags.map((x) => x.toLowerCase()); // tags ignore case, as in Obsidian
   if (f.op === "empty") return vals.length === 0;
   if (f.op === "notEmpty") return vals.length > 0;
-  // 値 "" は「未設定」を表すセンチネル。フィールド内は OR。人は表示名で比べる（"Ben" と "[[Ben]]" は同じ人）
   // "" is the "unset" sentinel; OR within the field. People compare by display name ("Ben" and "[[Ben]]" are one person)
   const hit = f.values.some((v) => (v === "" ? vals.length === 0 : vals.includes(f.field === "assignee" ? linkLabel(v) : f.field === "tag" ? v.toLowerCase() : v)));
   return f.op === "isNot" ? !hit : hit;
 }
 
-// 気にかけるべき状態（フィルタ用）：止まっている（延期グループ）・期限切れ・急ぎ。終わった仕事には無い
 // what needs attention (for filters): blocked (the Deferred group), overdue, urgent; finished work has none
 export const ATTENTION = ["blocked", "overdue", "urgent"];
 export function attentionOf(t: Task, statuses: StatusDef[], today: number): string[] {
@@ -58,8 +53,7 @@ export function attentionOf(t: Task, statuses: StatusDef[], today: number): stri
   ].filter(Boolean);
 }
 
-// 統合フィルタを filterMatch（all=AND / any=OR）で結合して絞り込む / narrow tasks by filters combined with AND/OR
-// 値をまだ選んでいない絞り込み（追加した直後）は何も絞らない：空の「次のどれか」は全部落とし、「どれでも」では空の名前が全部通してしまう
+// narrow tasks by filters combined with AND/OR
 // a filter with nothing chosen yet (just added) filters nothing: an empty "is" would drop everything, and in "any" mode an empty name would let everything through
 const isSet = (f: Filter): boolean => (f.kind === "text" ? f.value.trim() !== "" : f.kind === "category" ? f.op === "empty" || f.op === "notEmpty" || f.values.length > 0 : true);
 
@@ -73,42 +67,37 @@ export function applyFilters(tasks: Task[], filters: Filter[], match: FilterMatc
   );
 }
 
-// 期限切れ＝期限が今日より前で、完了でもキャンセルでもない（「期限切れ」プリセットと同じ期限の読み方）
 // overdue = due before today and neither completed nor cancelled (the due date read as the Overdue preset reads it)
 export function isOverdue(t: Task, statuses: StatusDef[], today: number): boolean {
   const end = anchorEnd(t);
   return !!end && dayIndex(end) < today && isOpen(t, statuses);
 }
 
-// 残っている仕事＝完了でもキャンセルでもない / still outstanding = neither completed nor cancelled
+// still outstanding = neither completed nor cancelled
 export function isOpen(t: Task, statuses: StatusDef[]): boolean {
   const group = statusGroupOf(statuses, t.status);
   return group !== "completed" && group !== "cancelled";
 }
 
-// 割り込みの急ぎ仕事＝優先度が urgent / expedite / דחוף（大文字小文字は問わない）。ほかの値（high など）は普通の仕事
 // urgent interrupting work = a priority of urgent / expedite / דחוף (any case); any other value (high, …) is normal work
 const URGENT = new Set(["urgent", "expedite", "דחוף"]);
 export function isUrgent(t: Task): boolean {
   return !!t.priority && URGENT.has(t.priority.trim().toLowerCase());
 }
 
-// 始まっている＝開始日（無ければ期限日）が今日以前、日付が無ければ始まっているとみなす / started = its start (else due) is today or earlier; no dates counts as started
+// started = its start (else due) is today or earlier; no dates counts as started
 const started = (t: Task, today: number): boolean => {
   const s = anchorStart(t);
   return !s || dayIndex(s) <= today;
 };
 
-// 割り込みと再開は、急ぎ仕事のノートの interrupts（「急ぎにする」で書く明示のリンク）だけから読む。推測はしない：リンクの無い急ぎ仕事は誰も止めない。
-// 急ぎが始まって残っている間はリンク先が割り込み中。リンクしている急ぎが全部終わったら（完了・中止）再開待ちで、「再開」でリンクを消すまで残る。
-// 一つでもまだ走っていれば割り込み中のまま（重なった割り込み）。リンク先のノートには何も書かず、ステータスも変えない
 // interruptions and resumption are read only from urgent notes' `interrupts` (explicit links written by "Mark as urgent"); nothing is inferred, so
 // urgent work without links stops nobody. While the urgent work has started and is outstanding, its targets are interrupted; once every urgent
 // task linking a target is finished (completed or cancelled), the target waits to be resumed until "Resume" clears the links. If any is still
 // running the target stays interrupted (overlapping interruptions). Nothing is written to the targets and their status doesn't change
 export interface Interruptions {
-  interrupted: Map<string, Task[]>; // 割り込まれたタスクのパス → まだ走っている急ぎ仕事 / interrupted task path → the urgent work still running
-  resume: Map<string, Task[]>; // 再開を待つタスクのパス → 終わった急ぎ仕事（走っているものが無いときだけ）/ task path to resume → the finished urgent work (only when none still runs)
+  interrupted: Map<string, Task[]>; // interrupted task path → the urgent work still running
+  resume: Map<string, Task[]>; // task path to resume → the finished urgent work (only when none still runs)
 }
 export function interruptions(tasks: Task[], statuses: StatusDef[], today: number): Interruptions {
   const interrupted = new Map<string, Task[]>();
@@ -127,7 +116,6 @@ export function interruptions(tasks: Task[], statuses: StatusDef[], today: numbe
   return { interrupted, resume };
 }
 
-// 「急ぎにする」ときの候補：同じ人の、ステータスが「始めた」ステータス（既定は In progress）の仕事だけ。To do や日付だけでは数えない
 // candidates for "Mark as urgent": the same person's work whose status is the started status (In progress by default); To do or dates alone don't count
 export function runningWorkOf(u: Task, tasks: Task[], startedId: string | undefined): Task[] {
   if (!startedId) return [];
@@ -135,7 +123,6 @@ export function runningWorkOf(u: Task, tasks: Task[], startedId: string | undefi
   return tasks.filter((t) => t.path !== u.path && !isUrgent(t) && t.status === startedId && t.assignees.some((a) => people.has(linkLabel(a))));
 }
 
-// 行の例外（強い順）。行には一番強いものと「ほかに何件」、詳細には全部を出す
 // a row's exceptions, strongest first; the row shows the strongest plus how many more, the details show them all
 export type Exception = "urgent" | "overdue" | "blocked" | "dependency" | "interrupted" | "resume";
 export const EXCEPTIONS: Exception[] = ["urgent", "overdue", "blocked", "dependency", "interrupted", "resume"];
@@ -152,7 +139,18 @@ export function exceptionsOf(t: Task, statuses: StatusDef[], today: number, conf
   return EXCEPTIONS.filter((e) => has[e]());
 }
 
-// 次に始まるタスク：今日より後に始まる一番早いもの（日付の無いものは入らない）/ the next task to start: the earliest one starting after today (undated ones don't count)
+// counts over open work: all, in progress (the started status), blocked, overdue, urgent; group headings and the report count alike
+export function openCounts(open: Task[], statuses: StatusDef[], today: number, startedId?: string): [number, number, number, number, number] {
+  return [
+    open.length,
+    startedId ? open.filter((t) => t.status === startedId).length : 0,
+    open.filter((t) => statusGroupOf(statuses, t.status) === "deferred").length,
+    open.filter((t) => isOverdue(t, statuses, today)).length,
+    open.filter(isUrgent).length,
+  ];
+}
+
+// the next task to start: the earliest one starting after today (undated ones don't count)
 export function nextToStart(tasks: Task[], today: number): Task | undefined {
   let best: Task | undefined;
   for (const t of tasks) {
@@ -162,7 +160,6 @@ export function nextToStart(tasks: Task[], today: number): Task | undefined {
   return best;
 }
 
-// 親タスクの要約：完了したサブタスクの数／（キャンセルを除く）全体、と次にやる（並び順で最初の残っている）サブタスク
 // a parent's summary: subtasks done / all (cancelled left out), and the next one to do (the first outstanding one in order)
 export function subtaskSummary(children: Task[], statuses: StatusDef[]): { done: number; total: number; next?: Task } {
   const counted = children.filter((c) => statusGroupOf(statuses, c.status) !== "cancelled");
@@ -173,16 +170,13 @@ export function subtaskSummary(children: Task[], statuses: StatusDef[]): { done:
   };
 }
 
-// 残っている急ぎ仕事を兄弟の先頭へ、その次に再開を待つ仕事（それ以外の並びは cmp のまま）
 // outstanding urgent work goes first among its siblings, then work waiting to be resumed (cmp orders the rest)
 export function urgentFirst(statuses: StatusDef[], cmp: (a: Task, b: Task) => number, resume: ReadonlyMap<string, unknown> = new Map()): (a: Task, b: Task) => number {
   const hot = (t: Task) => (isUrgent(t) && isOpen(t, statuses) ? 0 : resume.has(t.path) ? 1 : 2);
   return (a, b) => hot(a) - hot(b) || cmp(a, b);
 }
 
-// グループ化の軸に合わせて groups を合成グループへ差し替える / remap `groups` to synthetic groups for the chosen axis
-// 行の見出しが既に示している値（担当者・タグ）を除いた残り。見出しのキーは regroup と同じ作り方（担当者は表示名、タグはそのまま）。
-// フラット表示の行は見出しが "" なので何も除かない
+// remap `groups` to synthetic groups for the chosen axis
 // the values left after dropping the one the row's heading already shows (an assignee or a tag); heading keys are built as in regroup
 // (display name for an assignee, the tag as it is). Flat rows have the heading "", so nothing is dropped
 export function besideHeading(values: string[], field: "assignees" | "tags", groupBy: GroupBy, heading: string): string[] {
@@ -190,18 +184,17 @@ export function besideHeading(values: string[], field: "assignees" | "tags", gro
   return values.filter((v) => (field === "assignees" ? linkLabel(v) : v.toLowerCase()) !== (field === "assignees" ? heading : heading.toLowerCase()));
 }
 
-// 大文字小文字違いのタグの見せ方：常に小さい方の綴り（順や絞り込みで変わらない）/ how a tag spelled several ways is shown: always the smallest spelling (independent of order and filters)
+// how a tag spelled several ways is shown: always the smallest spelling (independent of order and filters)
 export function tagSpelling(a: string | undefined, b: string): string {
   return a == null || b < a ? b : a;
 }
 
 export function regroup(tasks: Task[], groupBy: GroupBy, flat: boolean, statuses: StatusDef[], noneLabel: string, all: Task[] = tasks): Task[] {
-  // フラットはグループを無視＝再マッピング不要（タグ複製で重複行が出るのも防ぐ）/ flat ignores groups: skip remap (also avoids tag-duplicated rows)
+  // flat ignores groups: skip remap (also avoids tag-duplicated rows)
   if (groupBy === "folder" || flat) return tasks;
-  // groups を合成グループへ差し替えて既存の buildRows を再利用。タグと担当者は多値なので、各グループへ複製する（無ければ (なし)）
   // remap groups to synthetic ones to reuse buildRows; tags and assignees are multi-valued, so a task is copied into each one's group
   const statusLabel = new Map(statuses.map((s) => [s.id, s.label]));
-  // タグの見出しは 1 つの綴りで（並びや絞り込みで変わらない）（#Work と #work は同じタグ）/ one tag heading per tag, in the first spelling seen (#Work and #work are one tag; the spelling doesn't depend on order or filters)
+  // one tag heading per tag, in the first spelling seen (#Work and #work are one tag; the spelling doesn't depend on order or filters)
   const spelling = new Map<string, string>();
   for (const t of all) for (const x of t.tags) spelling.set(x.toLowerCase(), tagSpelling(spelling.get(x.toLowerCase()), x));
   return tasks.flatMap((t) => {

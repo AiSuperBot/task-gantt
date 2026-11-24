@@ -2,10 +2,10 @@
 status: superseded by ADR-0004
 ---
 
-# DSL コードブロックを唯一の源泉とするハイブリッド構成 / DSL code block as the single source of truth
+# DSL code block as the single source of truth
 
-ガントの全スケジュール情報（開始・終了・担当・ステータス・依存）は、ノート内の ` ```gantt ` コードブロック（Plan）が唯一の源泉として持つ。obsidian-pm の「1 タスク = 1 Markdown ノート」方式は採らない。
+All of the Gantt's schedule information (start, end, assignee, status, dependencies) is held by a ` ```gantt ` code block in a note (the Plan), as its single source of truth. obsidian-pm's "one task = one Markdown note" approach is not adopted.
 
-**なぜ / Why:** 1 タスク 1 ノート方式はタスク数が増えるとファイル爆発とパフォーマンス管理が必要になり、ガントを 1 画面で俯瞰・一括編集するのに不利。Plan を 1 ブロックに集約すれば編集・差分・書き戻しの対象が一意に定まる。
+**Why:** With one note per task, more tasks mean an explosion of files and performance that has to be managed, which works against overseeing and bulk-editing the Gantt on one screen. Gathering the Plan into one block gives editing, diffs and write-backs a single, unambiguous target.
 
-**トレードオフ / Trade-off:** リンク先ノート（Detail note）は詳細ページ専用で、スケジュール情報を持たない（DSL → ノートの一方向）。タスクが他ノートと自動で双方向に結びつく obsidian-pm 的な統合は犠牲にする。
+**Trade-off:** Linked notes (Detail notes) are detail pages only and hold no schedule information (one way: DSL → note). The obsidian-pm-style integration, where tasks link both ways with other notes automatically, is given up.

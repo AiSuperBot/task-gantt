@@ -12,17 +12,19 @@ test/schedule.mjs
 test/links.mjs
 test/colors.mjs
 test/lanes.mjs
+test/workplan.mjs
+test/workplan-pptx.mjs
+test/ai.mjs
 
-# テスト用 Vault（リポジトリ直下・コミットしない）/ local dev vault, never committed
+# local dev vault, never committed
 Obsidian-Dev/
 
-# 参照用スクショ（本体ではない）はコミットしない / keep reference screenshots local
+# keep reference screenshots local
 examples/*.png
 
-# 参照用の動画など（本体ではない）/ reference videos & scratch files (not part of the plugin)
+# reference videos & scratch files (not part of the plugin)
 sample files/
 
-# 開発用のエージェント構成（ローカル限定・プラグイン本体とは無関係）
 # local-only agent setup (Planner / Generator / Evaluator); nothing to do with the plugin itself
 .claude/
 .mcp.json

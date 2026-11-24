@@ -2,12 +2,12 @@
 status: superseded by ADR-0004
 ---
 
-# DSL フォーマットに YAML を採用 / YAML as the DSL format
+# YAML as the DSL format
 
-Plan の中身は ` ```gantt ` ブロック内の YAML（`tasks:` 配列）とする。markwhen 風の自然文 DSL（例: `2026-06-01/2026-06-10 設計 @alice`）は採らない。
+The Plan's content is YAML (a `tasks:` array) inside the ` ```gantt ` block. A markwhen-style natural-language DSL (e.g. `2026-06-01/2026-06-10 Design @alice`) is not adopted.
 
-**なぜ / Why:** ガントバーのドラッグ/リサイズで日付を YAML に書き戻す双方向編集が要件。標準 YAML ライブラリで構造化された配列の読み書きができ、ラウンドトリップが堅牢。自作の自然文パーサ＋シリアライザは、書き戻し時に書式・カーソル位置を壊さない保証を自前で持つ必要があり脆い。
+**Why:** Two-way editing, where dragging or resizing a Gantt bar writes the dates back into the YAML, is a requirement. A standard YAML library reads and writes the structured array, so the round trip is robust. A home-made natural-language parser and serializer would have to guarantee by itself that a write-back never breaks the formatting or the cursor position, which is fragile.
 
-**トレードオフ / Trade-off:** 手書きの軽さ・見た目の美しさは markwhen 風に劣り、やや冗長。
+**Trade-off:** It is less light to write by hand and less pleasant to look at than a markwhen-style DSL, and somewhat verbose.
 
-**留意 / Note:** js-yaml は再シリアライズでコメント・キー順・整形を失う。書き戻しではコメント保持型 YAML（eemeli/`yaml` 等の AST）かピンポイントなテキスト編集を用い、ユーザーの手書き整形を壊さないこと。
+**Note:** js-yaml loses comments, key order and formatting when it re-serializes. Write-backs must use a comment-preserving YAML (an AST, such as eemeli/`yaml`) or pinpoint text edits, so the user's hand-written formatting is never broken.

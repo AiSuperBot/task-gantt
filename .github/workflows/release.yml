@@ -1,4 +1,4 @@
-# タグ push でビルドし、成果物をリリースに添付 / build on tag push and attach artifacts to the release
+# build on tag push and attach artifacts to the release
 name: Release Obsidian plugin
 
 on:
@@ -8,8 +8,8 @@ on:
 
 permissions:
   contents: write
-  id-token: write # provenance 署名に必要 / required to sign attestations
-  attestations: write # 成果物の attestation 生成 / create artifact attestations
+  id-token: write # required to sign attestations
+  attestations: write # create artifact attestations
 
 jobs:
   build:
@@ -22,18 +22,18 @@ jobs:
         with:
           node-version: "22.x"
 
-      # lock どおりに依存を入れ、テストが通ったものだけをビルドする / install from the lock, build only if tests pass
+      # install from the lock, build only if tests pass
       - name: Build plugin
         run: |
           npm ci
           npm test
           npm run build
 
-      # 配布する styles.css だけを圧縮する（リポジトリのコメント付きの原本はそのまま）/ minify only the shipped styles.css (the commented source in the repo stays as is)
+      # minify only the shipped styles.css (the commented source in the repo stays as is)
       - name: Minify styles
         run: npx esbuild styles.css --minify --outfile=styles.css --allow-overwrite
 
-      # 成果物の出所を暗号的に証明する / attest the provenance of the build artifacts
+      # attest the provenance of the build artifacts
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:

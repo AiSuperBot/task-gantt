@@ -1,4 +1,3 @@
-// 列定義の並び・表示・並べ替え（visibleColumns / columnWidth / taskComparator）の検証
 // Tests for column order, visibility, widths and sorting (visibleColumns / columnWidth / taskComparator)
 import { BUILTIN_COLUMNS, visibleColumns, columnWidth, taskComparator, customColumn, customColumnId, columnList, toggleColumn, moveColumn, allColumns, manualComparator, disabledLast, statusKind } from "./columns.mjs";
 
@@ -17,10 +16,10 @@ function check(name, cond) {
 const ids = (cols) => cols.map((c) => c.id).join(",");
 const byId = (id) => BUILTIN_COLUMNS.find((c) => c.id === id);
 
-// ── 定義 / definitions ──
+// ── definitions ──
 check("built-in order", ids(BUILTIN_COLUMNS) === "name,start,end,duration,progress,assignee,status,tags");
 check("only name is non-optional", ids(BUILTIN_COLUMNS.filter((c) => !c.optional)) === "name");
-// 表示できる列はすべて Inline edit に対応（name 以外は edit を持つ）/ every non-name column has an editor
+// every non-name column has an editor
 check("every cell column has paint + edit + editAria", BUILTIN_COLUMNS.filter((c) => c.kind === "cell").every((c) =>
   typeof c.paint === "function" && typeof c.edit === "function" && typeof c.editAria === "function"));
 check("name column is the only name kind", ids(BUILTIN_COLUMNS.filter((c) => c.kind === "name")) === "name");
@@ -31,7 +30,7 @@ check("definition order, not settings order", ids(visibleColumns(BUILTIN_COLUMNS
 check("unknown ids are ignored", ids(visibleColumns(BUILTIN_COLUMNS, ["ghost", "end"])) === "name,end");
 
 // ── columnWidth ──
-check("default width", columnWidth(byId("start"), {}) === 84);
+check("default width", columnWidth(byId("start"), {}) === 96);
 check("user override wins", columnWidth(byId("start"), { start: 120 }) === 120);
 
 // ── taskComparator ──
@@ -46,8 +45,8 @@ const sorted = (list, s) => list.slice().sort(taskComparator(BUILTIN_COLUMNS, s)
 
 const A = task({ name: "b-task", start: "2024-03-02", end: "2024-03-09", progress: 50, assignees: ["Zed"], status: "done", tags: ["x"] });
 const B = task({ name: "A-task", start: "2024-03-01", end: "2024-03-20", progress: 0, assignees: ["amy"], status: "todo", tags: ["b", "a"] });
-const C = task({ name: "c-task", status: "ghost" }); // 日付・進捗なし、未知ステータス / no dates or progress, unknown status
-const M = task({ name: "mile", milestone: true, end: "2024-03-05" }); // マイルストーンは期限日で並ぶ / milestone anchors on its due date
+const C = task({ name: "c-task", status: "ghost" }); // no dates or progress, unknown status
+const M = task({ name: "mile", milestone: true, end: "2024-03-05" }); // milestone anchors on its due date
 const ALL = [A, B, C, M];
 
 check("name: case-insensitive", sorted(ALL, settings("name")) === "A-task,b-task,c-task,mile");
@@ -57,12 +56,12 @@ check("progress: unset before 0%", sorted(ALL, settings("progress")) === "c-task
 check("assignee: case-insensitive, unset first", sorted(ALL, settings("assignee")) === "c-task,mile,A-task,b-task");
 check("status: configured order, unknown/unset last", sorted([A, B, C], settings("status")) === "A-task,b-task,c-task");
 check("tags joined", sorted([A, B], settings("tags")) === "A-task,b-task");
-// 期間は稼働日で並ぶ（A=6 日、B=14 日、日付なしは先頭）/ duration sorts by workdays (A = 6, B = 14, undated first)
+// duration sorts by workdays (A = 6, B = 14, undated first)
 check("duration: workdays, undated first", sorted([A, B, C], { ...settings("duration"), nonWorkingDays: [0, 6] }) === "c-task,b-task,A-task");
 check("desc flips", sorted(ALL, settings("name", "desc")) === "mile,c-task,b-task,A-task");
 check("unknown sort column falls back to start", sorted(ALL, settings("ghost")) === sorted(ALL, settings("start")));
 
-// ── Custom field の列 / custom field columns ──
+// ── custom field columns ──
 {
   const fText = { id: "t1", key: "client", label: "", type: "text" };
   const fNum = { id: "n1", key: "budget", label: "Budget", type: "number" };
@@ -83,11 +82,11 @@ check("unknown sort column falls back to start", sorted(ALL, settings("ghost")) 
   check("custom number: numeric, unset first", sortedC([X, Y, Z], s2("cf:n1")) === "z,y,x");
   const W = task({ name: "w", custom: {} });
   check("custom number: two unset values compare equal", taskComparator(cols, s2("cf:n1"))(Z, W) === 0);
-  // Y・Z はどちらも未設定なので安定ソートで入力順（z, y）のまま / Y and Z are both unset, so the stable sort keeps z before y
+  // Y and Z are both unset, so the stable sort keeps z before y
   check("custom date: unset last", sortedC([Z, X, Y], s2("cf:d1")) === "x,z,y");
 }
 
-// ── 列の並び・隠した列 / column order and hidden columns ──
+// ── column order and hidden columns ──
 {
   const cols = [...BUILTIN_COLUMNS, customColumn({ id: "n1", key: "budget", label: "", type: "number" })];
   const list = (vis, order) => columnList(cols, vis, order).map((x) => (x.on ? x.col.id : `(${x.col.id})`)).join(",");
@@ -104,7 +103,7 @@ check("unknown sort column falls back to start", sorted(ALL, settings("ghost")) 
   check("cannot move past the top", moveColumn(cols, ["start", "end"], [], "start", -1) === null);
   check("cannot cross into the hidden ones", moveColumn(cols, ["start", "end"], [], "end", 1) === null);
   const hidden = moveColumn(cols, ["start"], [], "tags", -1);
-  // 定義に無い id（キーを打ち直している途中の Custom field）は元の位置のまま残る / ids the definitions don't know (a custom field mid-edit) stay where they were
+  // ids the definitions don't know (a custom field mid-edit) stay where they were
   const keep = toggleColumn(cols, ["start", "cf:zz", "end"], ["start", "cf:zz", "end"], "end", false);
   check("allColumns: built-ins, then usable custom fields only", ids(allColumns({ customFields: [{ id: "n1", key: "budget", label: "", type: "number" }, { id: "bad", key: "", label: "", type: "text" }], keys: {} })) === "name,start,end,duration,progress,assignee,status,tags,cf:n1");
   check("unknown ids keep their visibility and place on toggle", keep.visibleColumns.join() === "start,cf:zz" && keep.columnOrder.slice(0, 3).join() === "start,cf:zz,end");
@@ -112,17 +111,17 @@ check("unknown sort column falls back to start", sorted(ALL, settings("ghost")) 
   check("hidden columns reorder among themselves", list(["start"], hidden) === "start,(end),(duration),(progress),(assignee),(tags),(status),(cf:n1)");
 }
 
-// 手の並びと、止めたタスクは最後 / the manual order, and disabled tasks last
+// the manual order, and disabled tasks last
 {
   const T = (path, start) => ({ path, name: path, start, end: start, groups: [], deps: [], tags: [], assignees: [], milestone: false });
   const list = [T("a", "2026-01-03"), T("b", "2026-01-01"), T("c", "2026-01-02"), T("d", "2026-01-04")];
   const byStart = taskComparator(BUILTIN_COLUMNS, { sortBy: "manual", sortDir: "asc", statuses: [] });
   const names = (cmp) => list.slice().sort(cmp).map((t) => t.path).join("");
-  check("manual: 並びの順、並びに無いものは後ろで開始日順", names(manualComparator(["c", "a"], byStart)) === "cabd");
-  check("manual: 止めたタスクは最後（その中も並びの順）", names(disabledLast(new Set(["c", "b"]), manualComparator(["c", "a"], byStart))) === "adcb");
+  check("manual: the saved order first, the rest after it by start date", names(manualComparator(["c", "a"], byStart)) === "cabd");
+  check("manual: disabled tasks go last (still in the saved order)", names(disabledLast(new Set(["c", "b"]), manualComparator(["c", "a"], byStart))) === "adcb");
 }
 
-// 表の印とバーが同じ文法で読むステータスの種類 / the status kind the table's marks and the bars both read
+// the status kind the table's marks and the bars both read
 const KINDS = [{ id: "todo", group: "active" }, { id: "doing", group: "active" }, { id: "hold", group: "deferred" }, { id: "done", group: "completed" }, { id: "x", group: "cancelled" }];
 check("statusKind: waiting, running, blocked, done, cancelled", KINDS.map((s) => statusKind(s, "doing")).join() === "queued,running,blocked,done,cancelled");
 check("statusKind: a task without a status is waiting", statusKind(undefined, "doing") === "queued");

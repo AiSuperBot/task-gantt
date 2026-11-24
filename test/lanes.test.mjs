@@ -1,5 +1,5 @@
-// ボード（ステータスの列）とチーム（人ごと）の振り分けの検証 / Tests for the board's columns and the team's people
-import { boardColumns, boardWhen, byPerson, isSprint } from "./lanes.mjs";
+// Tests for the board's columns and the team's people
+import { boardColumns, boardWhen, byPerson, isSprint, reportSections } from "./lanes.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -21,23 +21,23 @@ const STATUSES = [
 ];
 const names = (cells) => cells.map((c) => c.map((t) => t.name).join("+")).join("|");
 
-// ── 列 / columns ──
+// ── columns ──
 const A = task({ name: "A", status: "todo", assignees: ["Dana"] });
 const B = task({ name: "B", status: "doing", assignees: ["Eli"] });
-const C = task({ name: "C", status: "review", assignees: ["[[Noa]]"] }); // ほかの端末で足したステータス / a status added on another computer
+const C = task({ name: "C", status: "review", assignees: ["[[Noa]]"] }); // a status added on another computer
 const D = task({ name: "D", status: "done", assignees: ["Dana"] });
-const E = task({ name: "E" }); // ステータスなし / no status
+const E = task({ name: "E" }); // no status
 check("columns follow the settings' status order", boardColumns([A, B, D], STATUSES).join() === "todo,doing,done");
 check("a status the settings lack gets its own column, after them", boardColumns([A, C], STATUSES).join() === "todo,doing,done,review");
 check("(none) comes first, only when a card has no status", boardColumns([A, E], STATUSES)[0] === null && boardColumns([A, C], STATUSES)[0] !== null);
 
-// ── 人ごと / people ──
+// ── people ──
 const people = (list) => list.map(([p, ts]) => `${p}:${ts.map((t) => t.name).join("+")}`).join(" | ");
 check("one entry per person, by name; a link and a name are one person", people(byPerson([A, B, C, D], [], "Unassigned")) === "Dana:A+D | Eli:B | Noa:C");
 check("me first, Unassigned last, idle people included", people(byPerson([A, E, D], ["Eli"], "Unassigned", "Eli")) === "Eli: | Dana:A+D | Unassigned:E");
 check("a shared task shows under each of its people once", people(byPerson([task({ name: "S", assignees: ["Dana", "[[Dana]]", "Eli"] })], [], "Unassigned")) === "Dana:S | Eli:S");
 
-// ── ボードでの時期（ノートの日付だけで）/ when a card sits on the board (from the note's dates only) ──
+// ── when a card sits on the board (from the note's dates only) ──
 const TODAY = 20000;
 const day = (n) => new Date((TODAY + n) * 86_400_000).toISOString().slice(0, 10);
 check("work done and due within two weeks is now", boardWhen(task({ name: "x", end: day(-3) }), true, TODAY - 14, TODAY + 14) === "now");
@@ -50,9 +50,29 @@ check("open work starting within two weeks is now", boardWhen(task({ name: "x", 
 check("open work starting later is later", boardWhen(task({ name: "x", start: day(30), end: day(40) }), false, TODAY - 14, TODAY + 14) === "later");
 check("open undated or overdue work is now", boardWhen(task({ name: "x" }), false, TODAY - 14, TODAY + 14) === "now" && boardWhen(task({ name: "x", start: day(-40), end: day(-30) }), false, TODAY - 14, TODAY + 14) === "now");
 
-// ── スプリントのノート / sprint notes ──
+// ── the report's sections (each task in one only) ──
+const REP = [...STATUSES, { id: "hold", label: "Blocked", color: "#f00", group: "deferred" }, { id: "drop", label: "Cancelled", color: "#999", group: "cancelled" }];
+const rep = reportSections([
+  task({ name: "late", status: "doing", end: day(-1) }), // flagged
+  task({ name: "held", status: "hold" }), // blocked (flagged)
+  task({ name: "run", status: "doing" }),
+  task({ name: "soon", status: "todo", start: day(3) }),
+  task({ name: "first", status: "todo", start: day(1) }),
+  task({ name: "undated", status: "todo" }),
+  task({ name: "far", status: "todo", start: day(30) }), // after the window
+  task({ name: "won", status: "done", completed: day(-2) }),
+  task({ name: "old", status: "done", completed: day(-20) }), // before the window
+  task({ name: "dropped", status: "drop" }),
+], REP, ["todo"], (t) => t.name === "late" || t.status === "hold", TODAY - 14, TODAY + 14);
+const nm = (list) => list.map((t) => t.name).join();
+check("report: flagged open work needs attention, and only there", nm(rep.attention) === "late,held" && !nm(rep.now).includes("late"));
+check("report: now is started work; next is not-started work by start, undated last, within the window", nm(rep.now) === "run" && nm(rep.next) === "first,soon,undated");
+check("report: done holds what was finished within the window; cancelled work is left out", nm(rep.done) === "won" && ![...rep.attention, ...rep.now, ...rep.next, ...rep.done].some((t) => t.name === "dropped"));
+
+// ── sprint notes ──
 check("#sprint and #sprint/12 are sprint notes, in any case", isSprint(task({ name: "S", tags: ["sprint"] })) && isSprint(task({ name: "S", tags: ["Sprint/12"] })));
 check("#sprints and #sprint-planning are not", !isSprint(task({ name: "S", tags: ["sprints"] })) && !isSprint(task({ name: "S", tags: ["sprint-planning"] })));
+check("the Hebrew tag counts too: #ספרינט and #ספרינט/12, not #ספרינטים", isSprint(task({ name: "S", tags: ["ספרינט"] })) && isSprint(task({ name: "S", tags: ["ספרינט/12"] })) && !isSprint(task({ name: "S", tags: ["ספרינטים"] })));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

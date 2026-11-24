@@ -1,28 +1,27 @@
-// テスト用の最小 obsidian スタブ / minimal obsidian stub for tests
+// minimal obsidian stub for tests
 export class App {}
 export class TFile {}
 export class TFolder {}
 export function normalizePath(p) {
   return p;
 }
-// タグ取得スタブ（collectTasks はテストで未使用）/ tag stub (collectTasks isn't exercised in tests)
+// tag stub (collectTasks isn't exercised in tests)
 export function getAllTags() {
   return null;
 }
-// 列定義（columns.ts）が参照する UI 部品のスタブ。テストでは描画しない
 // stubs for UI helpers columns.ts imports; tests never paint
 export function setIcon() {}
 export function getIconIds() {
   return [];
 }
 export const moment = { locale: () => "en" };
-// wikilink UI（linkui.ts）が参照する API のスタブ / stubs for the APIs linkui.ts imports
+// stubs for the APIs linkui.ts imports
 export class Component {}
 export const Keymap = { isModEvent: () => false };
 export function prepareFuzzySearch() {
   return () => null;
 }
-// ポップオーバーの Esc（popover.ts）が参照する API のスタブ / stubs for the API popover.ts imports for its Esc binding
+// stubs for the API popover.ts imports for its Esc binding
 export class Scope {
   register() {}
 }

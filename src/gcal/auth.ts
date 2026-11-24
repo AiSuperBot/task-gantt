@@ -1,6 +1,4 @@
-// Google OAuth 2.0（ループバック + PKCE）。ユーザー自身の GCP クライアントを使う
 // Google OAuth 2.0 (loopback + PKCE) using the user's own GCP client
-// デスクトップ限定：認可コードの受け取りに 127.0.0.1 の一時 HTTP サーバーが必要
 // desktop-only: receiving the auth code needs a temporary HTTP server on 127.0.0.1
 
 import { Notice, Platform, requestUrl } from "obsidian";
@@ -11,30 +9,27 @@ import { getClientSecret, getRefreshToken, setRefreshToken } from "./secrets";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
-// イベントの読み書き＋カレンダー一覧のみ（フル calendar スコープは要求しない）
 // events read/write + calendar list only (never the full calendar scope)
 const SCOPES =
   "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly";
 
-// アクセストークンはメモリ保持のみ（リフレッシュトークンだけ SecretStorage に永続化）
 // the access token lives in memory only (just the refresh token is persisted, in SecretStorage)
 let accessToken = "";
-let accessTokenExp = 0; // 失効時刻 / expiry (epoch ms)
+let accessTokenExp = 0; // expiry (epoch ms)
 
-// バイト列を base64url へ / bytes to base64url
+// bytes to base64url
 function b64url(bytes: Uint8Array): string {
   let s = "";
   for (const b of bytes) s += String.fromCharCode(b);
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// PKCE の code_challenge（S256）/ PKCE code_challenge (S256)
+// PKCE code_challenge (S256)
 async function sha256(text: string): Promise<Uint8Array> {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return new Uint8Array(buf);
 }
 
-// Node の http をレイジーに取得（バンドル時に静的 require が入らないよう window.require 経由）
 // lazily grab Node's http (via window.require so the bundle gets no static require)
 type HttpServer = {
   close(): void;
@@ -59,7 +54,6 @@ function nodeHttp(): HttpModule | null {
   }
 }
 
-// トークンエンドポイント呼び出し（認可コード交換とリフレッシュで共用）
 // call the token endpoint (shared by the code exchange and refresh)
 async function tokenRequest(params: Record<string, string>): Promise<{ status: number; json: Record<string, unknown> }> {
   const res = await requestUrl({
@@ -73,17 +67,16 @@ async function tokenRequest(params: Record<string, string>): Promise<{ status: n
   try {
     json = res.json as Record<string, unknown>;
   } catch {
-    /* 本文が JSON でない場合は空のまま / leave empty when the body isn't JSON */
+    /* leave empty when the body isn't JSON */
   }
   return { status: res.status, json };
 }
 
-// 接続済みか / connected?
+// connected?
 export function isConnected(plugin: GanttPlugin): boolean {
   return !!getRefreshToken(plugin);
 }
 
-// 接続フロー：ローカルサーバー起動 → ブラウザで同意 → コード交換 → リフレッシュトークン保存
 // connect flow: start the loopback server, consent in the browser, exchange the code, store the refresh token
 export async function connectGoogle(plugin: GanttPlugin): Promise<boolean> {
   const g = plugin.settings.gcal;
@@ -103,7 +96,7 @@ export async function connectGoogle(plugin: GanttPlugin): Promise<boolean> {
   const state = b64url(crypto.getRandomValues(new Uint8Array(16)));
   let redirectUri = "";
 
-  // 認可コードを 127.0.0.1 で受け取る（3分でタイムアウト）/ receive the code on 127.0.0.1 (3-minute timeout)
+  // receive the code on 127.0.0.1 (3-minute timeout)
   const code = await new Promise<string | null>((resolve) => {
     let settled = false;
     const server = http.createServer((req, res) => {
@@ -125,7 +118,7 @@ export async function connectGoogle(plugin: GanttPlugin): Promise<boolean> {
       try {
         server.close();
       } catch {
-        /* 二重 close は無視 / ignore double close */
+        /* ignore double close */
       }
       resolve(v);
     };
@@ -140,8 +133,8 @@ export async function connectGoogle(plugin: GanttPlugin): Promise<boolean> {
         redirect_uri: redirectUri,
         response_type: "code",
         scope: SCOPES,
-        access_type: "offline", // リフレッシュトークンを得る / get a refresh token
-        prompt: "consent", // 再接続でも必ず refresh_token を返させる / always re-issue the refresh token
+        access_type: "offline", // get a refresh token
+        prompt: "consent", // always re-issue the refresh token
         code_challenge: challenge,
         code_challenge_method: "S256",
         state,
@@ -165,8 +158,6 @@ export async function connectGoogle(plugin: GanttPlugin): Promise<boolean> {
   });
   if (status !== 200 || typeof json.refresh_token !== "string") {
     console.error("Task Gantt: Google token exchange failed", status, json);
-    // Google が返した理由をそのまま出す。原因（redirect_uri_mismatch / invalid_client 等）で
-    // 対処が全く変わるため、汎用メッセージだけではコンソールを開かないと切り分けられない。
     // surface Google's own reason: the fix differs entirely per cause
     // (redirect_uri_mismatch vs invalid_client …), so a generic message forces a console trip.
     const reason =
@@ -174,8 +165,7 @@ export async function connectGoogle(plugin: GanttPlugin): Promise<boolean> {
         ? json.error_description
         : typeof json.error === "string"
           ? json.error
-          : // refresh_token だけが欠けるのは「同意済みで再発行されなかった」ケース
-            // a missing refresh_token alone means consent existed and Google didn't re-issue one
+          : // a missing refresh_token alone means consent existed and Google didn't re-issue one
             status === 200
             ? "no refresh_token in response"
             : `HTTP ${status}`;
@@ -192,7 +182,7 @@ export async function connectGoogle(plugin: GanttPlugin): Promise<boolean> {
   return true;
 }
 
-// 有効なアクセストークンを返す（必要ならリフレッシュ）/ return a valid access token (refreshing when needed)
+// return a valid access token (refreshing when needed)
 export async function getAccessToken(plugin: GanttPlugin, force = false): Promise<string> {
   const g = plugin.settings.gcal;
   const refreshToken = getRefreshToken(plugin);
@@ -205,7 +195,6 @@ export async function getAccessToken(plugin: GanttPlugin, force = false): Promis
     grant_type: "refresh_token",
   });
   if (status !== 200 || typeof json.access_token !== "string") {
-    // リフレッシュトークン失効＝再接続が必要（接続情報を落として設定画面に表示）
     // an expired/revoked refresh token means the user must reconnect
     if (json.error === "invalid_grant") {
       setRefreshToken(plugin, "");
@@ -219,7 +208,6 @@ export async function getAccessToken(plugin: GanttPlugin, force = false): Promis
   return accessToken;
 }
 
-// 切断：トークン失効（ベストエフォート）＋接続情報と同期状態のクリア
 // disconnect: revoke (best effort) and clear the connection + sync state
 export async function disconnectGoogle(plugin: GanttPlugin): Promise<void> {
   const g = plugin.settings.gcal;
@@ -233,7 +221,7 @@ export async function disconnectGoogle(plugin: GanttPlugin): Promise<void> {
         throw: false,
       });
     } catch {
-      /* 失効失敗は無視（ローカルは消す）/ ignore revoke failures; still clear locally */
+      /* ignore revoke failures; still clear locally */
     }
   }
   setRefreshToken(plugin, "");

@@ -1,19 +1,17 @@
-// wikilink の UI 部品: "[[" 入力でのノート候補ポップアップと、リンクのクリック／ホバー
 // wikilink UI helpers: the note-suggestion popup opened by typing "[[", and link click / hover wiring
 import { App, Component, Keymap, TFile, prepareFuzzySearch } from "obsidian";
 import { VIEW_TYPE_GANTT } from "./types";
 import { linkLabel, linkTarget, parseWikilink, wikilinkQuery } from "./links";
 
-const MAX_ITEMS = 20; // 候補の最大件数 / max suggestions shown
+const MAX_ITEMS = 20; // max suggestions shown
 
-// 入力欄／テキストエリアに "[[" のノート候補を付ける。候補の選択中は Enter・Esc・矢印を横取りする
 // add "[[" note suggestions to an input or textarea; while the popup is open it takes Enter, Esc and the arrows
 export function attachLinkSuggest(app: App, el: HTMLInputElement | HTMLTextAreaElement, sourcePath: string): void {
   let pop: HTMLElement | null = null;
   let items: TFile[] = [];
   let sel = 0;
-  let start = 0; // "[[" の位置 / where the "[[" starts
-  let listAttr: string | null = null; // 表示中は datalist を外して二重表示を防ぐ / detach any datalist while open
+  let start = 0; // where the "[[" starts
+  let listAttr: string | null = null; // detach any datalist while open
 
   const close = (): void => {
     pop?.remove();
@@ -59,12 +57,12 @@ export function attachLinkSuggest(app: App, el: HTMLInputElement | HTMLTextAreaE
   const place = (): void => {
     if (!pop) return;
     const r = el.getBoundingClientRect();
-    const caret = el.instanceOf(HTMLTextAreaElement) ? caretOffset(el) : null; // instanceof はポップアウトの窓では成り立たない / instanceof fails in a pop-out window
+    const caret = el.instanceOf(HTMLTextAreaElement) ? caretOffset(el) : null; // instanceof fails in a pop-out window
     const top = caret ? r.top + caret.top : r.bottom;
     const left = caret ? r.left + caret.left : r.left;
     const win = activeWindow;
     const h = pop.offsetHeight;
-    // 下に入らなければ上に出す / flip above when it doesn't fit below
+    // flip above when it doesn't fit below
     const y = top + h > win.innerHeight - 8 ? Math.max(8, (caret ? r.top + caret.top - caret.line : r.top) - h) : top;
     const x = Math.min(left, win.innerWidth - pop.offsetWidth - 8);
     pop.setCssStyles({ top: `${y}px`, left: `${Math.max(8, x)}px` });
@@ -80,7 +78,7 @@ export function attachLinkSuggest(app: App, el: HTMLInputElement | HTMLTextAreaE
     sel = 0;
     if (!pop) {
       pop = activeDocument.body.createDiv({ cls: "suggestion-container ogantt-link-suggest" });
-      // クリックで入力欄のフォーカスを奪わない（blur 保存を起こさない）/ keep focus in the field (no blur-save)
+      // keep focus in the field (no blur-save)
       pop.addEventListener("mousedown", (e) => e.preventDefault());
       if (el.hasAttribute("list")) {
         listAttr = el.getAttribute("list");
@@ -94,18 +92,18 @@ export function attachLinkSuggest(app: App, el: HTMLInputElement | HTMLTextAreaE
   const choose = (f: TFile): void => {
     const caret = el.selectionStart ?? el.value.length;
     let rest = el.value.slice(caret);
-    if (rest.startsWith("]]")) rest = rest.slice(2); // 自動で閉じられた "]]" を重ねない / don't double an auto-closed "]]"
+    if (rest.startsWith("]]")) rest = rest.slice(2); // don't double an auto-closed "]]"
     const link = `[[${app.metadataCache.fileToLinktext(f, sourcePath, true)}]]`;
     el.value = el.value.slice(0, start) + link + rest;
     const pos = start + link.length;
     el.setSelectionRange(pos, pos);
     close();
-    el.dispatchEvent(new Event("input")); // 高さ調整などを走らせる / let listeners (autosize) react
+    el.dispatchEvent(new Event("input")); // let listeners (autosize) react
   };
 
   el.addEventListener("input", update);
   el.addEventListener("blur", close);
-  // 入力欄自身の Enter 保存・Esc 取消より先に処理する / run before the field's own Enter-saves / Esc-cancels
+  // run before the field's own Enter-saves / Esc-cancels
   el.addEventListener(
     "keydown",
     (e: KeyboardEvent) => {
@@ -127,7 +125,6 @@ function stop(e: KeyboardEvent): void {
   e.stopImmediatePropagation();
 }
 
-// テキストエリア内のカーソル位置（要素左上からの px。top は行の下端）をミラー要素で測る
 // measure the caret position inside a textarea (px from its top-left; `top` is the line's bottom) with a mirror div
 function caretOffset(ta: HTMLTextAreaElement): { top: number; left: number; line: number } {
   const cs = activeWindow.getComputedStyle(ta);
@@ -148,8 +145,6 @@ function caretOffset(ta: HTMLTextAreaElement): { top: number; left: number; line
   return out;
 }
 
-// レンダリング済みの内部リンク（a.internal-link）をクリックで開き、ホバーでページプレビューを出す。
-// リンクのクリックで true を返す（呼び出し側は編集モードへ入らない）
 // open rendered internal links (a.internal-link) on click and show Page preview on hover.
 // Returns true when the click landed on a link (the caller then skips entering edit mode)
 export function handleLinkClick(app: App, e: MouseEvent, sourcePath: string): boolean {
@@ -160,16 +155,15 @@ export function handleLinkClick(app: App, e: MouseEvent, sourcePath: string): bo
     const href = a.getAttr("data-href") ?? a.getAttr("href") ?? "";
     void app.workspace.openLinkText(href, sourcePath, Keymap.isModEvent(e));
   }
-  // 外部リンク・タグ等は既定の動作に任せる / external links, tags etc. keep their default behaviour
+  // external links, tags etc. keep their default behaviour
   return true;
 }
 
-// 内部リンクのホバーでページプレビューを出す（コンテナに 1 回だけ付ける）
 // show Page preview when hovering an internal link (attach once per container)
 export function wireLinkHover(app: App, container: HTMLElement, hoverParent: Component, sourcePath: string): void {
   container.addEventListener("mouseover", (e) => {
     const a = (e.target as HTMLElement).closest("a.internal-link");
-    if (!a?.instanceOf(HTMLElement)) return; // ポップアウトの窓でも / in a pop-out window too
+    if (!a?.instanceOf(HTMLElement)) return; // in a pop-out window too
     app.workspace.trigger("hover-link", {
       event: e,
       source: VIEW_TYPE_GANTT,
@@ -181,7 +175,6 @@ export function wireLinkHover(app: App, container: HTMLElement, hoverParent: Com
   });
 }
 
-// 値を表示する。wikilink ならクリックできる内部リンク、それ以外はテキスト
 // render a value: a clickable internal link for a wikilink, plain text otherwise
 export function renderLinkValue(parent: HTMLElement, v: string, textCls: string): HTMLElement {
   const w = parseWikilink(v);

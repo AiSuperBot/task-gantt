@@ -1,4 +1,3 @@
-// Google Calendar REST API の薄いラッパー（requestUrl ベース・依存追加なし）
 // a thin Google Calendar REST wrapper on top of requestUrl (no extra dependencies)
 
 import { requestUrl } from "obsidian";
@@ -7,14 +6,14 @@ import { getAccessToken } from "./auth";
 
 const BASE = "https://www.googleapis.com/calendar/v3";
 
-// API エラー（HTTP ステータス付き）/ API error carrying the HTTP status
+// API error carrying the HTTP status
 export class GcalApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
   }
 }
 
-// イベントリソース（使用フィールドのみ）/ event resource (only the fields we use)
+// event resource (only the fields we use)
 export interface GEvent {
   id: string;
   status?: string;
@@ -35,7 +34,7 @@ export interface GEventList {
   nextSyncToken?: string;
 }
 
-// クエリを URL へ（配列は同名パラメータの繰り返し）/ build the query string (arrays repeat the parameter)
+// build the query string (arrays repeat the parameter)
 function buildUrl(path: string, query?: Record<string, string | string[] | undefined>): string {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(query ?? {})) {
@@ -46,7 +45,6 @@ function buildUrl(path: string, query?: Record<string, string | string[] | undef
   return `${BASE}${path}${qs ? `?${qs}` : ""}`;
 }
 
-// 認証付き呼び出し。401 は一度だけトークンを強制更新してリトライ
 // authenticated call; on 401, force-refresh the token and retry once
 async function call<T>(
   plugin: GanttPlugin,
@@ -73,7 +71,7 @@ async function call<T>(
         const j = res.json as { error?: { message?: string } };
         if (j.error?.message) msg += `: ${j.error.message}`;
       } catch {
-        /* 本文なし / no body */
+        /* no body */
       }
       throw new GcalApiError(res.status, `Google Calendar: ${method} ${path} → ${msg}`);
     }
@@ -82,7 +80,7 @@ async function call<T>(
   }
 }
 
-// 書き込み可能なカレンダー一覧 / writable calendars
+// writable calendars
 export async function listCalendars(plugin: GanttPlugin): Promise<{ id: string; summary: string; primary?: boolean }[]> {
   const res = await call<{ items?: { id: string; summary: string; primary?: boolean }[] }>(
     plugin,
@@ -111,7 +109,7 @@ export async function patchEvent(
   );
 }
 
-// 削除。既に消えている（404/410）は成功扱い / delete; already-gone (404/410) counts as success
+// delete; already-gone (404/410) counts as success
 export async function deleteEvent(plugin: GanttPlugin, calendarId: string, eventId: string): Promise<void> {
   try {
     await call<void>(

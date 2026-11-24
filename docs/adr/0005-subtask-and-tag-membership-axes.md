@@ -2,21 +2,21 @@
 status: accepted
 ---
 
-# Task の所属軸を増やす：サブタスクとタグ / New membership axes for Tasks: subtasks and tags
+# New membership axes for Tasks: subtasks and tags
 
-これまで Task の構造軸は **Folder（Group）** と、関係軸は **Dependency（`after`）** のみだった。これに **2 つの軸**を加える。
+Until now a Task's only structural axis was the **Folder (Group)**, and its only relational axis the **Dependency (`after`)**. This adds **two axes**.
 
-- **Subtask**：フロントマター `parent`（親 Task への**単一 wikilink**）で表す親子。子は**親と同じフォルダに同居**し、ドラッグ＆ドロップは**移動**（タスク行へdrop＝親付与＋親フォルダへ移動、フォルダ行へdrop＝親解除）。親移動はサブツリーごと（1 Undo で復元）、親欠落時は子をフォルダ直下へ昇格。スケジュール効果は持たない（表示上のまとめのみ／依存は従来どおり別軸）。
-- **Tag**：Obsidian ネイティブ `tags`（**多値**）。フォルダ（排他・1か所）に対し、タグは**追加的な複数所属**。タググループへの D&D は**タグ追加**、グループ化時は複数グループへ**重複表示**（“仮想フォルダ”的）。
+- **Subtask**: a parent/child relation written as the frontmatter `parent` (a **single wikilink** to the parent Task). A child **lives in its parent's folder**, and drag and drop **moves** it (a drop on a task row = setting the parent + moving into the parent's folder; a drop on a folder row = removing the parent). A parent moves with its whole subtree (one Undo restores it), and when the parent is missing, the child is promoted to directly under the folder. It has no scheduling effect (it only groups the display; dependencies stay a separate axis, as before).
+- **Tag**: Obsidian's native `tags` (**multi-valued**). Where a folder is exclusive (one place only), tags are **additive multiple membership**. A drag and drop onto a tag group **adds the tag**, and when grouped, a task is **shown in several groups** (like a "virtual folder").
 
-**なぜ / Why:** 「1 ファイル = 1 タスク」（ADR-0004）を保ったまま PM ツール的な階層と分類を得るため。ファイルはファイルを内包できないので階層は論理リンク（`parent`）で表し、Obsidian の検索・タグペインと統合できるよう分類はネイティブタグを使う。フォルダ＝移動（排他）、タグ＝追加（多重）という **D&D の非対称**が役割の住み分けを明確にする。
+**Why:** To get a PM tool's hierarchy and classification while keeping "one file = one task" (ADR-0004). A file can't contain files, so the hierarchy is a logical link (`parent`), and classification uses native tags so that it integrates with Obsidian's search and tag pane. The **asymmetry of drag and drop**, folder = move (exclusive) and tag = add (multiple), keeps the two roles clearly apart.
 
-## 退けた対案 / Considered options
+## Considered options
 
-- **サブタスク＝純論理リンク（場所不問, Z 案）**：子が物理フォルダと表示位置で食い違い、フォルダ軸と矛盾するため不採用。代わりに「親へ寄せる＝親フォルダへ移動」で表示ツリーを一意にした。
-- **親バー＝常時自動ロールアップ（MS Project 型）**：親の自分の日付を無視/読み取り専用にする混乱を避け、既定は「自分の日付」。集約はボード全体のロールアップ・トグル（既定 OFF）で任意に。
-- **タグ＝独自フィールド**：Obsidian のタグ機能と二重管理になるため不採用。
+- **Subtask = a purely logical link (anywhere; option Z)**: rejected, because a child's physical folder and its display position would disagree, contradicting the folder axis. Instead, "bringing it to a parent = moving it into the parent's folder" keeps the display tree unambiguous.
+- **Parent bar = always rolled up automatically (MS Project style)**: to avoid the confusion of ignoring a parent's own dates or making them read-only, the default is "its own dates". Rolling up is optional, through the board-wide rollup toggle (OFF by default).
+- **Tag = a field of our own**: rejected, since it would be managed twice alongside Obsidian's tag feature.
 
-## 補足 / Notes
+## Notes
 
-ソート（列ヘッダ ↑↓）・列の出し分け（歯車）・カスタムフィールド（設定で key/label/type 宣言）・フラット表示は、容易に可逆な UI 仕様のため本 ADR には含めず CONTEXT.md と設計サマリーで管理する。
+Sorting (column headers ↑↓), showing and hiding columns (the gear), custom fields (key/label/type declared in settings) and the flat view are easily reversible UI specs, so they are not part of this ADR and are kept in CONTEXT.md and the design summary.

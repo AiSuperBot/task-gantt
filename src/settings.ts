@@ -1,6 +1,4 @@
 import { App, Notice, Platform, PluginSettingTab, Setting, TextComponent } from "obsidian";
-// 宣言的設定の型（@since 1.13.0）。型のみの参照で実行時 API は呼ばないため、
-// minAppVersion 1.11.4 のままでも no-unsupported-api には触れない。
 // declarative-settings types (@since 1.13.0); type-only references call no runtime API,
 // so they don't trip no-unsupported-api while minAppVersion stays at 1.11.4.
 import type { SettingDefinitionItem, SettingDefinitionList, SettingGroupItem } from "obsidian";
@@ -9,8 +7,11 @@ import { StatusDef, StatusGroup, STATUS_GROUPS, ZoomMode, DateFormat, Filter, Fi
 import { collectAllTags, customFieldIssues, filesWithFrontmatterKey, newStatus, renameFrontmatterKey } from "./model";
 import { ColumnDef, allColumns, columnList, moveColumn, toggleColumn } from "./columns";
 import { AutoFired, autoStatusTargets, renameAutoStatusId } from "./schedule";
+import { dayToStr, formatDate, todayIndex } from "./timeline";
 import { ChoiceModal, ConfirmModal, PickModal } from "./modals";
 import { obsidianTagColor, toHex } from "./colors";
+import { jsonObject } from "./ai";
+import { checkAi } from "./ai-client";
 import { pickColor } from "./popover";
 import { t as tr, statusGroupLabel } from "./i18n";
 import { LEADS, leadLabel, sendTestNotification } from "./notify";
@@ -19,7 +20,7 @@ import { listCalendars } from "./gcal/api";
 import { syncGcal } from "./gcal/sync";
 import { getClientSecret, setClientSecret } from "./gcal/secrets";
 
-// タイムゾーン一覧（実在するオフセットのみ・代表都市付き）/ timezone list (real offsets only, with representative cities)
+// timezone list (real offsets only, with representative cities)
 const TZ_CITIES: [string, string][] = [
   ["-12:00", "Baker Island"],
   ["-11:00", "Midway, Niue"],
@@ -61,19 +62,17 @@ const TZ_CITIES: [string, string][] = [
   ["+14:00", "Kiritimati"],
 ];
 
-// プラグイン設定 / Plugin settings
-// ステータスの id を変えたら、保存した絞り込みとプリセットのステータスの値も付け替える / after a status id change, re-point the status values of the saved filters and presets
+// Plugin settings
+// after a status id change, re-point the status values of the saved filters and presets
 export function renameStatusInFilters(s: GanttSettings, from: string, to: string): void {
   for (const list of [s.filters, ...s.filterPresets.map((x) => x.filters)])
     for (const f of list) if (f.kind === "category" && f.field === "status") f.values = f.values.map((v) => (v === from ? to : v));
 }
 
-// 直前の付け替えで書いたステータス（メタデータの更新を待たずに次の付け替えが見つけられるように）/ statuses the last renames wrote, so the next rename finds them before the metadata cache catches up
+// statuses the last renames wrote, so the next rename finds them before the metadata cache catches up
 const written = new Map<string, string>();
 let renaming: Promise<unknown> = Promise.resolve();
 
-// ステータスの id を変えたら、既定のフォルダ配下のそのステータスのノートも書き換える。書いた数を返す。読むだけの部屋のノートは書かない。
-// 続けて変えても 1 つずつ順に（途中のノートを古い id に取り残さない）。Ctrl+Z では戻らない
 // after a status id change, rewrite the notes holding it under the default folder; returns how many were written. Notes in a read-only
 // room aren't written. Back-to-back renames run one after another (no note is left on a dead id). Not undoable with Ctrl+Z
 export function renameStatusInNotes(app: App, root: string, key: string, from: string, to: string): Promise<number> {
@@ -99,87 +98,85 @@ export function renameStatusInNotes(app: App, root: string, key: string, from: s
 }
 
 export interface GanttSettings {
-  rootFolder: string; // 集計する親フォルダ / parent folder to aggregate
-  recurse: boolean; // サブフォルダを再帰的に辿るか / recurse into subfolders
+  rootFolder: string; // parent folder to aggregate
+  taskTemplate: string; // the note new note tasks are copied from (empty: an empty note)
+  recurse: boolean; // recurse into subfolders
   statuses: StatusDef[];
   defaultZoom: ZoomMode;
-  dateFormat: DateFormat; // 表示用の日付フォーマット / display-only date format
-  // 時刻の表示/保存に使うタイムゾーン。"system"=端末、または "+09:00" 等の固定 GMT オフセット
+  dateFormat: DateFormat; // display-only date format
   // timezone for displaying/saving times: "system" (device) or a fixed GMT offset like "+09:00"
   tz: string;
-  // 休日の曜日（0=日 … 6=土）。Duration と依存の連動は稼働日で数える
   // non-working weekdays (0 = Sun … 6 = Sat); durations and dependency cascades count workdays only
   nonWorkingDays: number[];
-  // 2.17 で既定を金土にしたとき、保存されていた旧既定（土日）を一度だけ移した印 / set once the old saved default (Sat+Sun) has been moved to 2.17's default (Fri+Sat)
+  // set once the old saved default (Sat+Sun) has been moved to 2.17's default (Fri+Sat)
   weekendMigrated?: boolean;
-  // 先行が遅れて FS の後続と重なったら後続を押し出す / push FS successors when a slipping predecessor overlaps them
+  // set once the old default date format (YYYY/MM/DD) has been moved to the glance format ("Tue 24 Nov")
+  dateFormatMigrated?: boolean;
+  // the plan assistant's server: OpenAI-compatible, on the LAN (Ollama, vLLM, llama.cpp, LM Studio); its key, when one is needed, lives
+  // in SecretStorage (aiKey below), never here
+  ai: AiSettings;
+  // push FS successors when a slipping predecessor overlaps them
   autoScheduleFS: boolean;
-  // 日付で自動的にステータスを進める（既定 OFF）。空の id・空の一覧は既定（組み込みの in-progress / done、最初の「進行中」グループのステータス）。
-  // fired は決まりが当たった日付（ノートのパスごと。その日付のあいだは、取り消しても手で戻しても当て直さない）
   // move statuses on by date (off by default); an empty id or list means the default (the built-in in-progress / done, the first active status).
   // `fired` holds the date each rule fired for, per note path (not applied again while that date stands, even if undone or set back by hand)
   autoStatus: { enabled: boolean; started: string; finished: string; notStarted: string[]; fired: AutoFired };
-  detailWidth: number; // 詳細パネルの幅(px) / detail panel width (px)
-  // 詳細パネルでのカンバンのカード：工程ごとのチェックリスト（既定）か、Kanban と同じ横並びの列か
+  detailWidth: number; // detail panel width (px)
   // a kanban's cards in the detail panel: a checklist by lane (default) or side-by-side lanes like the Kanban plugin
   cardView: "list" | "board";
-  // 詳細パネルでの「実行」の位置：欄の後（既定）か、題名のすぐ下 / where Execution sits in the detail panel: after the fields (default) or right under the title
+  // where Execution sits in the detail panel: after the fields (default) or right under the title
   execPosition: "top" | "bottom";
-  visibleColumns: string[]; // 表示する任意列（name は常時表示）/ optional columns shown (name is always shown)
-  // 任意列の並び（列 id。無い列は定義順で後ろ）/ the optional columns' order (column ids; missing ones follow in definition order)
+  visibleColumns: string[]; // optional columns shown (name is always shown)
+  // the optional columns' order (column ids; missing ones follow in definition order)
   columnOrder: string[];
-  columnWidths: Record<string, number>; // 列幅の上書き(px)。未設定列は既定幅 / per-column width overrides (px); unset = default
-  sortBy: string; // ソート列 id（name/start/end/progress/assignee/status/tags、Custom field は cf:<id>）/ sort column id (custom fields: cf:<id>)
-  sortDir: "asc" | "desc"; // ソート方向 / sort direction
-  // Custom field（任意のフロントマターキーをテーブルの列にする）/ custom fields: arbitrary frontmatter keys as table columns
+  columnWidths: Record<string, number>; // per-column width overrides (px); unset = default
+  sortBy: string; // sort column id (custom fields: cf:<id>)
+  sortDir: "asc" | "desc"; // sort direction
+  // custom fields: arbitrary frontmatter keys as table columns
   customFields: CustomField[];
-  // 統合フィルタ（ステータス/担当者/タグ/開始日/期限日）と結合方法 / unified filters + combine mode
+  // unified filters + combine mode
   filters: Filter[];
-  filterMatch: FilterMatch; // all=すべてに一致(AND) / any=いずれかに一致(OR)
-  filterPresets: FilterPreset[]; // ユーザー定義のフィルタプリセット / user-defined filter presets
-  progressLineColor: string; // 稲妻線の色 / progress line color
-  // タグの既定色。空文字＝Obsidian 本体のタグ色に従う / default tag color; empty = follow Obsidian's own tag color
+  filterMatch: FilterMatch; // all = match all (AND), any = match any (OR)
+  filterPresets: FilterPreset[]; // user-defined filter presets
+  progressLineColor: string; // progress line color
+  // default tag color; empty = follow Obsidian's own tag color
   defaultTagColor: string;
-  // 色を指定したタグだけを保持する（載っている＝色を指定している）。色は常に具体値
   // only tags with an explicit colour are listed (listed ⇔ coloured); the colour is never empty
   tagColors: { name: string; color: string }[];
   folderColors: { name: string; color: string }[];
-  assigneeColors: { name: string; color: string }[]; // 担当者の表示名ごとの色 / colours keyed by an assignee's display name
-  // グループ見出しのアイコン（キーは "<グループ化の軸>:<見出し名>"）/ group heading icons, keyed "<group-by axis>:<heading>"
+  assigneeColors: { name: string; color: string }[]; // colours keyed by an assignee's display name
+  // group heading icons, keyed "<group-by axis>:<heading>"
   icons: Record<string, string>;
-  // ボードごとの表示。キーは "folder:<パス>"（"folder:" は Vault ルート。将来の Bases 用に "base:<id>" を空けておく）
   // each board's view setup, keyed "folder:<path>" ("folder:" = vault root; "base:<id>" is left free for Bases boards)
   boards: Record<string, BoardState>;
-  // 通知（Discord / Slack の Incoming Webhook）/ notifications via incoming webhooks
+  // notifications via incoming webhooks
   notify: {
-    discordWebhook: string; // 空欄で無効 / empty disables
+    discordWebhook: string; // empty disables
     slackWebhook: string;
-    teamsWebhook: string; // Power Automate Workflows の Webhook / Power Automate Workflows webhook
-    notifyStart: boolean; // 開始を通知するか / notify for start
-    notifyEnd: boolean; // 期限を通知するか / notify for due
-    leads: string[]; // 有効なリードタイムID（1w/1d/1h/10m/0）/ enabled lead ids
-    sent: Record<string, number>; // 送信済みキー→送信時刻（二重通知防止）/ sent keys → timestamp (dedupe)
+    teamsWebhook: string; // Power Automate Workflows webhook
+    notifyStart: boolean; // notify for start
+    notifyEnd: boolean; // notify for due
+    leads: string[]; // enabled lead ids
+    sent: Record<string, number>; // sent keys → timestamp (dedupe)
   };
-  // Google カレンダー双方向同期 / Google Calendar two-way sync
+  // Google Calendar two-way sync
   gcal: {
-    clientId: string; // ユーザー自身の GCP OAuth クライアント / the user's own GCP OAuth client
-    // クライアントシークレットとリフレッシュトークンは SecretStorage に置く（gcal/secrets.ts）
+    clientId: string; // the user's own GCP OAuth client
     // the client secret and refresh token live in SecretStorage (gcal/secrets.ts)
-    calendarId: string; // 同期先カレンダー / target calendar
-    calendarName: string; // 表示用 / display only
-    pushEnabled: boolean; // タスク → GCal / task → GCal
-    pullEnabled: boolean; // GCal → タスク / GCal → task
-    optInOnly: boolean; // true=フロントマターにフラグのあるタスクのみ / only tasks carrying the opt-in flag
-    scopeFolder: string; // 空=既定フォルダに従う / empty = follow the default folder
-    pullIntervalMin: number; // Pull の間隔（分）/ pull interval in minutes
+    calendarId: string; // target calendar
+    calendarName: string; // display only
+    pushEnabled: boolean; // task → GCal
+    pullEnabled: boolean; // GCal → task
+    optInOnly: boolean; // only tasks carrying the opt-in flag
+    scopeFolder: string; // empty = follow the default folder
+    pullIntervalMin: number; // pull interval in minutes
     deleteEventOnTaskDelete: boolean;
-    onEventDeleted: "unlink" | "clearDates"; // GCal 側で削除されたときの挙動 / behavior when the event is deleted remotely
-    syncToken: string; // 増分 Pull 用 / incremental pull token
-    lastSync: number; // 最終成功時刻 (epoch ms) / last successful sync
-    lastError: string; // 直近のエラー（設定画面に表示）/ latest error, shown in settings
-    state: Record<string, GcalSyncState>; // パス → 同期スナップショット / path → sync snapshot
+    onEventDeleted: "unlink" | "clearDates"; // behavior when the event is deleted remotely
+    syncToken: string; // incremental pull token
+    lastSync: number; // last successful sync
+    lastError: string; // latest error, shown in settings
+    state: Record<string, GcalSyncState>; // path → sync snapshot
   };
-  // フロントマターのキー名（プロジェクトに合わせて変更可）/ frontmatter key names
+  // frontmatter key names
   keys: {
     start: string;
     end: string;
@@ -189,19 +186,50 @@ export interface GanttSettings {
     progress: string;
     milestone: string;
     parent: string;
-    gcalId: string; // イベント ID の保存先 / where the event id is stored
-    gcal: string; // オプトインフラグ / the opt-in flag
-    canvas: string; // キャンバス型タスクの .canvas へのリンク / a canvas task's link to its .canvas
-    priority: string; // 優先度（urgent で割り込みの急ぎ仕事）/ priority (urgent marks interrupting work)
-    interrupts: string; // 急ぎ仕事が割り込んだタスクへのリンク / links from urgent work to the tasks it interrupted
-    completed: string; // 完了のグループに入った日（このプラグインがステータスと一緒に書く）/ the day the task entered the Completed group (written with the status)
+    gcalId: string; // where the event id is stored
+    gcal: string; // the opt-in flag
+    canvas: string; // a canvas task's link to its .canvas
+    priority: string; // priority (urgent marks interrupting work)
+    interrupts: string; // links from urgent work to the tasks it interrupted
+    completed: string; // the day the task entered the Completed group (written with the status)
+    blocker: string; // why it is blocked (only while in the Deferred group; cleared on leaving it)
   };
 }
 
-// この端末の利用者の名前（「自分の仕事」用。端末ごとで同期しない）/ this device's user name (for "My work"; per device, never synced)
+// this device's user name (for "My work"; per device, never synced)
 export const ME_KEY = "task-gantt-me";
 
-// ボードの表示の組み立て（開き直しても保つ）/ a board's view setup, kept across reopening
+// the AI server's key, in Obsidian's SecretStorage (the OS keychain): data.json travels through sync and backups. Clearing writes "" (no delete API)
+const AI_KEY = "task-gantt-ai-key";
+export function aiKey(plugin: GanttPlugin): string {
+  try {
+    return plugin.app.secretStorage.getSecret(AI_KEY) ?? "";
+  } catch (e) {
+    console.error("Task Gantt: failed to read the AI key", e);
+    return "";
+  }
+}
+export function setAiKey(plugin: GanttPlugin, value: string): void {
+  plugin.app.secretStorage.setSecret(AI_KEY, value);
+}
+
+export interface AiSettings {
+  url: string; // the server's address, ending in /v1
+  model: string;
+  api: "chat" | "responses"; // Chat Completions, or the Responses API
+  chatPath: string; // a path under the url, or a full URL
+  embedModel: string; // "" = no search by meaning
+  embedPath: string;
+  body: string; // a JSON object added to each chat request ("" = none)
+  headers: string; // a JSON object of headers, {key} standing for the key ("" = the key as a bearer token)
+  timeout: number; // seconds to wait for an answer
+  instructions: string; // the team's own, after the built-in ones
+}
+
+// each API's usual endpoint, under the server URL
+export const AI_PATHS = { chat: "/chat/completions", responses: "/responses" } as const;
+
+// a board's view setup, kept across reopening
 export interface BoardState {
   groupBy: "folder" | "status" | "assignee" | "tag";
   colorBy: "status" | "assignee";
@@ -209,46 +237,47 @@ export interface BoardState {
   rollup: boolean;
   progressLine: boolean;
   showEmptyFolders: boolean;
-  showDeps: boolean; // 依存の矢印を描くか / whether dependency arrows are drawn
-  showTags: boolean; // バーにタグを出すか / whether tags show on the bars
+  showDeps: boolean; // whether dependency arrows are drawn
+  showTags: boolean; // whether tags show on the bars
   collapsed: string[];
-  expanded?: string[]; // 開いた親タスク（パス。親は既定で畳む）/ expanded parent tasks (paths; parents start collapsed)
-  order?: string[]; // 手で決めた行の並び（タスクのパス）/ the manual row order (task paths)
-  disabled?: string[]; // 止めたタスク（パス。ノートには書かない）/ disabled tasks (paths; nothing is written to the notes)
+  expanded?: string[]; // expanded parent tasks (paths; parents start collapsed)
+  order?: string[]; // the manual row order (task paths)
+  disabled?: string[]; // disabled tasks (paths; nothing is written to the notes)
 }
 
-// タスク1件分の同期スナップショット（ループ防止と差分検出に使う）
 // per-task sync snapshot (drives loop prevention and change detection)
 export interface GcalSyncState {
-  id: string; // イベント ID / event id
-  hash: string; // 最終同期時のローカル内容ハッシュ / local fingerprint at last sync
-  etag: string; // 最終同期時のイベント etag（エコー判定）/ event etag at last sync (echo detection)
-  at: number; // 同期時刻 / synced at (epoch ms)
-  link?: string; // イベントの htmlLink / the event's htmlLink
+  id: string; // event id
+  hash: string; // local fingerprint at last sync
+  etag: string; // event etag at last sync (echo detection)
+  at: number; // synced at (epoch ms)
+  link?: string; // the event's htmlLink
 }
 
 export const DEFAULT_SETTINGS: GanttSettings = {
   rootFolder: "",
+  taskTemplate: "",
+  ai: { url: "", model: "", api: "chat", chatPath: "/chat/completions", embedModel: "", embedPath: "/embeddings", body: "", headers: "", timeout: 180, instructions: "" },
   recurse: true,
   statuses: [
     { id: "todo", label: "To do", color: "#9aa0a6", group: "active" },
     { id: "in-progress", label: "In progress", color: "#3b82f6", group: "active" },
-    // 手が止まっている状態なので Wrike の Deferred に置く / stalled work maps to Wrike's Deferred
+    // stalled work maps to Wrike's Deferred
     { id: "blocked", label: "Blocked", color: "#ef4444", group: "deferred" },
     { id: "done", label: "Done", color: "#22c55e", group: "completed" },
   ],
   defaultZoom: "Week",
-  dateFormat: "YYYY/MM/DD",
+  dateFormat: "ddd D MMM",
   tz: "system",
-  nonWorkingDays: [5, 6], // 日〜木の週 / a Sunday-to-Thursday week
+  nonWorkingDays: [5, 6], // a Sunday-to-Thursday week
   autoScheduleFS: true,
   autoStatus: { enabled: false, started: "", finished: "", notStarted: [], fired: {} },
   detailWidth: 380,
   execPosition: "bottom",
-  cardView: "list", // 狭いパネルでも横スクロールなしで上から順に読める / reads top to bottom in a narrow panel, no sideways scrolling
-  // 一目で要るもの：担当・ステータス・進捗・期限（開始はバーが示す）/ what a glance needs: assignee, status, progress, due (the bar shows the start)
-  visibleColumns: ["assignee", "status", "end"], // 進捗はカンバンの目印に出るので既定では出さない（タイムラインを広く）/ Progress is off by default (a kanban's count is in its cue), leaving the timeline wider
-  columnOrder: ["assignee", "status", "progress", "end", "start", "duration", "tags"], // 誰が・どの状態・どこまで・いつまで / who, what state, how far, by when
+  cardView: "list", // reads top to bottom in a narrow panel, no sideways scrolling
+  // what a glance needs: assignee, status, progress, due (the bar shows the start)
+  visibleColumns: ["assignee", "status", "end"], // Progress is off by default (a kanban's count is in its cue), leaving the timeline wider
+  columnOrder: ["assignee", "status", "progress", "end", "start", "duration", "tags"], // who, what state, how far, by when
   columnWidths: {},
   sortBy: "start",
   sortDir: "asc",
@@ -256,8 +285,8 @@ export const DEFAULT_SETTINGS: GanttSettings = {
   filters: [],
   filterMatch: "all",
   filterPresets: [],
-  progressLineColor: "#f59e0b", // 既定はバー色と重なりにくい橙 / amber, unlikely to clash with bar colors
-  defaultTagColor: "", // 空＝Obsidian 本体のタグ色 / empty = Obsidian's own tag color
+  progressLineColor: "#f59e0b", // amber, unlikely to clash with bar colors
+  defaultTagColor: "", // empty = Obsidian's own tag color
   tagColors: [],
   folderColors: [],
   assigneeColors: [],
@@ -303,18 +332,15 @@ export const DEFAULT_SETTINGS: GanttSettings = {
     priority: "priority",
     interrupts: "interrupts",
     completed: "completed",
+    blocker: "blocker",
   },
 };
 
-// 設定タブは宣言的な getSettingDefinitions()（1.13 以降）で描き、それより前の Obsidian では同じ定義を
-// display() が従来の Setting で描く（両方とも definitions() から作るのでずれない）。
 // The settings tab renders declaratively through getSettingDefinitions() (1.13+); older Obsidian falls back to
 // display(), which draws the same definitions with classic Settings (both come from definitions(), so they can't drift).
 export class GanttSettingTab extends PluginSettingTab {
   plugin: GanttPlugin;
 
-  // 宣言版で描画されているか。getSettingDefinitions() は 1.13 以降でしか呼ばれないので、
-  // これが true なら再描画は update()、false なら display() 側の draw() を使う。
   // whether the tab renders declaratively: getSettingDefinitions() is only called on 1.13+,
   // so true means redraw via update(), false means redraw via the display()-side draw().
   private declarative = false;
@@ -325,7 +351,7 @@ export class GanttSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
-  // 打ち終えたときに保存する欄で、まだ保存していない変更があるか / whether a field saved once typed holds a change not saved yet
+  // whether a field saved once typed holds a change not saved yet
   private dirty = false;
 
   private save(): void {
@@ -333,43 +359,49 @@ export class GanttSettingTab extends PluginSettingTab {
     void this.plugin.saveSettings();
   }
 
-  // 閉じるとき、打っている途中の欄の変更も保存する（Esc で閉じると change が来ない）/ on closing, save what a field still being typed holds (closing with Esc fires no change)
+  // on closing, save what a field still being typed holds (closing with Esc fires no change)
   hide(): void {
     if (this.dirty) this.save();
     super.hide();
   }
 
-  // 設定画面の外（表の右クリックなど）から色を変えたときに、開いていれば描き直す
   // redraw from outside the tab (e.g. a right-click in the table) when it happens to be open
   refreshIfOpen(): void {
     if (this.declarative) this.updateDeclarative();
     else if (this.containerEl.firstChild) this.draw();
   }
 
-  // 構造が変わる操作のあとの描き直し。描画経路に応じて振り分ける
   // redraw after a change that alters the structure, routed by which renderer is in use
   private redraw(): void {
     if (this.declarative) this.updateDeclarative();
     else this.draw();
   }
 
-  // update() は @since 1.13.0。minAppVersion 1.11.4 を保つため型付きの直接呼び出しを避け、
-  // 実行時に存在するときだけ呼ぶ（1.12 以下では declarative が false なのでそもそも通らない）。
   // update() is @since 1.13.0; to keep minAppVersion at 1.11.4 we avoid a typed direct call and
   // invoke it only when it exists at runtime (on 1.12 and older, `declarative` is never true).
   private updateDeclarative(): void {
     (this as unknown as { update?: () => void }).update?.();
   }
 
-  // ===== 各入力欄の組み立て（推奨の getSettingDefinitions と display() フォールバックで共有）=====
   // ===== control builders shared by getSettingDefinitions and the display() fallback =====
   private ctlRootFolder(setting: Setting): void {
     const s = this.plugin.settings;
-    // 打ち終えたとき（確定時）にだけ保存する（打ちかけのフォルダでボードを読み直さない）/ saved on commit only, so boards don't reload on a half-typed folder
+    // saved on commit only, so boards don't reload on a half-typed folder
     setting.addText((t) => {
       t.setPlaceholder(tr().setDefaultFolderPlaceholder).setValue(s.rootFolder);
       t.inputEl.addEventListener("change", () => {
         s.rootFolder = t.getValue().trim();
+        this.save();
+      });
+    });
+  }
+
+  private ctlTemplate(setting: Setting): void {
+    const s = this.plugin.settings;
+    setting.addText((t) => {
+      t.setPlaceholder(tr().setTemplatePlaceholder).setValue(s.taskTemplate);
+      t.inputEl.addEventListener("change", () => {
+        s.taskTemplate = t.getValue().trim();
         this.save();
       });
     });
@@ -394,7 +426,7 @@ export class GanttSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     setting.addDropdown((d) =>
       d
-        .addOptions({ "YYYY/MM/DD": "YYYY/MM/DD", "DD/MM/YYYY": "DD/MM/YYYY", "MM/DD/YYYY": "MM/DD/YYYY" })
+        .addOptions({ "ddd D MMM": formatDate(dayToStr(todayIndex()), "ddd D MMM"), "YYYY/MM/DD": "YYYY/MM/DD", "DD/MM/YYYY": "DD/MM/YYYY", "MM/DD/YYYY": "MM/DD/YYYY" })
         .setValue(s.dateFormat)
         .onChange((v) => { s.dateFormat = v as DateFormat; this.save(); })
     );
@@ -403,20 +435,18 @@ export class GanttSettingTab extends PluginSettingTab {
   private ctlTimezone(setting: Setting): void {
     const s = this.plugin.settings;
     const opts: Record<string, string> = { system: tr().setTimezoneSystem };
-    // 代表都市付きで一覧化 / list offsets with representative cities
+    // list offsets with representative cities
     for (const [v, cities] of TZ_CITIES) opts[v] = `GMT${v} — ${cities}`;
-    // 旧バージョンで保存した一覧外のオフセットも選択肢に残す / keep a saved offset selectable even if it left the list
+    // keep a saved offset selectable even if it left the list
     if (s.tz !== "system" && !opts[s.tz]) opts[s.tz] = `GMT${s.tz}`;
     setting.addDropdown((d) => d.addOptions(opts).setValue(s.tz).onChange((v) => { s.tz = v; this.save(); }));
   }
 
-  // 休日の曜日（よくある組み合わせから選ぶ。一覧外の保存値もそのまま残す）
   // non-working weekdays, picked from common patterns (a saved value outside the list stays selectable)
   private ctlNonWorkingDays(setting: Setting): void {
     const s = this.plugin.settings;
-    // キーは数字だけにしない（整数風のキーはオブジェクトの先頭へ並び替わり、選択肢の順が崩れる）
     // keys aren't bare digits: integer-like keys get hoisted to the front of an object and reorder the options
-    // 既定（金・土、日〜木の週）を先頭に / the default (Friday and Saturday, a Sunday-to-Thursday week) comes first
+    // the default (Friday and Saturday, a Sunday-to-Thursday week) comes first
     const presets: Record<string, number[]> = { friSat: [5, 6], satSun: [0, 6], sun: [0], none: [] };
     const opts: Record<string, string> = {
       friSat: tr().setWeekendFriSat,
@@ -444,7 +474,7 @@ export class GanttSettingTab extends PluginSettingTab {
     setting.addToggle((t) => t.setValue(s.autoScheduleFS).onChange((v) => { s.autoScheduleFS = v; this.save(); }));
   }
 
-  // ===== 日付による自動ステータス / automatic status by date =====
+  // ===== automatic status by date =====
   private ctlAutoStatus(setting: Setting): void {
     const a = this.plugin.settings.autoStatus;
     setting.addToggle((t) => t.setValue(a.enabled).onChange((v) => {
@@ -453,24 +483,22 @@ export class GanttSettingTab extends PluginSettingTab {
     }));
   }
 
-  // 開始後（「進行中」グループ）・完了後（「完了」グループ）のステータス。表示する値は既定を解決したもの
   // the started (active group) or finished (completed group) status; the shown value is the resolved default
   private ctlAutoStatusTarget(setting: Setting, which: "started" | "finished"): void {
     const s = this.plugin.settings;
     const group = which === "started" ? "active" : "completed";
     const cur = autoStatusTargets(s.statuses, s.autoStatus)[which];
     setting.addDropdown((d) => {
-      if (!cur) d.addOption("", "—"); // 当てはまるステータスがまだ無い / no matching status yet
+      if (!cur) d.addOption("", "—"); // no matching status yet
       for (const st of s.statuses.filter((x) => x.group === group)) d.addOption(st.id, st.label);
       d.setValue(cur ?? "").onChange((v) => {
         s.autoStatus[which] = v;
         this.save();
-        if (which === "started") this.redraw(); // 未着手の候補が変わる / the not-started choices change
+        if (which === "started") this.redraw(); // the not-started choices change
       });
     });
   }
 
-  // 未着手とみなすステータス（「進行中」グループのうち開始後以外）。最後の 1 つは外せない（空は既定に戻ってしまうため）
   // the statuses that count as not started (active ones other than the started target); the last one can't be unticked (empty means the default)
   private ctlAutoStatusNotStarted(setting: Setting): void {
     const s = this.plugin.settings;
@@ -496,9 +524,8 @@ export class GanttSettingTab extends PluginSettingTab {
     sync();
   }
 
-  // ===== 表の列 / table columns =====
+  // ===== table columns =====
 
-  // 列 1 行：表に表示・上下の矢印・幅。隠した列は一覧の下に薄く並び、同じように操作できる（幅などの設定は消えない）
   // one column row: show in the table, up/down arrows and the width; hidden columns sit dimmed at the bottom and work the same (their settings are kept)
   private ctlColumnRow(setting: Setting, col: ColumnDef, on: boolean, canUp: boolean, canDown: boolean): void {
     const s = this.plugin.settings;
@@ -521,7 +548,7 @@ export class GanttSettingTab extends PluginSettingTab {
         b.buttonEl.dataset.col = `${col.id}|${dir}`;
       });
     }
-    // 幅（空欄＝既定幅）。隠した列も変えられる / the width (blank = the default); hidden columns can be changed too
+    // the width (blank = the default); hidden columns can be changed too
     setting.addText((t) => {
       t.inputEl.type = "number";
       t.inputEl.min = "40";
@@ -538,7 +565,6 @@ export class GanttSettingTab extends PluginSettingTab {
     });
   }
 
-  // 列の表示・並びを変えて描き直し、フォーカスを同じ操作へ戻す（端で押せなくなった矢印なら反対向きへ）
   // change the columns' visibility or order, redraw, and put focus back on the same control (on the other arrow once one is disabled at an end)
   private changeColumns(focus: string, change: () => void): void {
     change();
@@ -551,7 +577,7 @@ export class GanttSettingTab extends PluginSettingTab {
     }, 0);
   }
 
-  // 色の選択欄：色見本のボタンでパレット（＋カスタム）を開く / a colour control: a swatch button that opens the palette (+ custom)
+  // a colour control: a swatch button that opens the palette (+ custom)
   private ctlColor(setting: Setting, get: () => string, set: (color: string) => void): Setting {
     return setting.addButton((b) => {
       b.buttonEl.addClass("ogantt-swatch");
@@ -565,8 +591,8 @@ export class GanttSettingTab extends PluginSettingTab {
     });
   }
 
-  // 稲妻線の色（パレット＋既定に戻すボタン）/ progress line color (palette + reset to default)
-  // この端末の名前は data.json ではなく端末のローカルストレージへ（共有の Vault で人ごとに違う）/ this device's name lives in local storage, not data.json (it differs per person in a shared vault)
+  // progress line color (palette + reset to default)
+  // this device's name lives in local storage, not data.json (it differs per person in a shared vault)
   private ctlMe(setting: Setting): void {
     const app = this.plugin.app;
     setting.addText((t) => t.setValue((app.loadLocalStorage(ME_KEY) as string | null) ?? "").onChange((v) => app.saveLocalStorage(ME_KEY, v.trim() || null)));
@@ -599,13 +625,11 @@ export class GanttSettingTab extends PluginSettingTab {
         b.setIcon("rotate-ccw").setTooltip(tr().setResetTooltip).onClick(() => {
           s.progressLineColor = DEFAULT_SETTINGS.progressLineColor;
           this.save();
-          this.redraw(); // ピッカーの表示値を戻す / refresh the picker's shown value
+          this.redraw(); // refresh the picker's shown value
         })
       );
   }
 
-  // 一覧の列名。行には名前欄が無く id/ラベル/グループ/色が並ぶだけなので、どれが何かを見出しで示す。
-  // 列はグリッド（.ogantt-status-row）が決めるので、見出しの 4 つとコントロールの 4 つが同じ列に載る
   // column names for the list: a row is just id/label/group/color with no name field, so say which is
   // which. The grid on .ogantt-status-row places the columns, so the four labels land on the four
   // controls regardless of how wide each control renders
@@ -618,20 +642,17 @@ export class GanttSettingTab extends PluginSettingTab {
     c.createSpan({ text: tr().setStatusColor });
   }
 
-  // ステータス 1 行（削除ボタンまで含む）。宣言版の onDelete は使わず行に持たせることで、
-  // 一覧の先頭に列見出しの行を差し込んでも削除の対象がずれない
   // one status row, delete button included: keeping deletion on the row instead of the framework's
   // onDelete means a column-header row at the top of the list can't throw off which row gets removed
   private ctlStatusRow(setting: Setting, st: StatusDef): void {
     setting
       .addText((t) => {
-        // id は打ち終えたとき（確定時）にだけ変えて保存する（打ちかけの id で自動ステータスが動かないように）。自動ステータスの行き先・未着手の一覧もついて行く
         // the id changes and saves only on commit (so automatic status never runs on a half-typed id); the automatic-status targets follow it
         t.setPlaceholder(tr().setStatusId).setValue(st.id);
         t.inputEl.addEventListener("change", () => void (async () => {
           const was = st.id;
           const id = t.getValue().trim();
-          // 空や他と同じ id は受け付けず元へ戻す / an empty or already-used id is refused and put back
+          // an empty or already-used id is refused and put back
           if (!id || this.plugin.settings.statuses.some((o) => o !== st && o.id === id)) return void t.setValue(was);
           if (id === was) return;
           st.id = id;
@@ -639,14 +660,14 @@ export class GanttSettingTab extends PluginSettingTab {
           renameStatusInFilters(this.plugin.settings, was, id);
           this.plugin.renameStatusInTabs(was, id);
           this.save();
-          // そのステータスのノートもついて行く（残すと終わった仕事が「未完了」に見える）/ the notes holding it follow (left behind, finished work would read as open)
+          // the notes holding it follow (left behind, finished work would read as open)
           const n = await renameStatusInNotes(this.app, this.plugin.settings.rootFolder ?? "", this.plugin.settings.keys.status, was, id);
           if (n) new Notice(tr().statusIdRenamed(n));
         })());
       })
       .addText((t) => {
-        t.setPlaceholder(tr().setStatusLabel).setValue(st.label).onChange((v) => { st.label = v; this.dirty = true; }); // 保存は確定時（下）/ saved on commit (below)
-        // 名前で覚えている見出しのアイコン・畳み状態は、打ち終えたとき（確定時）にまとめて付け替える / the heading icon and collapse state kept by name move once, on commit
+        t.setPlaceholder(tr().setStatusLabel).setValue(st.label).onChange((v) => { st.label = v; this.dirty = true; }); // saved on commit (below)
+        // the heading icon and collapse state kept by name move once, on commit
         let was = st.label;
         t.inputEl.addEventListener("change", () => {
           this.plugin.renameStatusKeys(was, st.label);
@@ -654,7 +675,6 @@ export class GanttSettingTab extends PluginSettingTab {
           this.save();
         });
       })
-      // グループ（完了/未完了の判定に使う。種類は Wrike と同じ 4 固定）
       // the group behind the completed/incomplete distinction; the four are fixed, as in Wrike
       .addDropdown((d) => {
         for (const g of STATUS_GROUPS) d.addOption(g, statusGroupLabel(g));
@@ -663,7 +683,6 @@ export class GanttSettingTab extends PluginSettingTab {
             const warned = this.statusGroupWarning() !== undefined;
             st.group = v as StatusGroup;
             this.save();
-            // 注意書きの有無が変わったときだけ描き直す（毎回だと入力中のフォーカスが飛ぶ）
             // redraw only when the advisory appears or disappears; doing it always steals focus
             if (warned !== (this.statusGroupWarning() !== undefined)) this.redraw();
           })
@@ -672,7 +691,6 @@ export class GanttSettingTab extends PluginSettingTab {
     this.ctlColor(setting, () => st.color, (c) => (st.color = c))
       .addExtraButton((b) =>
         b.setIcon("trash").setTooltip(tr().setDeleteTooltip).onClick(() => {
-          // 番号ではなく行そのものを探して消す（描画後に並びが変わっていても巻き込まない）
           // locate the row by identity, not by index, so a reordered list can't take out the wrong one
           const live = this.plugin.settings.statuses;
           const at = live.indexOf(st);
@@ -684,7 +702,7 @@ export class GanttSettingTab extends PluginSettingTab {
       );
   }
 
-  // Custom field 一覧の列見出し（キー / 表示名 / 種類）/ column names for the custom field list (key / label / type)
+  // column names for the custom field list (key / label / type)
   private ctlCustomFieldHeader(setting: Setting): void {
     setting.setClass("ogantt-setting-row").setClass("ogantt-cf-row").setClass("ogantt-setting-head");
     const c = setting.controlEl;
@@ -693,8 +711,6 @@ export class GanttSettingTab extends PluginSettingTab {
     c.createSpan({ text: tr().setCfType });
   }
 
-  // Custom field 1 行（キー・表示名・種類・削除）。キーは打つたびではなく確定時（Enter・フォーカス外れ）に反映する。
-  // 打ち替えの途中で列が別のプロパティを読んで空になるのを防ぎ、ノート側のキー変更も確定時に尋ねるため
   // one custom field row (key, label, type, delete). The key applies on commit (Enter / blur), not per keystroke,
   // so the column doesn't read some half-typed property and go blank, and renaming it in notes is asked once
   private ctlCustomFieldRow(setting: Setting, f: CustomField): void {
@@ -705,7 +721,7 @@ export class GanttSettingTab extends PluginSettingTab {
       })
       .addText((t) => {
         t.setPlaceholder(tr().setCfLabel).setValue(f.label).onChange((v) => { f.label = v; this.dirty = true; });
-        t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存（打つたびに全ボードを描き直さない）/ saved once typed, not redrawing every board per key
+        t.inputEl.addEventListener("change", () => this.save()); // saved once typed, not redrawing every board per key
       })
       .addDropdown((d) => {
         d.addOption("text", tr().cfTypeText).addOption("number", tr().cfTypeNumber).addOption("date", tr().cfTypeDate);
@@ -715,7 +731,6 @@ export class GanttSettingTab extends PluginSettingTab {
       })
       .addExtraButton((b) =>
         b.setIcon("trash").setTooltip(tr().setDeleteTooltip).onClick(() => {
-          // 列の表示・幅・並べ替えの設定も片付ける（ノートの値には触れない）
           // tidy up the column's visibility, width and sort (the values in notes are left alone)
           const s = this.plugin.settings;
           const at = s.customFields.indexOf(f);
@@ -734,8 +749,6 @@ export class GanttSettingTab extends PluginSettingTab {
       );
   }
 
-  // キーの確定。旧キーの値を持つノートがあれば、ノート側のキーも変えるか尋ねる（設定画面に取り消しは無いので確認を挟む）。
-  // 新旧どちらかが組み込みキー・他フィールドと重複するときは、ノートに触れず設定だけ変える
   // commit a key change. If notes hold values under the old key, ask whether to rename it there too (the settings
   // tab has no undo, hence the dialog). When either key clashes with a built-in or another field, only the setting changes
   private commitCustomFieldKey(f: CustomField, input: TextComponent): void {
@@ -747,7 +760,6 @@ export class GanttSettingTab extends PluginSettingTab {
       const before = this.customFieldWarnings().join("|");
       f.key = newKey;
       this.save();
-      // 注意書きの有無・中身が変わったときだけ描き直す（確定時なので入力中のフォーカスは奪わない）
       // redraw only when the advisory changes (this runs on commit, so no typing is interrupted)
       if (this.customFieldWarnings().join("|") !== before) this.redraw();
     };
@@ -774,14 +786,13 @@ export class GanttSettingTab extends PluginSettingTab {
           })(),
         },
       ],
-      // 選ばずに閉じたら元のキーへ / closing without a choice reverts the key
+      // closing without a choice reverts the key
       onDismiss: () => {
         input.setValue(oldKey);
       },
     }).open();
   }
 
-  // Custom field を 1 件追加。id は不変（キーを変えても列の設定が外れない）。追加した列は最初から表示する
   // add a custom field; its id never changes (renaming the key keeps the column's settings), and its column starts out visible
   private addCustomField(): void {
     const s = this.plugin.settings;
@@ -792,8 +803,6 @@ export class GanttSettingTab extends PluginSettingTab {
     this.redraw();
   }
 
-  // Custom field の注意書き（空キー・組み込みキーとの衝突・重複）。何も無ければ空配列＝行を置かない。
-  // 行を置いて隠すだけだと、宣言版では外枠（空のグループ）が残るため
   // the custom field advisory (empty keys, clashes with built-in keys, duplicates); empty means no row at all —
   // placing a row and hiding it leaves an empty group frame behind in the declarative tab
   private customFieldWarnings(): string[] {
@@ -809,13 +818,12 @@ export class GanttSettingTab extends PluginSettingTab {
     return [...lines];
   }
 
-  // 注意書きの行の中身（1 件 1 行）/ fill the advisory row, one line per issue
+  // fill the advisory row, one line per issue
   private ctlCustomFieldWarning(setting: Setting, lines: string[]): void {
     setting.setClass("ogantt-setting-warn");
     for (const line of lines) setting.descEl.createDiv({ text: line });
   }
 
-  // 「完了」が空だと完了プリセットが常に 0 件になるので、その旨だけ伝える（禁止はしない）
   // an empty Completed group makes the completed preset always empty; say so without forbidding it
   private statusGroupWarning(): string | undefined {
     return this.plugin.settings.statuses.some((s) => s.group === "completed")
@@ -823,7 +831,6 @@ export class GanttSettingTab extends PluginSettingTab {
       : tr().setNoCompletedStatus;
   }
 
-  // 色を指定したタグの1行。行が存在する＝色を指定している、なので色は常に具体値を持つ
   // one row per explicitly coloured tag; a row exists only when a colour is set, so it's never empty
   private ctlTagColorRow(setting: Setting, tc: { name: string; color: string }): void {
     setting.addText((t) => t.setValue(tc.name).setDisabled(true));
@@ -833,14 +840,12 @@ export class GanttSettingTab extends PluginSettingTab {
       );
   }
 
-  // 一覧の並び。順序に意味は無く、追加元が2箇所あって挿入順が予測できないのでタグ名の昇順で固定する
   // display order: the list is a lookup table with no meaningful order, and rows arrive from two
   // different places, so insertion order is unpredictable — sort by tag name instead
   private sortedTagColors(): { name: string; color: string }[] {
     return this.plugin.settings.tagColors.slice().sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // 色指定を解除する（＝一覧から外す）。設定画面には取り消しが無いので確認を挟む
   // drop a colour override, which removes the row; the settings tab has no undo, so confirm first
   private confirmRemoveTagColor(tc: { name: string; color: string }): void {
     new ConfirmModal(this.plugin.app, {
@@ -859,7 +864,6 @@ export class GanttSettingTab extends PluginSettingTab {
     }).open();
   }
 
-  // 色を付けるタグを Vault の一覧から選ぶ（手入力だと名前を間違えて色が効かない）
   // pick the tag to colour from the vault's own list; typing it by hand invites a silent typo
   private pickTagToColor(): void {
     const s = this.plugin.settings;
@@ -870,20 +874,20 @@ export class GanttSettingTab extends PluginSettingTab {
       return;
     }
     new PickModal(this.plugin.app, choices, (tag) => tag, tr().setPickTagPlaceholder, (tag) => {
-      // 既定色を初期値にして、そこから変えてもらう / seed with the default so the user edits from there
+      // seed with the default so the user edits from there
       s.tagColors.push({ name: tag, color: toHex(s.defaultTagColor || obsidianTagColor()) });
       this.save();
       this.redraw();
     }).open();
   }
 
-  // タグの既定色（空＝名前から自動生成）/ default tag color (empty = auto from the name)
+  // default tag color (empty = auto from the name)
   private ctlDefaultTagColor(setting: Setting): void {
     const s = this.plugin.settings;
     this.ctlColor(setting, () => s.defaultTagColor || obsidianTagColor(), (c) => (s.defaultTagColor = c))
       .addExtraButton((b) =>
         b.setIcon("rotate-ccw").setTooltip(tr().setDefaultTagColorAuto).onClick(() => {
-          s.defaultTagColor = ""; // Obsidian 本体のタグ色へ戻す / back to Obsidian's own tag color
+          s.defaultTagColor = ""; // back to Obsidian's own tag color
           this.save();
           this.redraw();
         })
@@ -892,7 +896,7 @@ export class GanttSettingTab extends PluginSettingTab {
 
   private ctlKeyRow(setting: Setting, k: keyof GanttSettings["keys"]): void {
     const s = this.plugin.settings;
-    // 打ち終えたとき（確定時）にだけ保存する（打ちかけのキーで自動ステータスが全ノートを読み違えないように）/ saved on commit only, so automatic status never reads every note with a half-typed key
+    // saved on commit only, so automatic status never reads every note with a half-typed key
     setting.addText((t) => {
       t.setValue(s.keys[k]);
       t.inputEl.addEventListener("change", () => {
@@ -907,7 +911,7 @@ export class GanttSettingTab extends PluginSettingTab {
     const n = this.plugin.settings.notify;
     setting.addText((t) => {
       t.setPlaceholder(placeholder).setValue(n[key]).onChange((v) => { n[key] = v.trim(); this.dirty = true; });
-      t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存 / saved once typed
+      t.inputEl.addEventListener("change", () => this.save()); // saved once typed
     });
   }
 
@@ -926,18 +930,105 @@ export class GanttSettingTab extends PluginSettingTab {
     );
   }
 
-  // ===== Google カレンダー同期の各行 / the Google Calendar sync rows =====
-  // display() と getSettingDefinitions() の両方から使うため、行ごとにヘルパー化する
+  // ===== the Google Calendar sync rows =====
   // one helper per row, shared by display() and getSettingDefinitions() so the two can't drift
   private ctlGcalClientId(setting: Setting): void {
     const g = this.plugin.settings.gcal;
     setting.addText((t) => {
       t.setValue(g.clientId).onChange((v) => { g.clientId = v.trim(); this.dirty = true; });
-      t.inputEl.addEventListener("change", () => this.save()); // 打ち終えたときに保存 / saved once typed
+      t.inputEl.addEventListener("change", () => this.save()); // saved once typed
     });
   }
 
-  // 入力値は data.json ではなく SecretStorage へ保存 / saved to SecretStorage, not data.json
+  // one of the assistant's text settings, saved once typed; the model field offers the models a check found
+  private ctlAi(setting: Setting, key: "url" | "model" | "chatPath" | "embedModel" | "embedPath", placeholder: string): void {
+    const a = this.plugin.settings.ai;
+    setting.addText((t) => {
+      t.setPlaceholder(placeholder).setValue(a[key]).onChange((v) => { a[key] = v.trim(); this.dirty = true; });
+      t.inputEl.addEventListener("change", () => this.save());
+      if (key === "model") t.inputEl.setAttr("list", "ogantt-ai-models");
+    });
+  }
+
+  // the team's instructions, or a JSON object checked as it's typed (what's wrong shown under the description)
+  private ctlAiArea(setting: Setting, key: "instructions" | "body" | "headers", placeholder: string): void {
+    const a = this.plugin.settings.ai;
+    setting.settingEl.addClass("ogantt-setting-stacked"); // the box goes under the description, full width
+    const error = key === "instructions" ? null : setting.descEl.createDiv({ cls: "ogantt-setting-error" });
+    const check = (v: string) => {
+      const r = jsonObject(v);
+      error?.setText(typeof r === "string" ? tr().aiBadJson(setting.nameEl.getText(), r) : "");
+    };
+    setting.addTextArea((t) => {
+      t.setPlaceholder(placeholder).setValue(a[key]).onChange((v) => { a[key] = v; this.dirty = true; if (error) check(v); });
+      t.inputEl.addEventListener("change", () => this.save());
+      t.inputEl.rows = 3;
+      t.inputEl.addClass("ogantt-ai-area");
+      if (error) {
+        t.inputEl.addClass("is-code");
+        t.inputEl.spellcheck = false;
+        check(a[key]);
+      }
+    });
+  }
+
+  // the API; its usual endpoint follows when the path was the other one's
+  private ctlAiApi(setting: Setting): void {
+    const a = this.plugin.settings.ai;
+    setting.addDropdown((d) => d.addOption("chat", tr().aiApiChat).addOption("responses", tr().aiApiResponses).setValue(a.api).onChange((v) => {
+      if (a.chatPath === AI_PATHS[a.api]) a.chatPath = AI_PATHS[v as AiSettings["api"]];
+      a.api = v as AiSettings["api"];
+      this.save();
+      this.redraw();
+    }));
+  }
+
+  private ctlAiTimeout(setting: Setting): void {
+    const a = this.plugin.settings.ai;
+    setting.addText((t) => {
+      t.inputEl.type = "number";
+      t.inputEl.min = "10";
+      t.setValue(String(a.timeout)).onChange((v) => {
+        const n = Math.round(Number(v));
+        if (n >= 10) { a.timeout = n; this.dirty = true; }
+      });
+      t.inputEl.addEventListener("change", () => this.save());
+    });
+  }
+
+  // Check: the server's models (offered in the Model field), a short chat with the tools and the embeddings, a line each
+  private ctlAiCheck(setting: Setting): void {
+    setting.addButton((b) => b.setButtonText(tr().setAiCheckButton).onClick(async () => {
+      if (this.dirty) this.save();
+      b.setDisabled(true);
+      setting.descEl.setText(tr().aiChecking);
+      const { lines, models } = await checkAi(this.plugin);
+      setting.descEl.empty();
+      for (const l of lines) setting.descEl.createDiv({ cls: l.ok ? "ogantt-check is-ok" : "ogantt-check is-bad", text: l.text });
+      const list = this.containerEl.querySelector("#ogantt-ai-models") ?? this.containerEl.createEl("datalist", { attr: { id: "ogantt-ai-models" } });
+      list.empty();
+      for (const m of models) list.createEl("option", { attr: { value: m } });
+      b.setDisabled(false);
+    }));
+  }
+
+  // the advanced connection rows show when asked for, or when any of them is set
+  private aiAdvanced?: boolean;
+  private showAiAdvanced(): boolean {
+    const a = this.plugin.settings.ai;
+    const d = DEFAULT_SETTINGS.ai;
+    return (this.aiAdvanced ??= (["api", "chatPath", "embedModel", "embedPath", "body", "headers", "timeout"] as const).some((k) => a[k] !== d[k]));
+  }
+
+  // saved to SecretStorage, not data.json
+  private ctlAiKey(setting: Setting): void {
+    setting.addText((t) => {
+      t.inputEl.type = "password";
+      t.setValue(aiKey(this.plugin)).onChange((v) => setAiKey(this.plugin, v.trim()));
+    });
+  }
+
+  // saved to SecretStorage, not data.json
   private ctlGcalClientSecret(setting: Setting): void {
     setting.addText((t) => {
       t.inputEl.type = "password";
@@ -945,12 +1036,10 @@ export class GanttSettingTab extends PluginSettingTab {
     });
   }
 
-  // 接続 / 切断（押すと接続状態が変わるので、完了後に描き直す）/ connect / disconnect, redrawn once the state flips
+  // connect / disconnect, redrawn once the state flips
   private ctlGcalAccount(setting: Setting): void {
     setting.addButton((b) => {
       if (isConnected(this.plugin)) {
-        // setDestructive() は @since 1.13.0 で minAppVersion 1.11.4 と両立しない（no-unsupported-api エラー）。
-        // 非推奨の setWarning() も避け、それが付けるのと同じ mod-warning クラスを直接付ける。
         // setDestructive() requires @since 1.13.0, incompatible with minAppVersion 1.11.4 (trips no-unsupported-api);
         // instead of the deprecated setWarning(), add the same mod-warning class it applies.
         b.buttonEl.addClass("mod-warning");
@@ -967,14 +1056,14 @@ export class GanttSettingTab extends PluginSettingTab {
     });
   }
 
-  // 同期先カレンダー（一覧は非同期で取得して差し込む）/ target calendar (the list loads asynchronously)
+  // target calendar (the list loads asynchronously)
   private ctlGcalCalendar(setting: Setting): void {
     const g = this.plugin.settings.gcal;
     setting.addDropdown((d) => {
       if (g.calendarId) d.addOption(g.calendarId, g.calendarName || g.calendarId);
       else d.addOption("", "—");
       d.setValue(g.calendarId);
-      // 宣言版は未接続でも（非表示の）行を描くので、接続中だけ一覧を取りに行く / the declarative tab renders hidden rows too, so only fetch while connected
+      // the declarative tab renders hidden rows too, so only fetch while connected
       if (!isConnected(this.plugin)) return;
       void listCalendars(this.plugin)
         .then((cals) => {
@@ -985,7 +1074,7 @@ export class GanttSettingTab extends PluginSettingTab {
           d.onChange((v) => {
             g.calendarId = v;
             g.calendarName = cals.find((c) => c.id === v)?.summary ?? v;
-            // カレンダーを替えたら同期状態はリセット / switching calendars resets the sync state
+            // switching calendars resets the sync state
             g.syncToken = "";
             g.state = {};
             this.save();
@@ -1002,7 +1091,7 @@ export class GanttSettingTab extends PluginSettingTab {
 
   private ctlGcalScope(setting: Setting): void {
     const g = this.plugin.settings.gcal;
-    // 打ち終えたとき（確定時）にだけ保存する（打ちかけのフォルダで同期の範囲が変わらない）/ saved on commit only, so a half-typed folder never becomes the sync scope
+    // saved on commit only, so a half-typed folder never becomes the sync scope
     setting.addText((t) => {
       t.setPlaceholder(tr().setDefaultFolderPlaceholder).setValue(g.scopeFolder);
       t.inputEl.addEventListener("change", () => {
@@ -1036,32 +1125,28 @@ export class GanttSettingTab extends PluginSettingTab {
       b.setButtonText(tr().setGcalSyncNow).onClick(() => void (async () => {
         const ok = await syncGcal(this.plugin, { pull: true });
         new Notice(ok ? tr().gcalSyncDone : `⚠️ ${g.lastError || "(console)"}`);
-        this.redraw(); // 最終同期時刻・エラー表示を更新 / refresh the last-sync time and any error
+        this.redraw(); // refresh the last-sync time and any error
       })())
     );
   }
 
-  // 「今すぐ同期」行の説明（最終同期時刻 or 直近のエラー）/ the sync-now row's description
+  // the sync-now row's description
   private gcalStatusDesc(): string {
     const g = this.plugin.settings.gcal;
     if (g.lastError) return `⚠️ ${g.lastError}`;
     return g.lastSync ? tr().gcalLastSync(new Date(g.lastSync).toLocaleString()) : "";
   }
 
-  // ===== getSettingDefinitions()（@since 1.13.0・宣言的設定）=====
-  // 1.13 以降はこちらが使われ、display() は呼ばれない。1.12 以下は本メソッドを知らないので
-  // display() にフォールバックする（公式の Path B）。行の中身は ctl* ヘルパーを両経路で共有し、
-  // 二重管理によるズレを防ぐ。ここでは 1.13 専用の実行時 API を一切呼ばない。
   // ===== getSettingDefinitions() (@since 1.13.0, declarative settings) =====
   // Used from 1.13 on, where display() is skipped; older versions don't know this method and fall
   // back to display() (the official Path B). Row contents come from the shared ctl* helpers so the
   // two paths can't drift. No 1.13-only runtime API is called from here.
   getSettingDefinitions(): SettingDefinitionItem[] {
-    this.declarative = true; // 再描画の経路を update() 側へ / route redraws to update()
+    this.declarative = true; // route redraws to update()
     return this.definitions();
   }
 
-  // 設定項目の定義（宣言版と display() の両方がここから描く）/ the setting definitions both renderers draw from
+  // the setting definitions both renderers draw from
   private definitions(): SettingDefinitionItem[] {
     const s = this.plugin.settings;
     const connected = (): boolean => Platform.isDesktop && isConnected(this.plugin);
@@ -1072,6 +1157,7 @@ export class GanttSettingTab extends PluginSettingTab {
     const items: SettingDefinitionItem[] = [
       { name: tr().setDefaultFolderName, desc: tr().setDefaultFolderDesc, render: (x) => this.ctlRootFolder(x) },
       { name: tr().setRecurseName, desc: tr().setRecurseDesc, render: (x) => this.ctlRecurse(x) },
+      { name: tr().setTemplateName, desc: tr().setTemplateDesc, render: (x) => this.ctlTemplate(x) },
       { name: tr().setDefaultZoomName, render: (x) => this.ctlZoom(x) },
       { name: tr().setDateFormatName, render: (x) => this.ctlDateFormat(x) },
       { name: tr().setMeName, desc: tr().setMeDesc, render: (x) => this.ctlMe(x) },
@@ -1085,26 +1171,22 @@ export class GanttSettingTab extends PluginSettingTab {
         desc: tr().setProgressLineColorDesc,
         render: (x) => this.ctlProgressLineColor(x),
       },
-      // 日付による自動ステータス（見つけやすいよう、全般の設定のすぐ後）/ automatic status by date (right after the general settings, easy to find)
+      // automatic status by date (right after the general settings, easy to find)
       {
         type: "group",
         heading: tr().setAutoStatusHeading,
         items: [
           { name: tr().setAutoStatusName, desc: tr().setAutoStatusDesc, render: (x) => this.ctlAutoStatus(x) },
-          // 行き先は OFF のうちから選べる（ON にした最初の実行から選んだとおりに動く）/ the targets can be picked while it's off, so the first run already follows them
+          // the targets can be picked while it's off, so the first run already follows them
           { name: tr().setAutoStatusStarted, render: (x) => this.ctlAutoStatusTarget(x, "started") },
           { name: tr().setAutoStatusNotStarted, render: (x) => this.ctlAutoStatusNotStarted(x) },
           { name: tr().setAutoStatusFinished, render: (x) => this.ctlAutoStatusTarget(x, "finished") },
         ],
       },
-      // ステータス（追加はフレームワークの list、削除は行内のゴミ箱）/ statuses (the list owns add; rows own delete)
+      // statuses (the list owns add; rows own delete)
       {
         type: "list",
         heading: tr().setStatusesHeading,
-        // name を空にして行ラベルを出さない（id/ラベル欄と二重表示になるため）。
-        // 行のクラスは render 内で付ける（定義側に cls が無いため）。
-        // 先頭は列見出しの行。onDelete を使わない＝どの行にも削除ボタンが付かないので、
-        // 見出し行が一覧に混ざっても消せてしまう心配がない
         // an empty name keeps the row label out (it would duplicate the id/label fields);
         // the row class goes on inside render, since definitions have no `cls` field.
         // The first entry is the column-header row: with no onDelete, the framework adds no delete
@@ -1122,19 +1204,17 @@ export class GanttSettingTab extends PluginSettingTab {
         addItem: {
           name: tr().setAddStatus,
           action: () => {
-            // 凡例からの追加と同じ決まり（重ならない id・まだ使っていない色）/ the same rule as adding from the legend (a unique id, an unused colour)
+            // the same rule as adding from the legend (a unique id, an unused colour)
             s.statuses.push(newStatus(s.statuses, "New"));
             this.save();
-            this.redraw(); // 1.13 より前の設定画面も描き直す / the pre-1.13 settings tab redraws too
+            this.redraw(); // the pre-1.13 settings tab redraws too
           },
         },
       },
-      // 「完了」グループが空のときだけ出る注意書き。一覧の直後に置くと文脈が伝わる
       // shown only when the Completed group is empty; right after the list, where it reads in context
       ...(statusWarn
         ? [{ name: "", desc: statusWarn, render: (x: Setting) => { x.setClass("ogantt-setting-warn"); } }]
         : []),
-      // Custom field（説明→列見出し→行、追加はフレームワークの list、削除は行内のゴミ箱）
       // custom fields: description, column header, rows; the list owns add, rows own delete
       {
         type: "list",
@@ -1152,23 +1232,21 @@ export class GanttSettingTab extends PluginSettingTab {
         ],
         addItem: { name: tr().setAddCustomField, action: () => this.addCustomField() },
       },
-      // 注意書きがあるときだけ置く / the advisory, only when there is something to say
+      // the advisory, only when there is something to say
       ...(cfWarnings.length > 0 ? [{ name: "", render: (x: Setting) => this.ctlCustomFieldWarning(x, cfWarnings) }] : []),
-      // 表の列：表示中の列を表の順に、その下に隠した列 / table columns: the shown ones in table order, the hidden ones below
+      // table columns: the shown ones in table order, the hidden ones below
       {
         type: "group",
         heading: tr().setColumnsHeading,
         items: [
-          { name: "", desc: tr().setColumnsDesc, render: () => {} }, // render が無いと宣言版は名前の無い行を描かない / without a render the declarative tab skips a nameless row
+          { name: "", desc: tr().setColumnsDesc, render: () => {} }, // without a render the declarative tab skips a nameless row
           ...columnList(allColumns(this.plugin.settings), s.visibleColumns, s.columnOrder).map(({ col, on }, i, list): SettingGroupItem => ({
             name: "",
             render: (x) => this.ctlColumnRow(x, col, on, list[i - 1]?.on === on, list[i + 1]?.on === on),
           })),
         ],
       },
-      // タグの色（フォルダの色は表で右クリック）/ tag colors (folder colors via right-click in the table)
-      // 見出しの無い単独項目は直前のグループ（ステータス）に吸い寄せられて見えるので、
-      // 既定色は「タグの色」見出しを持つグループの中に置く
+      // tag colors (folder colors via right-click in the table)
       // a headingless item reads as part of the preceding group (statuses), so the default color
       // lives inside a group that carries the "Tag colors" heading
       {
@@ -1186,7 +1264,6 @@ export class GanttSettingTab extends PluginSettingTab {
         type: "list",
         heading: tr().setTagColorsPerTag,
         emptyState: tr().setNoTagColors,
-        // 削除は行内の × に確認付きで持たせるので、フレームワークの onDelete は使わない
         // deletion lives on the row's own × with a confirm, so the framework's onDelete is not used
         items: this.sortedTagColors().map((tc): SettingGroupItem => ({
           name: "",
@@ -1194,7 +1271,34 @@ export class GanttSettingTab extends PluginSettingTab {
         })),
         addItem: { name: tr().setAddTagColor, action: () => this.pickTagToColor() },
       },
-      // 通知 / notifications
+      // notifications
+      // the plan assistant: a chat server on the team's network
+      {
+        type: "group",
+        heading: tr().setAiHeading,
+        items: [
+          { name: tr().setAiHeading, desc: tr().setAiDesc },
+          { name: tr().setAiUrlName, desc: tr().setAiUrlDesc, render: (x) => this.ctlAi(x, "url", "http://ai-server:11434/v1") },
+          { name: tr().setAiModelName, desc: tr().setAiModelDesc, render: (x) => this.ctlAi(x, "model", "gpt-oss:20b") },
+          { name: tr().setAiKeyName, desc: tr().setAiKeyDesc, render: (x) => this.ctlAiKey(x) },
+          { name: tr().setAiCheckName, desc: tr().setAiCheckDesc, render: (x) => this.ctlAiCheck(x) },
+          { name: tr().setAiInstructionsName, desc: tr().setAiInstructionsDesc, render: (x) => this.ctlAiArea(x, "instructions", tr().setAiInstructionsPlaceholder) },
+          {
+            name: tr().setAiAdvancedName,
+            desc: tr().setAiAdvancedDesc,
+            render: (x) => {
+              x.addToggle((t) => t.setValue(this.showAiAdvanced()).onChange((v) => { this.aiAdvanced = v; this.redraw(); }));
+            },
+          },
+          { name: tr().setAiApiName, desc: tr().setAiApiDesc, visible: () => this.showAiAdvanced(), render: (x) => this.ctlAiApi(x) },
+          { name: tr().setAiChatPathName, desc: tr().setAiChatPathDesc, visible: () => this.showAiAdvanced(), render: (x) => this.ctlAi(x, "chatPath", AI_PATHS[this.plugin.settings.ai.api]) },
+          { name: tr().setAiEmbedModelName, desc: tr().setAiEmbedModelDesc, visible: () => this.showAiAdvanced(), render: (x) => this.ctlAi(x, "embedModel", "bge-m3") },
+          { name: tr().setAiEmbedPathName, desc: tr().setAiEmbedPathDesc, visible: () => this.showAiAdvanced(), render: (x) => this.ctlAi(x, "embedPath", "/embeddings") },
+          { name: tr().setAiBodyName, desc: tr().setAiBodyDesc, visible: () => this.showAiAdvanced(), render: (x) => this.ctlAiArea(x, "body", '{"max_tokens": 2048}') },
+          { name: tr().setAiHeadersName, desc: tr().setAiHeadersDesc, visible: () => this.showAiAdvanced(), render: (x) => this.ctlAiArea(x, "headers", '{"api-key": "{key}"}') },
+          { name: tr().setAiTimeoutName, desc: tr().setAiTimeoutDesc, visible: () => this.showAiAdvanced(), render: (x) => this.ctlAiTimeout(x) },
+        ],
+      },
       {
         type: "group",
         heading: tr().setNotifyHeading,
@@ -1215,7 +1319,7 @@ export class GanttSettingTab extends PluginSettingTab {
             desc: tr().setWebhookDesc,
             render: (x) => this.ctlWebhook(x, "teamsWebhook", "https://….logic.azure.com/workflows/…"),
           },
-          // テスト送信＝Webhook 設定の即時確認 / send-a-test button for instant webhook verification
+          // send-a-test button for instant webhook verification
           { name: tr().setNotifyTestName, action: () => void sendTestNotification(this.plugin) },
           { name: tr().setNotifyStartName, render: (x) => this.ctlNotifyToggle(x, "notifyStart") },
           { name: tr().setNotifyEndName, render: (x) => this.ctlNotifyToggle(x, "notifyEnd") },
@@ -1229,13 +1333,11 @@ export class GanttSettingTab extends PluginSettingTab {
           render: (x) => this.ctlLeadToggle(x, lead.id),
         })),
       },
-      // Google カレンダー同期。接続後にだけ意味を持つ行は visible で出し分ける
       // Google Calendar sync; rows that only matter once connected are gated with `visible`
       {
         type: "group",
         heading: tr().setGcalHeading,
         items: [
-          // モバイルはループバック認証が使えないため案内のみ。同名の行を 2 つ置くと宣言版でキーが重複するので 1 行で出し分ける
           // mobile can't do loopback auth, so it gets a note instead; one row switches its text, as two rows of one name share a key
           { name: tr().setGcalHeading, desc: Platform.isDesktop ? tr().setGcalDesc : tr().gcalDesktopOnly },
           {
@@ -1285,7 +1387,7 @@ export class GanttSettingTab extends PluginSettingTab {
           },
         ],
       },
-      // フロントマターのキー名 / frontmatter key names
+      // frontmatter key names
       {
         type: "group",
         heading: tr().setKeysHeading,
@@ -1297,10 +1399,6 @@ export class GanttSettingTab extends PluginSettingTab {
     return items;
   }
 
-  // ===== display()（1.13 未満向けのフォールバック）=====
-  // 1.13 以降は getSettingDefinitions() が使われ、このメソッドは呼ばれない。minAppVersion 1.11.4 を
-  // 保つ間は 1.12.x のために残す必要があり、公式ガイドもこの併設（Path B）を案内している。
-  // 非推奨 API の「呼び出し」を避けるため、再描画は this.draw() に委譲し this.display() は内部から呼ばない。
   // ===== display(): the fallback for Obsidian older than 1.13 =====
   // From 1.13 on, getSettingDefinitions() renders the tab and this method is never called. It has to
   // stay for 1.12.x while minAppVersion is 1.11.4; the official guide calls this dual setup "Path B".
@@ -1309,7 +1407,6 @@ export class GanttSettingTab extends PluginSettingTab {
     this.draw();
   }
 
-  // 宣言版と同じ定義を従来の Setting で描く（使っているのは行・グループ・リストだけ）。手書きの 2 系統がずれないように
   // draws the same definitions with classic Settings (only rows, groups and lists are used), so two hand-written paths can't drift
   private draw(): void {
     const el = this.containerEl;
@@ -1330,7 +1427,7 @@ export class GanttSettingTab extends PluginSettingTab {
       if (!shown(d.visible)) return;
       const row = new Setting(el).setName(d.name);
       if (d.desc) row.setDesc(d.desc);
-      if (d.render) (d.render as (s: Setting) => unknown)(row); // ここの描画は SettingGroup を使わない / our renders never use the SettingGroup
+      if (d.render) (d.render as (s: Setting) => unknown)(row); // our renders never use the SettingGroup
       const act = d.action;
       if (act) row.addButton((b) => b.setButtonText(d.name).onClick(() => act(i)));
     };

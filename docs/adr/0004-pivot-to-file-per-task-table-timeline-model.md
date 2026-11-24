@@ -2,18 +2,18 @@
 status: accepted
 ---
 
-# ファイル単位タスクの「表＋タイムライン」モデルへ転換 / Pivot to a file-per-task, table-plus-timeline model
+# Pivot to a file-per-task, table-plus-timeline model
 
-ADR-0001〜0003 を廃止し、プロジェクト管理ツール風のタスク管理 UI を Obsidian で再現するモデルへ転換する。
+ADR-0001 to ADR-0003 are retired, and the plugin pivots to a model that recreates a project-management-tool-style task UI in Obsidian.
 
-**何を / What:**
-- **1 ファイル = 1 タスク**。スケジュール情報（開始・終了・ステータス・担当・先行タスク）は各ノートの**フロントマター**が源泉。ノート**本文（Body）**がタスク説明。
-- 設定した**親フォルダ直下のサブフォルダ＝グループ**、その中の `.md` ＝タスク。
-- リボンアイコンで専用 Gantt ビューを開く。レイアウトは `[フォルダ/ナビ | タスク表(中央) | タイムライン(右)]`（表＋タイムライン形式）。表とタイムラインは**行が揃う**。
-- 描画は**自前の表＋SVG タイムライン**（frappe-gantt は左の表を持てないため不採用）。
-- タスククリックで右から**詳細パネル**（日付・ステータス・担当・Body）がスライドイン。
-- バーのドラッグで各ファイルのフロントマター `start`/`end` を書き戻し。依存は矢印表示・違反は警告のみ（自動スケジュールなし）。
+**What:**
+- **One file = one task**. Each note's **frontmatter** is the source of truth for the schedule (start, end, status, assignee, predecessor tasks). The note's **body (Body)** is the task description.
+- **The subfolders directly under the configured parent folder = groups**, and the `.md` files inside them = tasks.
+- The ribbon icon opens a dedicated Gantt view. The layout is `[folder/nav | task table (center) | timeline (right)]` (table + timeline). The table and the timeline **line up row for row**.
+- Rendering is a **home-made table + SVG timeline** (frappe-gantt was dropped because it can't have a table on its left).
+- Clicking a task slides in a **detail panel** from the right (dates, status, assignee, Body).
+- Dragging a bar writes the `start`/`end` frontmatter back to its file. Dependencies are drawn as arrows and a violation only warns (no automatic scheduling).
 
-**なぜ / Why:** 実際に DSL 方式を動かした結果、ユーザーの本当の要件は「プロジェクト管理ツールのようなタスク管理 UI を Obsidian で」だった。タスクを独立ノートにすると Obsidian のリンク・検索・本文編集とそのまま統合でき、表＋タイムラインの体験に直結する。
+**Why:** Running the DSL approach for real showed that the user's actual requirement was "a task-management UI like a project-management tool's, in Obsidian". Making each task a note of its own integrates it as it is with Obsidian's links, search and body editing, and leads straight to the table + timeline experience.
 
-**廃止する決定 / Superseded:** ADR-0001（DSL を源泉）, ADR-0002（YAML DSL）, ADR-0003（frappe-gantt）。
+**Superseded:** ADR-0001 (the DSL as the source of truth), ADR-0002 (YAML DSL), ADR-0003 (frappe-gantt).

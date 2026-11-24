@@ -1,7 +1,5 @@
 # Task Gantt
 
-**English** | [日本語](#日本語)
-
 An interactive project-management Gantt for Obsidian. **One Markdown file = one task**; a configured folder is shown and edited as a "table + timeline" Gantt — drag bars to reschedule, link dependencies, set milestones, sort and filter, and move tasks between folders by dragging.
 
 > Requires **Obsidian 1.11.4 or later**.
@@ -25,19 +23,19 @@ Click a task or its bar to open the detail panel beside the board and edit its d
 1. In **Settings → Task Gantt**, set the **target folder** (e.g. `Projects/Cleanup`).
 2. Open the view from the **"Open Gantt" ribbon icon** in the left column (or the command **"Open Gantt"**). The ribbon opens the Gantt for the folder of the currently open note — or the folder selected in the file explorer — and falls back to the default folder in settings (the **vault root** when none is set). You can also right-click any folder → **Open as Gantt**.
 3. Direct subfolders become **groups**, and the `.md` files inside them become **tasks**.
-4. **Drag a bar / resize its edges** to write the new dates back to that file's `start`/`end` frontmatter. **Every column the table can show is editable in place — just double-click the cell** (a single click selects the row, and a pencil marks editable cells on hover). Start and Due open a calendar, Duration takes a number of workdays, Progress takes a percentage (0–100; blank or 0 clears it), Status opens a dropdown, and Assignee and Tags open a small editor with a chip per value (× to remove) and an add field — assignees suggest the names already used on the board (type `[[` to link a note instead), tags suggest the vault's existing tags. Enter or clicking away saves, Esc cancels.
+4. **Drag a bar / resize its edges** to write the new dates back to that file's `start`/`end` frontmatter. **Every column the table can show is editable in place — just double-click the cell** (a single click selects the row, and a pencil marks editable cells on hover). Start and Due open a calendar, Duration takes a number of workdays (a unit may follow: `4d`, `4 days`, `4 ימים`), Progress takes a percentage (0–100; blank or 0 clears it), Status opens a dropdown, and Assignee and Tags open a small editor with a chip per value (× to remove) and an add field — assignees suggest the names already used on the board (type `[[` to link a note instead), tags suggest the vault's existing tags. Enter or clicking away saves, Esc cancels.
 5. Click a task in the table or its bar to open the **detail panel** (dates, status, assignee, dependencies, progress, body). It sits beside the board instead of covering it: the timeline keeps its scale and the opened task's bar, outlined with a glow, stays where it was, moving only as far as needed when the panel would cover it, and you can scroll on as usual. It follows changes made elsewhere and closes with its × or **Esc**. Hover a bar for a summary card (dates, duration, status, progress, assignees). Links in the body are clickable (internal links open the note, Ctrl/Cmd-click for a new tab, with Page preview on hover); click anywhere else in the body to edit it, and type `[[` to insert a link to a note.
 6. Use the **＋ New task** button to create a one-day task in the current folder and name it on the spot — its **▾** creates a [Kanban board or a Canvas](#task-kinds-note-kanban-canvas) task instead — and **Today** to scroll the timeline to the current date.
-7. Use the **Day / Week / Month / Fit** buttons to change the timeline scale; the date in the middle of the screen stays put. **Fit** auto-scales to the pane width and re-fits when you resize (not when the detail panel opens or closes). In Day, Week and Month the timeline is endless: scroll past either end and more weeks, months or years are added (up to a year, three years or ten years on each side; changing the scale trims them again), and **Today** brings today into view wherever it is, a quarter of the way in, so most of the view shows what comes next. Today is a line with a *Today* pill above it; during a sprint (see below) its dates are washed in the accent colour, with a line under the dates naming it on hover. Hovering a row highlights it across the timeline, so a name and its bar line up. Under a right-to-left interface (Hebrew, Arabic) the board keeps this left-to-right layout, while names and tags in Hebrew, Arabic or any other script read in their own direction. Axis dates follow Obsidian's language, the month (the year in Month view) is named above them, and non-working days are shaded. The folder name at the top left switches the board to another folder.
+7. Use the **Day / Week / Month / Fit** buttons to change the timeline scale; the date in the middle of the screen stays put. **Fit** auto-scales to the pane width and re-fits when you resize (not when the detail panel opens or closes). In Day, Week and Month the timeline is endless: scroll past either end and more weeks, months or years are added (up to a year, three years or ten years on each side; changing the scale trims them again), and **Today** brings today into view wherever it is, a quarter of the way in, so most of the view shows what comes next. Today is a line with a *Today* pill above it; during a sprint (see below) its dates are washed in the accent colour, with a line under the dates naming it on hover. Hovering a row highlights it across the timeline, so a name and its bar line up. Under a right-to-left interface (Hebrew, Arabic) the board keeps this left-to-right layout, while names and tags in Hebrew, Arabic or any other script read in their own direction. Axis dates follow Obsidian's language: the month (the year in Month view) is named above them, each week below by its first day's number on an even weekly rhythm (*22 · 29 · 6 · 13*; the month band shows where a month turns), and non-working days are shaded. The folder name at the top left switches the board to another folder.
 8. **Keyboard**: in the table, ↑/↓ (and Home/End, Page Up/Down) move between rows, →/← expand and collapse, **Enter** opens the detail panel (or toggles a group; while the panel is open the table narrows to the task names, so the timeline stays in view), **F2** renames, and **Shift+F10** or the menu key opens the row menu. **Esc** closes the panel and puts you back on the row.
 
-The UI follows Obsidian's display language. Supported: English, Japanese, Korean, Chinese (Simplified & Traditional), French, Spanish, and Russian; any other language falls back to English.
+The interface is in English. Hebrew notes, names, tags and Kanban steps are fully supported and read right to left.
 
 ## View options
 
 The **Display** menu at the right end of the toolbar shapes how the board is displayed, so the toolbar stays one row. A thin legend under the toolbar explains the colors; it hides while the table already shows that column (Status when coloring by status, Assignee when coloring by assignee), since the column spells the colors out. Statuses can still be edited in settings.
 
-At its top, **Group by** folder, status, assignee or tag, and **Color by** status or assignee; below them, what you switch less often, in three sections: **Timeline** (**Dependency arrows**, **Tags on bars**, **Progress line**), **Rows** (**Flat**, **Roll up**, **Show empty folders**) and which table **Columns** to show. Each board remembers all of this, plus which groups are collapsed. Rarer actions, **Export as PNG** and **Reload**, are in the view's **⋯** menu and the command palette. Status never relies on color alone: a bar is hollow while waiting to start, solid once started, hatched when deferred, faded once done, and fainter still when cancelled. **Overdue** tasks (due before today and neither completed nor cancelled) get a red outline and a red line from their due date to today. Nothing after a bar repeats what is already on screen: the name is in the table, the assignees follow the bar only while the Assignee column is hidden, the tags only while the Tags column is, and urgent work gets a ⚡. Each group heading counts its open and overdue tasks (*5 open · 2 overdue*); grouped by assignee, that is each person's workload. The today line is a solid line in the accent color.
+At its top, **Group by** folder, status, assignee or tag, and **Color by** status or assignee; below them, what you switch less often, in three sections: **Timeline** (**Dependency arrows**, **Tags on bars**, **Progress line**), **Rows** (**Flat**, **Roll up**, **Show empty folders**) and which table **Columns** to show. Each board remembers all of this, plus which groups are collapsed. Rarer actions, **Export as PNG** and **Reload**, are in the view's **⋯** menu and the command palette. Status never relies on color alone: a bar is hollow while waiting to start, solid once started, hatched when deferred, faded once done, and fainter still when cancelled. **Overdue** tasks (due before today and neither completed nor cancelled) get a red outline and a red line from their due date to today. Nothing after a bar repeats what is already on screen: the name is in the table, the assignees follow the bar only while the Assignee column is hidden, the tags only while the Tags column is, and urgency is the **Urgent** tag on the row's name. Each group heading counts its open and overdue tasks (*5 open · 2 overdue*); grouped by assignee, that is each person's workload. The today line is a solid line in the accent color.
 
 ![Grouping and color-by options with a legend](docs/images/grouping-en.webp)
 
@@ -97,7 +95,7 @@ Open **Presets** for one-click filter sets. Start points by role switch the grou
 
 ## At a glance
 
-The table is the main reading surface. A new board shows **Assignee, Status and Due** next to a wider task name, leaving the timeline room (a Kanban task's checked count rides in its board cue; existing setups keep their columns, and Progress is one click away in Display). Each row carries **one attention tag** at most: the strongest of **Urgent**, **Overdue** (due before today and not finished), **Blocked** (a Deferred-group status), **Date clash** (a predecessor's dates break the link, arrows shown or not), **Interrupted** and **Resume** (see below), as an icon and a word, with *+N* when there are more (*Overdue +1*). The detail panel lists every reason with what is known: the due date, the blocking status (*no reason recorded*: the note holds none), the predecessor waited on, the urgent work and whose it is, and the reasons of its subtasks. A row whose Status column already says Blocked doesn't repeat it. The button at the start of the **Task** header folds every heading at once, one line per project for a quick overview, and unfolds them again; hovering a heading shows its whole line when the table is too narrow for it. Group headings say how far along they are and what needs attention: *1/8 · 1 blocked · 1 overdue* (*1/8* = done of all, cancelled left out; grouped by assignee, two or more tasks in progress at once are shown too). Hovering a heading shows the whole line, with what is open and in progress and what comes next: *1/8 · 7 open · 2 in progress · 1 blocked · 1 overdue · next: Data migration › Import into new DB 2026/11/09* (*in progress* is the started status; *next* is the earliest task starting after today, with its parent in front when it's a subtask, so it can be found inside a collapsed parent). Task names keep their full length: the exception tag, the board cue and the heading's *next* are cut first. Status marks differ by shape as well as colour: a ring for queued Active statuses, a filled dot for the started one, a square for Deferred, a check for Completed and a cross for Cancelled. Bars follow the same grammar: hollow while waiting to start, solid once started, hatched when deferred and faded once done, so finished work steps back. A task past its due date trails a red line to today, so late work shows even when the view is at today. The **Progress** column is empty when a task has no progress, and a Kanban task shows its checked cards, its steps (*4/7 steps*), which is not a measure of effort or schedule. On narrow panes a tag shrinks to its icon before a task name is cut, and its word stays in the tooltip.
+The table is the main reading surface. A new board shows **Assignee, Status and Due** next to a wider task name, leaving the timeline room (a Kanban task's checked count rides in its board cue; existing setups keep their columns, and Progress is one click away in Display). Each row carries **one attention tag** at most: the strongest of **Urgent**, **Overdue** (due before today and not finished), **Blocked** (a Deferred-group status), **Date clash** (a predecessor's dates break the link, arrows shown or not), **Interrupted** and **Resume** (see below), as an icon and a word, with *+N* when there are more (*Overdue +1*). The detail panel lists every reason with what is known: the due date, the blocking status with a field saying what it is waiting for (see [Blocked work](#blocked-work-what-is-it-waiting-for)), the predecessor waited on, the urgent work and whose it is, and the reasons of its subtasks. A row whose Status column already says Blocked doesn't repeat it. The button at the start of the **Task** header folds every heading at once, one line per project for a quick overview, and unfolds them again; hovering a heading shows its whole line when the table is too narrow for it. Group headings say how far along they are and what needs attention: *1/8 · 1 blocked · 1 overdue* (*1/8* = done of all, cancelled left out; grouped by assignee, two or more tasks in progress at once are shown too). Hovering a heading shows the whole line, with what is open and in progress and what comes next: *1/8 · 7 open · 2 in progress · 1 blocked · 1 overdue · next: Data migration › Import into new DB 2026/11/09* (*in progress* is the started status; *next* is the earliest task starting after today, with its parent in front when it's a subtask, so it can be found inside a collapsed parent). Task names keep their full length: the exception tag, the board cue and the heading's *next* are cut first. Status marks differ by shape as well as colour: a ring for queued Active statuses, a filled dot for the started one, a square for Deferred, a check for Completed and a cross for Cancelled. Bars follow the same grammar: hollow while waiting to start, solid once started, hatched when deferred and faded once done, so finished work steps back. A task past its due date trails a red line to today, so late work shows even when the view is at today. The **Progress** column is empty when a task has no progress, and a Kanban task shows its checked cards, its steps (*4/7 steps*), which is not a measure of effort or schedule. On narrow panes a tag shrinks to its icon before a task name is cut, and its word stays in the tooltip.
 
 ## Timeline, Board and People
 
@@ -105,7 +103,7 @@ Each tab shows its board one of three ways, picked with **Timeline · Board · P
 
 **The current window.** During a sprint (below) everything folds to that sprint; without one, to two weeks either side of today. The Board's **Done** shows what was finished since the window began and its open columns fold what starts after it ends (*Show N older* / *Show N later*); the Timeline folds finished work from before the window too, behind a **Show N older** chip in the filter row, so it doesn't keep growing while the history stays one click away (the notes are never touched). A finished task counts from the day it was finished (else its due date), so every computer folds the same way.
 
-**Board**: the work by status, laid out to walk at the daily scrum from right to left. Columns follow the order of your statuses, each counting the cards it shows; Cancelled ones aren't shown. A status this computer doesn't know (one someone else added in their own settings) gets a dashed column of its own, and cards without a status get **No status**; neither takes drops, so a drop never clears or invents a status. In each column, work needing attention comes first (urgent, overdue, broken dependency, interrupted), then the table's sort. Columns share the width equally, and nothing on a card is cut short: a long name or step wraps onto more lines. A card shows the project (only when the board spans several folders) and the parent of a subtask (click it to open the parent); the name, with its people at the end of its line; then up to two warnings (*Overdue · Blocked*), a Kanban task's steps (*5/7 · next step*) and done subtasks (*1/2*). A parent whose subtasks are on the board isn't a card of its own, so nothing is counted twice. **Drag a card onto another column** to change its status (undoable; cards in a room you may only read show a lock and don't move). A card dropped on a Deferred column (Blocked) opens its details, so the reason can be written down. Click a card (or Tab to it and press Enter) for the details panel, whose Status field changes the status without dragging; right-click or Shift+F10 opens the row menu.
+**Board**: the work by status, laid out to walk at the daily scrum from right to left. Columns follow the order of your statuses, each counting the cards it shows; Cancelled ones aren't shown. A status this computer doesn't know (one someone else added in their own settings) gets a dashed column of its own, and cards without a status get **No status**; neither takes drops, so a drop never clears or invents a status. In each column, work needing attention comes first (urgent, overdue, broken dependency, interrupted), then the table's sort. Columns share the width equally, and nothing on a card is cut short: a long name or step wraps onto more lines. A card shows the project (only when the board spans several folders) and the parent of a subtask (click it to open the parent); the name, with its people at the end of its line; then up to two warnings (*Overdue · Blocked*), a Kanban task's steps (*5/7 · next step*) and done subtasks (*1/2*). A parent whose subtasks are on the board isn't a card of its own, so nothing is counted twice. **Drag a card onto another column** to change its status (undoable; cards in a room you may only read show a lock and don't move). A card dropped on a Deferred column (Blocked) opens its details with the cursor in **What is it waiting for?**, and the answer shows on the card (see [Blocked work](#blocked-work-what-is-it-waiting-for)). Click a card (or Tab to it and press Enter) for the details panel, whose Status field changes the status without dragging; right-click or Shift+F10 opens the row menu.
 
 **People**: one card per person, you first (once **Your name on this device** is set), then everyone by name, and **Unassigned** last while it holds open work. **Now** lists the work each person has started (any status but the not-started ones, Blocked included), up to three with *Show N more*; **Next** lists two other open tasks by due date; **Done since <day>** lists what they finished and the steps ticked on their tasks since the last daily scrum. Without filters, someone with nothing started still gets a card saying *Nothing in progress*. A shared task shows under each of its people, without repeating the card's own person.
 
@@ -120,15 +118,77 @@ On the Board, a Done card finished since then shows ✓ and its weekday (*✓ Su
 
 **Linked to your work**: once your device name is set, other people's open tasks linked to one of your open tasks by a dependency say which way, in words: *you wait on it* (your task depends on it) or *waits on you* (it depends on yours); the tooltip names your task.
 
-**Sprints**: give a note the tag `#sprint` (or `#sprint/12`) and the sprint's dates, and put the goal in its name (*Sprint 12 — DB adapter in production*). It is a bar on the Timeline like any task, and while today falls inside it the Board and People show one line above the cards: its name, the workday and how much of the sprint's work is done (*day 5 of 10 · 1 of 9 done*), counted for the whole team as the Board shows it, whatever this tab's filters; click it to open the note. The Board becomes that sprint's board (see *The current window*). Sprint notes never get warnings, aren't cards and aren't counted in group headings.
+**Sprints**: give a note the tag `#sprint` (or `#sprint/12`; the Hebrew `#ספרינט` works the same) and the sprint's dates, and put the goal in its name (*Sprint 12 — DB adapter in production*). It is a bar on the Timeline like any task, and while today falls inside it the Board and People show one line above the cards: its name, the workday and how much of the sprint's work is done (*day 5 of 10 · 1 of 9 done*), counted for the whole team as the Board shows it, whatever this tab's filters; click it to open the note. A small bar after it compares the two by length: its fill is the share of work done, its mark the share of days gone, so a fill well short of the mark means the sprint is behind. The Board becomes that sprint's board (see *The current window*). Sprint notes never get warnings, aren't cards and aren't counted in group headings.
 
 **New task** makes a task in the first not-started status (To do); on the Board and People it is undated, so it doesn't show up as overdue the next day. When the board's folder is outside every [Vault Rooms](#shared-vaults-vault-rooms) room but holds rooms you can edit (say a *Team* folder whose projects are the rooms), it asks which room the task goes in, offering the board's own folder last as *not shared*: a task made outside the rooms would be shared with nobody. **Export as PNG** draws the Timeline.
 
 Automatic status (in Settings) changes statuses by date in the shared notes, for everyone; a team that moves cards by hand at the daily scrum usually leaves it off.
 
+## Blocked work: what is it waiting for?
+
+A task in a Deferred status (Blocked by default) asks one question at the top of its details: **What is it waiting for?** Type the answer in a line (who or what, and since when: *Security approval of the new limits (asked Mon)*) and press Enter. It is written to the note's `blocker` frontmatter (undoable) and shows under the card's name on the Board and People, in the details and in the [status report](#status-report-for-your-manager). Dropping a card on a Deferred column, or picking a Deferred status in the details, puts the cursor in the field. Moving the task out of the Deferred group clears the reason in the same write, so it never outlives the block.
+
+## Status report for your manager
+
+**Status report…** (the view's **⋯** menu, or the command) builds a short report from the board, shows it beside the two fields exactly as it will read, and copies it as Markdown, to paste into a note, an e-mail or a chat. You add the two things only you know:
+
+- **How is it going?** *On track* (we will meet the goal as planned), *At risk* (we can meet it if a risk is handled) or *Off track* (we will miss it unless something changes). The plugin never picks it for you; click a picked one again to leave it out.
+- A **headline**: what your manager should know first, with any ask.
+
+The rest comes from the whole board, whatever this tab's filters, and each task appears once:
+
+- **Needs attention**: blocked, overdue and urgent work, strongest first, with its people and reason (*Blocked: security approval of the new limits*, *Overdue: due Mon 23 Nov*, *Urgent; Interrupts DB Adapter*). Date clashes and interruptions are yours to sort out, so they stay on the board.
+- **Done since** the sprint began (without a sprint, two weeks ago), **Now** (started work, with a Kanban task's steps or the progress) and **Next** (work starting before the sprint ends, by start date): the People view's words.
+- **Projects**: one line per project folder with done of all and the open counts of the Timeline's headings.
+
+It is laid out to be read at a glance in Obsidian and still reads plainly in a message: the health opens it as a callout in its colour (green, amber or red, with the headline inside), what needs attention is a small table (task, who, why), each heading carries its count (*Needs attention (3)*), and the sprint and each project get a text progress bar (*▰▰▰▱▱▱▱▱▱▱ 3 of 13 done*). Empty sections are left out. During a sprint the report carries its line (*day 8 of 10 · 3 of 13 done*), so at the sprint review it doubles as the sprint report.
+
+## Plan assistant (AI on your own server)
+
+**Ask the plan assistant** (the command, or the view's **⋯** menu) opens a chat in the right sidebar about the board you used last. Ask it about projects, tasks, people and statuses (*What needs attention, and why?*, *Who is working on what?*), have it summarize (*Summarize this sprint for my manager*), or ask for a change (*Delay Data migration by three workdays*, *Mark API rate limits blocked: waiting for security*). It looks the board up as it answers, and never guesses. A change comes back as a **proposal card**: each task's change, before → after, and every task that depends on a moved one, rescheduled the way the board always does (finish-to-start successors pushed, start- and finish-linked ones realigned, lengths kept in workdays). Nothing is written until you press **Apply**, and Apply is one step: **Ctrl+Z** on the board puts every task back.
+
+Set it up in **Settings → Task Gantt → AI assistant**:
+
+- **Server URL**: an OpenAI-compatible server on your network, usually ending in `/v1`, such as Ollama (`http://ai-server:11434/v1`), vLLM, LM Studio or a llama.cpp server.
+- **Model**: one that can call tools. *gpt-oss:20b* fits a single 16 GB GPU; *qwen3:14b* and *qwen3:8b* also call tools well. Llama 3.x models are weak at it.
+- **API key**: only if the server asks for one. It is kept in this computer's secure storage (the OS keychain), not in the vault.
+- **Check connection**: asks the server for its models (then offered as you type the model), tries a short chat with the tools, and tries the embeddings when set, with a ✓ or the server's own error for each.
+- **Team instructions**: what the assistant can't see on the board, added after its built-in instructions: your terms (*Ops is the infrastructure team*), priorities, how to answer. Keep it short: it is sent with every question.
+- **Advanced connection settings**, for servers set up differently:
+  - **API**: *Chat Completions* (`/chat/completions`), which every OpenAI-compatible server offers, or the newer *Responses* API (`/responses`), which OpenAI, vLLM and recent llama.cpp servers also offer.
+  - **Chat endpoint**: a path under the server URL, or a full URL (Ollama's own API: `/api/chat`).
+  - **Embeddings model** and **endpoint** (`/embeddings`; Ollama's own: `/api/embed`): optional. With an embeddings model (*bge-m3*, *nomic-embed-text*), a search that matches no task's words finds the closest tasks by meaning, including across Hebrew and English (*העברת נתונים* finds *Data migration*).
+  - **Extra request fields**: a JSON object added to every chat request, for options your server takes (`{"max_tokens": 2048}`); it can replace the default temperature of 0.2.
+  - **Extra headers**: a JSON object of HTTP headers; `{key}` stands for the API key (`{"api-key": "{key}"}`), and without it the key goes as a bearer token.
+  - **Time limit**: seconds to wait for each answer (180 by default).
+
+The assistant also reads the shapes other servers answer in: Ollama's own API, the older single `function_call`, and Qwen-style `<tool_call>` text from a server that doesn't parse the model's tool calls.
+
+**How it is guided.** You write no prompt. Behind each question work three short things:
+
+- **Built-in instructions**, the same for every question, so a server reads them once and reuses that work: today and the next ten workdays as dates, the work week, the current sprint, who is asking, the board's people, projects and statuses; four rules (look things up and never invent; ask only when the answer would change what it does, such as which task, how far to move it, or what a blocked task waits for; changes are proposals; answer in the language you write in); and a few lines on each kind of request: summaries and reports, moving dates, changing status or people, workload, risks.
+- **What the plugin reads in your request** and says outright, because a small model skips an "if" and can misread a word: a delay that names no amount, day or date (*ask how far*) and, in a Hebrew request, the board's status for its status word (*"כחסומה" is the status Blocked*) and today's weekday.
+- **The lookups themselves**: each task comes back with its dates in words (*started 9 days ago (Sun); ends in 2 days (Thu)*; in Hebrew for a Hebrew question), so the model does no calendar sums, and a proposal that can't be right is refused with what to do instead (an unknown status lists the real ones; blocking a task without saying what it waits for tells it to ask you).
+
+The guidance is always part of the instructions rather than fetched for each kind of request. Measured on a local model with 25 requests in English and Hebrew, fetching it on demand got no more of them right and took about a sixth longer per question, since a server has to read again whatever changes between questions.
+
+Server notes: Ollama serves the network with `OLLAMA_HOST=0.0.0.0`, and its default context of 4,096 tokens is tight, so raise it with `OLLAMA_CONTEXT_LENGTH` (say 16384). vLLM needs `--enable-auto-tool-choice` and a `--tool-call-parser` for the model; llama.cpp's server needs `--jinja` (and `--embeddings` for embeddings).
+
+**Network use**: the assistant talks only to the server set here, and only while you chat. It sends your questions and what it looks up: task names, dates, statuses, people, blocker reasons, and the start of a task's note when it reads one; with an embeddings model, also the board's task names, to compare their meaning. Nothing else leaves this computer, and with no server set it makes no network requests at all.
+
+## A daily scrum and sprint routine
+
+The views are laid out for a short routine; none of it is enforced.
+
+- **Daily scrum (15 minutes)**: open the **Board**. Walk it right to left: what is **Done** since the last scrum (✓ and its weekday), what is **Blocked** and what it waits for, what is **In progress** (urgent and overdue cards first), and what comes next in **To do**. Talk about the work; anything longer is taken after the scrum. To go person by person instead, use **People**: each card is that person's *Done since*, *Now* and *Next*.
+- **Each person** sets **Your name on this device** once (People asks the first time). Their card then comes first, **Presets → My work** shows their own open work, and other people's tasks linked to theirs say *waits on you* or *you wait on it*.
+- **When work stops**, drag it to **Blocked** and answer *What is it waiting for?*; drag it back when it moves again.
+- **Each sprint**: at planning, make the sprint note (tag `#sprint`, the sprint's dates, the goal in its name) and give the sprint's tasks dates inside it. The Board and People then show that sprint, and its bar shows whether the team is behind. At the review, **Status report…** gives your manager the done and not-done picture.
+- **New tasks** start from the team's [template](#creating-tasks), so whoever picks one up knows the outcome and when it's done without asking. Work with several steps becomes a [Kanban task](#task-kinds-note-kanban-canvas), whose cards are its steps.
+
 ## Urgent work
 
-Mark unplanned, interrupting work as urgent from the row's right-click menu (**Mark as urgent / Clear urgent**, undoable) or by writing `priority: urgent` in its frontmatter. Urgent work that isn't finished sorts first among its siblings, carries an **Urgent** tag and a ⚡ beside its bar, and is counted in its group heading. Group by assignee to see who is handling it.
+Mark unplanned, interrupting work as urgent from the row's right-click menu (**Mark as urgent / Clear urgent**, undoable) or by writing `priority: urgent` in its frontmatter. Urgent work that isn't finished sorts first among its siblings, carries an **Urgent** tag (a ⚡ and the word) on its row and card, and is counted in its group heading. Group by assignee to see who is handling it.
 
 **Mark as urgent** (in the row menu, or the **Priority** row of the detail panel) also records what it interrupts, from the urgent note only (`interrupts: ["[[DB Adapter]]"]`). Only work in the *started* status (In progress by default) of the same person counts as current work; To do, dates or an assignment alone never do. One such task is linked as is; with several, or a task shared with others, you pick the one it interrupts (or **Don't link**). The interrupted task, its status and its board stay exactly as they were, and nothing is inferred: urgent work without a link interrupts nobody. While the urgent work runs, the linked task shows **Interrupted** (*Interrupted by Hotfix login (Dana)*). Only once every urgent task linking it is done or cancelled does it show **Resume** and sort right after urgent work; **Resume DB Adapter** (in the panel and the row menu) removes the links (undoable) and takes you back, to its board for a Kanban task, to its details otherwise, without changing its status.
 
@@ -154,7 +214,7 @@ Tasks use Obsidian's native `tags` (frontmatter `tags:` plus inline `#tag`), so 
 
 ## Coloring tags and folders
 
-Every tag starts from a single **Default tag color** — Obsidian's own tag color unless you change it in **Settings → Task Gantt → Tag colors** — and you can override any individual tag on top of that. Folders get an automatic color from their name instead.
+Every tag starts from a single **Default tag color** — Obsidian's own tag color unless you change it in **Settings → Task Gantt → Tag colors** — and you can override any individual tag on top of that. Folders get an automatic color instead, one no other folder on the board has, so projects tell apart at a glance (the folder heading's icon on the Timeline, the dot before a card's project on the Board and People).
 
 Colors are picked from a palette of 17, plus a rainbow swatch that opens your system's color picker for any hue. On the timeline, a task's tags follow its label as small pills tinted with each tag's color (up to three, then *+N*); turn them off with **Display → Tags on bars**.
 
@@ -168,9 +228,38 @@ Colors are picked from a palette of 17, plus a rainbow swatch that opens your sy
 
 Choose **Export as PNG** from the view's **⋯** menu, or run the command, to save the whole board as an image, including rows scrolled out of view. It keeps the current theme and the **Display** menu's choices, adds the board's name and date on top and a color key for the current **Color by** underneath, and goes wherever your vault keeps attachments (a relative attachment setting is taken from the vault root, so nothing is added inside the board's folder). Each task is named once, in the image's left column (with a ✓ when it's completed, struck through when it's cancelled), so a bar is followed only by its people and tags; under a person's heading, only the other people on a shared task. A notice links to the file, or says why nothing was saved.
 
+## Work plan for a quarter or a half (PPTX)
+
+**Export work plan (PPTX)…** (the view's **⋯** menu, or the command) asks for a period (this or the next quarter, this or the next half) and saves the board's plan for it as a PowerPoint slide, in Hebrew and right to left, as a תוכנית עבודה (ת"ע) is drawn:
+
+- **The calendar** runs from right to left under the title, the period and the board's name: the Hebrew months by their real dates, the Gregorian months under them, and a red line at today.
+- **One row per person**, with a shared task in each of its people's rows. A task is a box over its days with its name inside, or beside it when the box is too small to show the name whole; a milestone is a diamond. A name reads in its own direction: English left to right, Hebrew right to left.
+- **Colours** are the board's: a task takes the colour of its first [coloured tag](#coloring-tags-and-folders), or else its project folder's.
+- **Markers** come from the task itself. The legend shows only the ones in use:
+  - *בסיכון* (at risk): a red dashed outline on blocked or overdue work.
+  - *שוטף* (routine work, tag `#שוטף` or `#routine`): a dark box.
+  - *אי זמינות* (unavailable, such as leave or a course; tag `#אי-זמינות` or `#unavailable`): a grey box in italics.
+  - *תלות בגורם חיצוני* (waits on an outside party, tag `#חיצוני` or `#external`): a chain-link icon in the box.
+  - Done work is pale with a ✓, and an arrow marks work that runs past the period's edge.
+  - Cancelled work and sprint notes are left out.
+
+Too many rows for one slide go on over more slides, each with the title, legend and months. The file goes wherever your vault keeps attachments, named after the board and the period's first month (*Team 2026-10.pptx*), and a notice offers to open it. It is made on this computer; nothing is sent anywhere.
+
 ## Creating tasks
 
-Press **＋ New task** to create a dated note in the current folder and rename it immediately. You don't have to start there, though: every note inside the target folder already appears as a row — **including notes with no dates yet** — so you can also click an existing note and set **Start** / **Due** in the detail panel to turn it into a scheduled task. Empty cells are double-click editable too, so you can fill a blank value straight from the table.
+Press **＋ New task** to create a dated note in the current folder and rename it immediately. To start every new note task with the same headings, point **Settings → Task Gantt → Template for new tasks** at a note (keep it outside the boards' folders, or it shows up as a task); new note tasks start as a copy of it, frontmatter included, and the board then sets their status and dates. A template that lets someone pick a task up without asking can be as small as:
+
+```markdown
+### Outcome
+%% What will be true when this is done, in a sentence or two %%
+
+### Done when
+- [ ] 
+
+### Links
+```
+
+`%% … %%` is an Obsidian comment: it guides whoever writes the task and doesn't show in the details. A team-wide definition of done belongs in one note that the template links to. You don't have to start with **＋ New task**, though: every note inside the target folder already appears as a row — **including notes with no dates yet** — so you can also click an existing note and set **Start** / **Due** in the detail panel to turn it into a scheduled task. Empty cells are double-click editable too, so you can fill a blank value straight from the table.
 
 ## Task kinds: note, Kanban, Canvas
 
@@ -211,6 +300,7 @@ The body is the task description (shown in the detail panel).
 | `milestone` | `true` for a diamond (zero duration). |
 | `priority` | `urgent` (or `expedite`, `דחוף`, any case) marks [urgent interrupting work](#urgent-work). Other values (`high`, …) are normal work. |
 | `interrupts` | On urgent work: links to the tasks it interrupted (written by **Mark as urgent**, removed by **Resume**; may be edited by hand). |
+| `blocker` | What a task in a Deferred status (Blocked) is waiting for, in a line ([Blocked work](#blocked-work-what-is-it-waiting-for)). Cleared when the task leaves the Deferred group. |
 | `gcal` | `true` opts the task into [Google Calendar sync](#google-calendar-sync-optional-desktop-only) (only used when **Sync flagged tasks only** is on). |
 | `gcalId` | Set automatically once the task is pushed to Google Calendar — the linked event's ID. Don't edit by hand. |
 | `canvas` | Link to a [Canvas task](#task-kinds-note-kanban-canvas)'s `.canvas` (set when the task is created). |
@@ -219,7 +309,7 @@ The body is the task description (shown in the detail panel).
 
 The task name is the file name (without extension); the group is the parent subfolder name. Frontmatter key names can be changed in settings.
 
-Sample data for a quick try lives in `examples/Cleaning Project お掃除プロジェクト/` (point the target folder at it).
+Sample data for a quick try lives in `examples/Cleaning Project/` (point the target folder at it).
 
 ## Dependencies
 
@@ -241,7 +331,7 @@ Changes made **outside Obsidian** — renaming, moving or deleting notes in Wind
 
 ## Settings
 
-Open **Settings → Task Gantt** to configure the default folder, subfolder recursion, default zoom, and the **date display format** (`YYYY/MM/DD`, `DD/MM/YYYY`, or `MM/DD/YYYY`; stored dates always stay ISO `YYYY-MM-DD`).
+Open **Settings → Task Gantt** to configure the default folder, subfolder recursion, the [template for new tasks](#creating-tasks), default zoom, and the **date display format**: by default a date reads at a glance, *Tue 24 Nov* (the month by name, so day and month can't be mixed up; the weekday for near-term planning; the year only outside the current one, *5 Jan 2027*), or numeric `YYYY/MM/DD`, `DD/MM/YYYY` or `MM/DD/YYYY`. Stored dates always stay ISO `YYYY-MM-DD`. A computer still on the old default, `YYYY/MM/DD`, moves to the glance format once; picking a format afterwards keeps it.
 
 The **Timezone** setting (system or a fixed GMT offset, listed with representative cities) controls how times of day are displayed and saved, and which day counts as today (the today line, date filters, new tasks' dates). Changing it re-displays stored times in the new offset.
 
@@ -257,7 +347,7 @@ The **Progress line color** setting sets the color of the jagged line drawn by t
 
 The **group** is what tells the plugin whether a task is finished. There are four, borrowed from Wrike and not extensible: **Active** (being worked on), **Completed** (done), **Deferred** (paused — on hold, blocked, waiting), and **Cancelled** (dropped). Every status belongs to exactly one, and the *Completed* / *Incomplete* filter presets read only the group, never the status name — so a status called `Shipped` counts as finished as long as it sits in the Completed group. If no status is in the Completed group, settings say so and the *Completed* preset stays empty.
 
-> Upgrading from 2.8.x: existing statuses are assigned a group once, guessed from their id and label (`done`/`完了` → Completed, `cancelled`/`中止` → Cancelled, `on hold`/`blocked`/`保留` → Deferred, everything else → Active). Check the list after upgrading and correct anything the guess got wrong.
+> Upgrading from 2.8.x: existing statuses are assigned a group once, guessed from their id and label, in English or Hebrew (`done`/`בוצע` → Completed, `cancelled`/`בוטל` → Cancelled, `on hold`/`blocked`/`חסום`/`בהמתנה` → Deferred, everything else → Active). Check the list after upgrading and correct anything the guess got wrong.
 
 You can also rename the **frontmatter keys** the plugin reads (start, end, status, assignee, after, progress, milestone, canvas) to match your own vault conventions.
 
@@ -301,7 +391,7 @@ The plugin has no server, so it uses **your own Google Cloud project**:
 - Deleting a task deletes its event (configurable). Deleting the event in Google Calendar just **unlinks** the task by default (optionally also clearing its dates) — files are never deleted.
 - Recurring events are not supported (skipped by both directions).
 
-**Example** — `Test1` and `Test2` carry `gcal: true` and pushed through as events; `Test3 (no flag)` stayed local only. The `Test3 from GC` event and the `七夕` holiday were created directly in Google Calendar and never became tasks:
+**Example** — `Test1` and `Test2` carry `gcal: true` and pushed through as events; `Test3 (no flag)` stayed local only. The `Test3 from GC` event and a public holiday were created directly in Google Calendar and never became tasks:
 
 ![Obsidian board next to the synced Google Calendar](docs/images/gcal-compare.webp)
 
@@ -313,7 +403,7 @@ The plugin has no server, so it uses **your own Google Cloud project**:
 
 ## Vault access
 
-To build the board, the plugin lists the Markdown files in your vault and reads their frontmatter through Obsidian's metadata cache. When the board is opened on a folder, only notes under that folder are shown, but notifications look at the whole vault, and renaming a custom field's key searches every note for that key. Nothing read this way leaves your device; the only network use is the optional notifications and Google Calendar sync described above.
+To build the board, the plugin lists the Markdown files in your vault and reads their frontmatter through Obsidian's metadata cache. When the board is opened on a folder, only notes under that folder are shown, but notifications look at the whole vault, and renaming a custom field's key searches every note for that key. Nothing read this way leaves your device; the only network use is the optional notifications, Google Calendar sync and [plan assistant](#plan-assistant-ai-on-your-own-server) described above.
 
 ## Development
 
@@ -328,7 +418,7 @@ Copy `main.js` / `manifest.json` / `styles.css` into `<vault>/.obsidian/plugins/
 
 ## Design
 
-See [`docs/adr/`](./docs/adr/) for the rationale behind design decisions (latest: ADR-0005) and [`CONTEXT.md`](./CONTEXT.md) for terminology.
+See [`docs/adr/`](./docs/adr/) for the rationale behind design decisions (latest: ADR-0006) and [`CONTEXT.md`](./CONTEXT.md) for terminology.
 
 ## Limitations
 
@@ -337,296 +427,3 @@ Auto-scheduling (critical path), sub-day time granularity, and cross-folder aggr
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
-
----
-
-# 日本語
-
-[English](#task-gantt) | **日本語**
-
-プロジェクト管理ツールのようなタスク管理 UI を Obsidian で実現するプラグインです。**1 ファイル = 1 タスク**とし、指定フォルダ配下を **「表＋タイムライン」ガント**で表示・編集します。バーのドラッグで日程変更、依存の作成、マイルストーン、ソート・フィルタ、ドラッグでのフォルダ移動などができます。
-
-> **Obsidian 1.11.4 以降**が必要です。
-
-## スクリーンショット
-
-左列のリボンボタン、またはフォルダの右クリック →**「Open as Gantt」**から Gantt として開きます：
-
-![リボンボタンまたは右クリックメニューからフォルダを Gantt として開く](docs/images/open-as-gantt.webp)
-
-「表＋タイムライン」で開き、グループ・バー・マイルストーン・依存の矢印が表示されます：
-
-![開いたガントチャート（グループ・バー・マイルストーン・依存）](docs/images/gantt-chart.webp)
-
-タスクをクリックすると詳細パネルが開き、日付・状態・担当・進捗・本文を編集できます：
-
-![タスクの詳細パネル（日付・状態・担当・進捗・本文の編集）](docs/images/detail-panel.webp)
-
-## 使い方
-
-1. **設定 → Task Gantt** で**対象フォルダ**を指定（例: `Projects/お掃除`）。
-2. 左列の **「Gantt を開く」リボンアイコン**（またはコマンド「Gantt を開く」）でビューを開く。リボンは、**現在開いているノートのフォルダ**（またはエクスプローラで選択中のフォルダ）を Gantt 表示し、どちらも無ければ設定の既定フォルダ（未設定なら **Vault ルート**）を開きます。フォルダを右クリック →**「Open as Gantt」**でも開けます。
-3. 直下のサブフォルダが**グループ**、その中の `.md` が**タスク**になります。
-4. バーを**ドラッグ／端をリサイズ**すると、そのファイルの `start`/`end` に書き戻します。**テーブルに表示できる列はすべて、セルをダブルクリックすればその場で編集できます**（シングルクリックは行の選択。編集できるセルにはホバーで鉛筆が出ます）。 開始・期限はカレンダー、期間は稼働日数の入力、進捗は % の直接入力（0–100。空欄または 0 で未設定）、ステータスはドロップダウン、担当者とタグは詳細パネルと同じエディタ（値ごとのチップと × による削除＋追加欄。担当者はボード内で既に使われている名前を、タグは Vault 内の既存タグを候補に出し、担当者は `[[` でノートへのリンクにもできます）が開きます。Enter またはフォーカスを外すと保存、Esc で取消します。
-5. 表のタスクかバーをクリックすると**詳細パネル**（日付・ステータス・担当者・依存・進捗・本文）が開きます。パネルはボードを覆わず横に並び、他の場所での変更にも追従し、× か **Esc** で閉じます。バーにマウスを載せると概要カード（日付・期間・ステータス・進捗・担当者）が出ます。
-6. **＋ 新規タスク**ボタンで現在のフォルダに1日タスクを作ってその場で命名（横の **▾** から[カンバン・キャンバス](#タスクの種類ノートカンバンキャンバス)のタスクも作れます）、**今日**ボタンでタイムラインを今日へスクロールできます。
-7. **Day / Week / Month / Fit** ボタンで時間軸の拡大率を変更（画面中央の日付はそのまま）。**Fit** はペイン幅に自動で収め、リサイズにも追従します。軸の日付は Obsidian の表示言語に従い、その上に月（Month では年）の帯が付き、休日は網掛けされます。左上のフォルダ名から別のフォルダのボードへ切り替えられます。
-8. **キーボード**：表では ↑/↓（と Home/End・Page Up/Down）で行を移動、→/← で開閉、**Enter** で詳細パネル（グループは開閉）、**F2** で名前の変更、**Shift+F10** かメニューキーで行のメニュー。**Esc** でパネルを閉じて元の行に戻ります。
-
-UI 表示は Obsidian の表示言語に追従します。対応言語：英語・日本語・韓国語・中国語（簡体／繁体）・フランス語・スペイン語・ロシア語（その他は英語にフォールバック）。
-
-## 表示オプション
-
-ツールバーの右端の **グループ化**・**色分け**・**表示** メニューで、ボードの見せ方を調整できます。ツールバーの下の細い行は色の凡例です。
-
-**グループ化**（フォルダ／ステータス／担当者／タグ）と**色分け**（ステータス／担当者）。**表示** メニューには、ときどき切り替えるものが 3 つの区分にまとまっています：**タイムライン**（**依存の矢印**・**バーのタグ**・**稲妻線**）、**行の表示**（**フラット表示**・**ロールアップ**・**空フォルダを表示**）、表に出す**列**。これらと折りたたんだグループはボードごとに記憶されます。たまにしか使わない **PNG として書き出す** と **再読み込み** は、ビューの **⋯** メニューとコマンドパレットにあります。ステータスは色だけに頼らず、完了はラベルに ✓、延期は斜線、キャンセルは薄く取り消し線で示します。
-
-![グループ化と色分けのオプション（凡例付き）](docs/images/grouping-ja.webp)
-
-グループの見出しには、グループ化の軸に合わせたアイコン（フォルダ・人・ステータスの丸・タグ）が付きます。**見出しを右クリック**すると色を選べるほか、Obsidian のアイコン一覧（検索可）から好きなアイコンを付けられます（例：ある人の作業をまとめたフォルダに人のアイコン）。凡例の**ステータスをクリック**すると名前・色・グループの変更や削除ができ、**＋** でステータスを追加できます。担当者で色分け中は、凡例の人をクリックしてその人の色を選べます。
-
-**ソート**は列ヘッダをクリック。もう一度クリックで昇順／降順を切替（↑/↓）：
-
-![列ヘッダのクリックでソート（↑/↓ 表示）](docs/images/sort-ja.webp)
-
-**列の表示**は **表示** メニューから、開始・期限・期間・進捗・担当者・ステータス・タグを出し分け。ここに出せる列はすべてセルのダブルクリックで編集できます。列レイアウトとソートはセッションをまたいで保存されます：
-
-![表示メニューから列を表示／非表示](docs/images/column_ja.webp)
-
-**フラット表示**は、フォルダや入れ子を無視して全タスクを1本のソート済みリストで表示します：
-
-![フラット表示：全タスクを1本のソート済みリストで](docs/images/flatview-ja.webp)
-
-**稲妻線**は、今日を基準にした垂線を各タスクの実績到達点まで折り曲げた折れ線です。**今日より左に折れれば遅れ、右なら進み**を意味します。各行の点は、タスクの `progress` に対応するバー上の位置に置かれます（先週が期限なのに 40% のタスクは、線をその 40% 地点まで引き戻します）。100% のタスク、まだ開始日が来ていない未着手タスク、フォルダ行、ロールアップ中の親バーは今日線上を素通りします。開始日を過ぎているのに進捗 0% のタスクは、線を開始日まで引き戻します。線の色は**設定 → Task Gantt → 稲妻線の色**で変更できます。
-
-![進捗列と稲妻線（どちらも表示オプションから有効化）](docs/images/progressline_ja.webp)
-
-## カスタムフィールド
-
-任意のフロントマターのキーを、テーブルの列として表示できます。**設定 → Task Gantt → カスタムフィールド**で**フィールドを追加**を押し、**キー**（フロントマターのプロパティ名。例: `client`）、列見出しに使う**表示名**（省略可）、**種類**を指定します。
-
-- **テキスト** — そのまま表示します。リストの値はカンマ区切りで表示し、編集するとリストのまま書き戻します。
-- **数値** — 右揃えで表示し、数値として並べ替えます。
-- **日付** — 設定の日付形式で表示し、開始・期限と同じカレンダーで編集します（日付部分のみ）。
-
-![設定画面のカスタムフィールド。フィールドごとにキー・表示名・種類を指定](docs/images/custom-fields-settings-ja.webp)
-
-追加したフィールドの列はすぐに表示され、ほかの列と同じく **表示** メニューで表示を切り替えられます。見出しのクリックで並べ替え、セルのダブルクリックで編集でき、編集はすべて取り消せます。キー名を変えても、列の表示・幅・並べ替えの設定はそのまま残ります。キーの変更は Enter を押すか入力欄を離れたときに反映され、旧キーの値を持つノートがあれば、ノート側のプロパティ名も変えるか（新しいキーに既に値があるノートは上書きしません）、列が読むキーだけを変えるかを尋ねます。プラグインが既に使っているキー（**フロントマターのキー名**にある開始・期限・ステータスなどのキーと `tags`）は使えません。また、同じキーのフィールドが複数あるときは最初の 1 つだけが列になります。どちらも設定画面に注意書きが出ます。
-
-![テーブルのカスタムフィールド列。組み込みの列の後ろに並ぶ](docs/images/custom-fields-table-ja.webp)
-
-## フィルタ
-
-オプション行の下の**フィルタ行**でボードを絞り込めます。**フィルタを追加**から項目（**名前**／**ステータス**／**ステータスグループ**／**担当者**／**タグ**／**開始日**／**期限日**）を選び、条件を設定します。各フィルタはチップで表示され、クリックで編集、**×**で削除できます。
-
-- **名前**：と一致／以外／を含む／を含まない／で始まる／で終わる
-- **ステータス／ステータスグループ／担当者／タグ**：複数値をチェックで選択（**（なし）＝未設定**も選べます）。と一致／以外／未設定／設定あり
-- **開始日／期限日**：プリセット（昨日・今日・明日）／具体的な日付／相対的な日付（例：*1 週間後*・毎日再計算）／期間と比較。と一致／より前／より後／以前／以後／未設定／設定あり
-
-![チップと一致条件トグルを備えたフィルタ行](docs/images/filter-ja.webp)
-
-フィルタが2件以上あるときは、右端の **表示するタスク → すべてに一致**（AND）／**いずれかに一致**（OR）で結合方法を選べます。
-
-### プリセット
-
-**プリセット**からワンクリックでフィルタ構成を切り替えられます。組み込みプリセットは **日付なし（バーなし）／日付あり／期限切れ／未割り当て／完了済み／未完了**。後ろの 2 つはステータス名ではなく**ステータスグループ**を見ます：**完了済み**は完了グループのタスク、**未完了**は完了でもキャンセルでもないタスク（アクティブ・延期・ステータス未設定）です。任意のフィルタ構成に名前を付けて**プリセットとして保存**でき、保存したプリセットは再適用・削除が可能です。**フィルタをクリア**で全解除。フィルタとプリセットはセッションをまたいで保存されます。
-
-![組み込みプリセットとマイプリセット](docs/images/filter-preset-ja.webp)
-
-## フォルダ間のタスク移動
-
-フォルダでグループ化しているとき、**タスク行をドラッグ**してフォルダにドロップするとそのフォルダへ移動できます（別タスクへドロップすると、そのタスクと同じフォルダへ）。ドラッグ中は、ポインタの下の行にドロップの結果（*「Marketing」へ移動*、*「API」のサブタスクにする* など）が表示されます。ドラッグしなくても、**タスク名を右クリック**（タッチは長押し、キーボードは Shift+F10）で **サブタスクにする…**・**親タスクから外す**・**フォルダへ移動…**・**削除** を選べます。リンクは自動更新され、移動は **Ctrl/Cmd+Z** または取り消しボタンで**元に戻せます**。空のフォルダも行として表示されるので常にドロップ先になります（**空フォルダを表示**トグル＝既定ON で切替）。
-
-## サブタスク
-
-タスクに `parent`（別タスクへの単一 wikilink）を与えると、表でその親の下に入れ子表示され、シェブロンで折りたたみできます。フォルダでグループ化中は、**タスクを別タスクへドラッグ**するとサブタスク化（親のフォルダへサブツリーごと移動）、**フォルダへドラッグ**すると親を解除してトップレベルへ戻します。循環は禁止され、移動はすべて取り消し可能です。**ロールアップ**トグルで、親のバー（と開始・期限セル）を子孫全体の範囲として描けます。親の設定・解除は詳細パネルからも行えます。
-
-## タグ
-
-タスクは Obsidian ネイティブの `tags`（フロントマター `tags:` ＋本文 `#tag`）を使うので、Obsidian の検索・タグペインと同期します。**タグでグループ化**すると、各タグの下にそのタスクが表示され（多値のタスクは複数グループに登場）、タグでの絞り込みや、チップ表示の**タグ列**も使えます。タグでグループ化中は、**タスクをタグのグループへドラッグ**するとそのタグを付与できます（フォルダへのドロップ＝移動とは別動作）。タグの追加・削除は詳細パネル、または**タグ**セルのダブルクリックで同じエディタを開いて行えます。どちらもフロントマターの `tags:` に書き込むため、本文中に書いた `#tag` は表示されますがここからは削除できません。
-
-## 共有タスク（複数の担当者）
-
-`assignee` には複数の人を入れられます。フロントマターにリストで書くか、詳細パネルや**担当者**セルで 1 人ずつ追加します。共有タスクはバーの横に人数分のアバターが重なって並び、名前の前に人のアイコンが付きます。**担当者で色分け**すると、バーが一人ひとりの色の帯に分かれます（ボードの一人ひとりに別の色が自動で付き、10 人までは同じ色になりません。凡例の人をクリックすれば別の色を選べます）。**担当者でグループ化**すると、そのタスクは担当者それぞれのグループに並び、同じタスクどうしは点線でつながり、どれかにマウスを載せるとまとめて強調されます。行では見出しの人を繰り返しません。*Ana* の下では、ラベルと**担当者**セルにほかの人だけが「+」付きで出て（*Visual design + Ben*）、Ana だけのタスクは名前だけになります。タグでグループ化したときも、見出しのタグは行に出しません。タスクを人のグループへドラッグするとその人を追加します（ほかの担当者はそのまま）。担当者が 1 人のときは値は従来どおり文字列のままなので、既存のノートの書き方は変わりません。
-
-## タグ・フォルダの色
-
-タグの色はすべて **タグの既定色** を土台にし、そこから個別に上書きします。既定色は **設定 → Task Gantt → タグの色** で指定でき、未設定なら Obsidian 本体のタグ色に従います。フォルダは従来どおり名前から自動で色が付きます。
-
-色は 17 色のパレットから選べ、虹色の見本を押すとシステムの色選択が開いて好きな色合いを選べます。タイムラインでは、タスクのタグがラベルの後ろに小さな札で、それぞれのタグの色で控えめに並びます（3 つまで。それ以上は *+N*）。**表示 → バーのタグ** で隠せます。
-
-**フォルダの見出し・タグの見出し・タグのチップを右クリック**して、色の変更／リセットができます。色を指定すると、そのタグが設定の**個別のタグ**に登録され、リセットすると登録が外れます。つまり一覧には**自分で色を決めたタグだけ**が並び、それ以外は既定色に従います。設定側からは Vault のタグを選んで追加でき、削除には確認が入ります（設定画面には取り消しが無いため）。並びはタグ名順です（フォルダの色は右クリックのみ）。
-
-<video src="https://github.com/katoiek/task-gantt/raw/main/docs/images/coloring_folder_tag.mp4" controls width="100%"></video>
-
-> 上で動画が再生されない場合は [こちら](docs/images/coloring_folder_tag.mp4) からご覧ください。
-
-## PNG として書き出す
-
-ビューの **⋯** メニュー（またはコマンド）の **PNG として書き出す** で、画面外の行も含めたボード全体を画像として保存できます。今のテーマと **表示** メニューの設定のまま、上にボード名と日付、下に今の **色分け** の凡例が付き、Vault の添付ファイルの置き場所に保存されます（相対の設定は Vault のルートから決まるので、ボードのフォルダの中には何も増えません）。タスク名は画像の左の列に 1 度だけ出し（完了は ✓ 付き、キャンセルは取り消し線）、バーの後ろには担当者とタグだけを出します。人の見出しの下では、共有タスクのほかの人だけです。通知からファイルを開けるほか、保存できなかったときは通知でそう伝えます。
-
-## タスクの作成
-
-**＋ 新規タスク**で現在のフォルダに日付付きノートを作り、すぐ名前を付けられます。もちろんそこから始める必要はありません。対象フォルダ内のノートは、**まだ日付が無いものも含めて**そのまま行として表示されるので、既存ノートをクリックして詳細パネルで **開始 / 期限** を入力すれば、そのままスケジュール付きタスクになります。各セルは**値が空のままでもダブルクリックで編集できる**ので、表から直接入力しても構いません。
-
-## タスクの種類：ノート・カンバン・キャンバス
-
-タスクは常に 1 つのノートで、日付やステータスなどはフロントマターが持ちます。そのうえで中身を 3 種類から選べます。**＋ 新規タスク**の横の **▾** から選んでください：
-
-- **ノート**（既定）：本文がタスクの説明です。
-- **カンバン**：[Kanban プラグイン](https://github.com/mgmeyers/obsidian-kanban)の形式で、ステータスごとの列を持つノートを作ります。詳細パネルには列とカードが縮小表示され、クリックするとボードが開きます（Kanban プラグインがあればボードとして、無ければ Markdown として）。**進捗はチェックしたカードの割合**で、ボードと同じく列の中の項目はすべてカードとして数えます。ボードでカードをチェックするとバーが伸びます（パネルには *カード 5 枚中 2 枚が完了* のように出ます）。100% になるのは全部チェックしたときだけで、カードがある間は手で編集しません。
-- **キャンバス**：ノートと同じ名前の `.canvas` を隣に作り、`canvas` キーでリンクして本文に埋め込むので、詳細パネルにキャンバスが表示されます。タスクを削除するとそのキャンバスも削除され、取り消せば両方が戻ります。
-
-表では、カンバンとキャンバスのタスクにアイコンが付きます。フロントマターに `kanban-plugin: board` があるノートはカンバン、`canvas` キーが `.canvas` にリンクしているノートはキャンバスとして扱います。
-
-## タスクの書き方
-
-各タスクは 1 つの Markdown ファイル。スケジュールはフロントマター、説明は本文に書きます。
-
-```markdown
----
-start: 2026-02-04
-end: 2026-02-07
-status: in-progress
-assignee: kato
-progress: 40
-after:
-  - "[[掃き掃除]]"     # 先行タスク（依存＝矢印）
----
-
-# 拭き掃除
-本文がタスクの説明（詳細パネルに表示）。
-```
-
-| フロントマター | 意味 |
-|----------------|------|
-| `start` / `end` | 開始 / 終了日 `YYYY-MM-DD`（バーの位置と長さ）。`YYYY-MM-DDTHH:mm+09:00` 形式で時刻も設定可（詳細パネルで編集。オフセットは**タイムゾーン**設定に従う） |
-| `status` | ステータス ID（設定で定義、バー色に反映。所属する**ステータスグループ**が完了済み／未完了フィルタの根拠） |
-| `assignee` | 担当者（バー脇にアバターとラベルを表示）。1 人なら値、複数ならリスト（[共有タスク](#共有タスク複数の担当者)） |
-| `progress` | 進捗 0–100（バー内の塗り。詳細パネルのスライダー、または**進捗**列のダブルクリックで編集） |
-| `after` | 先行タスクへの wikilink 配列（依存＝矢印、違反は赤） |
-| `milestone` | `true` で菱形（期間ゼロ） |
-| `gcal` | `true` で **Google カレンダー同期**（後述）の対象にする（**フラグ付きタスクのみ同期**がオンのときだけ判定に使用） |
-| `gcalId` | タスクを Google カレンダーへ Push すると自動で入る、紐付け先イベントの ID。手動編集不可 |
-| `canvas` | [キャンバス](#タスクの種類ノートカンバンキャンバス)型タスクの `.canvas` へのリンク（作成時に自動で入る） |
-
-**マイルストーン：** `end`（終了日）だけがあり `start`（開始日）が無いタスクは、自動的にマイルストーンと判定され菱形で描画されます。`milestone: true` でも同じです。通常タスクに戻すには `start`（開始日）を与えてください。
-
-タスク名はファイル名（拡張子なし）。グループは直上のサブフォルダ名。フロントマターのキー名は設定で変更できます。
-
-`examples/Cleaning Project お掃除プロジェクト/` に動作確認用のサンプルがあります（対象フォルダにそれを指定）。
-
-## 依存関係
-
-バーの丸ハンドルから別のバーへドラッグするか、詳細パネルの **先行タスクを追加…** で種類を選んでから先行タスクを選ぶと依存を作成します。つないだ端で種類が決まります：**FS**（終了→開始）・**SS**（開始→開始）・**FF**（終了→終了）。SS/FF の後続は、先行の日程変更に追従します。FS の後続は、**先行が遅れて重なったときに後ろへ押し出されます**。先行の期限日の次の稼働日へ移り、期間はそのまま保たれます。押し出しはその先の後続へも連鎖します。先行を前倒ししても後続は引き戻されないので、わざと空けた間隔は残ります。この動作は設定の **FS の後続を自動で押し出す** でオフにできます。マイルストーンは依存では動きません。依存を外すには、線にマウスを載せて出る **×** をクリックするか、詳細パネルの依存の × を押します。通知の **取り消し**（または **Ctrl/Cmd+Z**・取り消しボタン）で戻せます。線そのもののクリックでは外れないので、誤クリックで依存が消えることはありません。**表示 → 依存の矢印** をオフにしていても、依存が守られていないタスクは破線の縁で分かります。
-
-## 期間（Duration）
-
-**期間**列（**表示** メニューで表示）は、タスクが何**稼働日**かかるかを表示します。両端の日を含めて数え、設定した休日（既定は土・日）は数えません。期間はどこにも保存されず、`start` と `end` から計算します（日付が常に正です）。
-
-- **期間を変える**（セルのダブルクリック、または詳細パネルの欄）と、開始日はそのままで期限日が動きます。開始日が無いタスクは今日から始まります。
-- **開始日だけを変える**と、期限日も一緒に動き、期間が保たれます（バーが平行移動します）。期限日を変えた場合は期間が変わります。タイムラインでバーの端をドラッグしたときは、これまでどおり伸び縮みします。
-- FS 依存と組み合わせると 期間でスケジュールを組めます。各タスクに期間を入れて FS でつなげば、遅れたタスクがその後ろをまとめて押し出します。
-
-## 取り消し・やり直し
-
-ボード上の変更は、**Ctrl/Cmd+Z** または取り消しボタンで元に戻し、**Ctrl/Cmd+Shift+Z**・**Ctrl/Cmd+Y** またはやり直しボタンでやり直せます。対象はセルの編集、詳細パネルのすべての項目（名前の変更・本文を含む）、バーのドラッグ、依存、移動・サブタスク化、タグ、タスクの作成・削除です。削除を取り消すと、ノートが同じ場所に作り直されます。一緒に動いた後続も、まとめて元に戻ります。テキスト入力中は、ショートカットは入力内容の取り消しとして働きます。ファイルエクスプローラーでボードのタスクやフォルダをリネーム・移動した場合も履歴に入るので、取り消しは常に起きた順に遡ります。履歴はボードを開いている間保持されます。
-
-**Obsidian の外**で行った変更（Windows のエクスプローラーや macOS の Finder、同期ツールでのノートのリネーム・移動・削除）は履歴に入りません。Obsidian からは「ファイルが消えて、別のファイルが現れた」としか見えないためです。そうしたノートに対するそれ以前の変更を取り消しても、何も起きません。取り消せるようにしたい場合は、リネームや移動を Obsidian の中（タイトル欄や Obsidian のファイルエクスプローラー）で行ってください。
-
-## 設定
-
-**設定 → Task Gantt** から、既定フォルダ・サブフォルダの再帰・既定ズーム・**日付の表示フォーマット**（`YYYY/MM/DD`／`DD/MM/YYYY`／`MM/DD/YYYY`。保存値は常に ISO `YYYY-MM-DD`）を設定できます。
-
-**タイムゾーン**設定（システム / 固定GMTオフセット・代表都市付き一覧）で時刻の表示・保存に使うタイムゾーンを選べます。変更すると保存済みの時刻が新しいオフセットに換算されて表示されます。
-
-![代表都市付きのタイムゾーン設定](docs/images/timezone-ja.webp)
-
-**休日の曜日**（土・日／金・土／日のみ／なし）は、期間の計算と依存による移動のときに数えません。**FS の後続を自動で押し出す**（既定はオン）で、先行の遅れを FS の後続へ伝えるかを切り替えます。
-
-**稲妻線の色**設定で、表示オプションの**稲妻線**で描かれる折れ線の色を変更できます（既定の橙に戻すボタン付き）。
-
-**ステータスは自由に追加・編集・削除**できます（ここでも、ボードの凡例からでも）。各ステータスは **id**（フロントマターの `status` 値と対応）・**ラベル**・**グループ**・**色**（バー色に反映）を持ちます。
-
-**グループ**は「そのタスクが終わっているか」をプラグインが判断する唯一の根拠です。Wrike に倣った 4 種**固定**で、増やすことはできません：**アクティブ**（作業中）・**完了**（終了）・**延期**（保留・ブロック・待ち）・**キャンセル**（中止）。各ステータスはちょうど 1 つに属し、フィルタプリセットの**完了済み／未完了**はグループだけを見ます（ステータス名は見ません）。そのため `リリース済み` という名前でも、完了グループに入れておけば完了として扱われます。完了グループのステータスが 1 つも無い場合は設定画面に注意が出て、**完了済み**プリセットは常に 0 件になります。
-
-> 2.8.x からの更新時：既存のステータスには、id とラベルからグループを一度だけ推測して設定します（`done`／`完了` → 完了、`cancelled`／`中止` → キャンセル、`on hold`／`blocked`／`保留` → 延期、それ以外 → アクティブ）。更新後に一覧を確認し、外れているものは直してください。
-
-プラグインが読む**フロントマターのキー名**（start / end / status / assignee / after / progress / milestone / canvas）も、各自の Vault の慣習に合わせて変更できます。
-
-![Task Gantt の設定：カスタマイズ可能なステータスとフロントマターキー](docs/images/settings-ja.webp)
-
-## 通知（任意）
-
-**時刻を設定した**タスクの開始・期限を、Incoming Webhook 経由で **Discord** / **Slack** に通知できます。**設定 → Task Gantt → 通知** で Webhook URL・対象（開始/期限）・通知タイミング（1週間前・1日前・1時間前・10分前・時刻ちょうど）を設定してください。**テスト送信**ボタンで Webhook の疎通をすぐ確認できます。
-
-![通知設定](docs/images/notification_ja.webp)
-
-![Discord に届いた通知](docs/images/notification_discord.webp)
-
-- **ネットワーク利用について**：有効にすると、設定した Webhook URL に対してタスク名と日時のみを HTTP POST で送信します。それ以外の情報は送らず、他の宛先にも送信しません。URL を両方空欄（既定）にすればネットワークアクセスは一切行いません。
-- 通知は Obsidian の起動中のみ動作します。終了中に過ぎたタイミングはスキップされ、同じ通知は二度送られません。
-- 日付のみ（時刻なし）のタスクは通知対象外です。
-- 対象は Vault 全体です。フォルダの設定は不要で、時刻を設定したタスクはすべて対象になります。
-
-## Google カレンダー同期（任意・デスクトップ専用）
-
-タスクと Google カレンダーを**双方向で同期**できます。タスクの作成・日程変更・削除はイベントとして反映され、Google カレンダー側でのイベント移動・削除はタスクのフロントマターへ書き戻されます。**設定 → Task Gantt → Google カレンダー** で方向ごと（Push / Pull）に ON/OFF できます。
-
-### セットアップ
-
-プラグインにはサーバーがないため、**ユーザー自身の Google Cloud プロジェクト**を使います。
-
-1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作成し、**Google Calendar API** を有効化する。
-2. OAuth 同意画面を設定（External で可）し、自分の Google アカウントを**テストユーザー**に追加する。アプリは自分専用の未確認アプリなので、同意時に「確認されていないアプリ」の警告が出ますが想定どおりです（そのまま続行してください）。
-3. **OAuth クライアント ID**（種類：**デスクトップアプリ**）を作成し、クライアント ID とシークレットをプラグイン設定に貼り付ける。
-4. **接続**を押すとブラウザで Google の同意画面が開き、`127.0.0.1`（ループバック）で認可を受け取ります。その後**同期先カレンダー**を選択してください（専用カレンダーの利用を推奨）。
-
-![Google カレンダーの設定画面](docs/images/gcal-settings-ja.webp)
-
-### 同期の仕組み
-
-- **Pull（Google カレンダー→タスク）が対象にするのは、Task Gantt 自身が作成したイベントのみです。** Google カレンダー側で直接イベントを新規作成しても、それがタスクとして取り込まれることは**ありません**。また、プラグインが関与していない既存イベントの編集・削除も無視されます — Pull は自分がPushしたイベントへの変更を読み戻すだけで、カレンダーに元からある予定には一切手を付けません。
-- 既定ではフロントマターに **`gcal: true`** フラグを付けたタスクだけが同期されます（**オプトイン**。詳細パネルのトグルで切替でき、同期済みタスクには **Google カレンダーで開く** リンクも表示されます）。**フラグ付きタスクのみ同期**をオフにすると、対象フォルダ内の日付付きタスク全てが対象になります。
-- 日付のみのタスクは**終日イベント**、両端に時刻のあるタスクは時刻付きイベント（プラグインの**タイムゾーン**設定を使用）、マイルストーンは1日のイベントになります。紐付け先イベントの ID はタスクの `gcalId` キーに自動で保存されます（手動編集は不可）。
-- ローカルの編集は数秒で Push され、Google カレンダー側の変更は設定間隔（既定5分）で Pull されます。タイトルの同期はタスク→イベントの一方向のみで、イベント名を Google カレンダー側で変更しても次の Push でタスク名に戻ります（外部からのファイルリネームは危険なため）。
-- 前回同期以降に両側が変更されていた場合は**新しい方の編集が勝ち**、どちらを採用したかを通知します。
-- タスクを削除するとイベントも削除されます（設定で変更可）。Google カレンダー側でイベントを削除した場合、既定ではタスクの**紐付けを解除するだけ**です（日付もクリアする設定あり）。ファイルが削除されることはありません。
-- 繰り返しイベントは Push / Pull とも対象外です。
-
-**例**：`Test1` と `Test2` は `gcal: true` を付けて Push され、イベントとして反映されています。`Test3 (no flag)` はフラグが無いためローカルのみに留まっています。一方 `Test3 from GC` と祝日「七夕」は Google カレンダー側で直接作られたもので、タスクとしては取り込まれていません：
-
-![Obsidian のボードと同期後の Google カレンダーの比較](docs/images/gcal-compare.webp)
-
-### 開示事項
-
-- **ネットワーク利用について**：接続すると Google の OAuth / Calendar API とのみ通信し、同期対象タスクの名前・日付・本文抜粋（先頭500文字）とノートへ戻るリンクを送信します。未設定（既定）の場合、ネットワークアクセスは一切行いません。
-- **アカウントと認証情報**：Google アカウントと自身の Google Cloud OAuth クライアントが必要です。要求スコープは `calendar.events` と `calendar.calendarlist.readonly` のみです。OAuth の**クライアントシークレットとリフレッシュトークンは Obsidian のシークレットストレージ（OS のキーチェーン）に保存**され、プラグインの `data.json` には書き込まれません。そのため Vault の同期・バックアップ・git には含まれません。`data.json` に残るのはクライアント ID のみです。シークレットストレージは端末ごとの保存なので、端末ごとに接続し直してください。2.9.3 以前から更新すると、`data.json` に平文で残っていた値は自動で移行・削除されます。過去に `data.json` を git へコミット・共有したことがある場合は、Google Cloud Console でクライアントシークレットを再発行し、接続し直してください。
-- モバイルは非対応です（OAuth のループバック受信にデスクトップが必要）。他の機能は従来どおりモバイルでも動作します。
-
-## Vault へのアクセス
-
-ボードを組み立てるため、プラグインは Vault 内の Markdown ファイルを一覧し、Obsidian のメタデータキャッシュを通してフロントマターを読み取ります。フォルダを開いたときに表示されるのはそのフォルダ配下のノートだけです。ただし、通知は Vault 全体を対象にし、カスタムフィールドのキー名を変えるときは全ノートからそのキーを探します。読み取った内容が端末の外へ出ることはありません。ネットワークを使うのは、上に書いた任意の通知と Google カレンダー同期だけです。
-
-## 開発
-
-```bash
-npm install      # 依存をインストール
-npm run dev      # 監視ビルド
-npm run build    # 型チェック＋本番ビルド
-npm test         # ヘッドレスのモデルテスト
-```
-
-`main.js` / `manifest.json` / `styles.css` を `<vault>/.obsidian/plugins/task-gantt/` にコピーして有効化。
-
-## 設計
-
-設計判断の経緯は [`docs/adr/`](./docs/adr/)（最新は ADR-0005）、用語は [`CONTEXT.md`](./CONTEXT.md) を参照。
-
-## 既知の制限
-
-自動スケジューリング（クリティカルパス）・時刻粒度・複数フォルダ横断は未実装。カスタムフィールドはまだフィルタに使えません。
-
-## ライセンス
-
-MIT ライセンス（[`LICENSE`](./LICENSE) を参照）。

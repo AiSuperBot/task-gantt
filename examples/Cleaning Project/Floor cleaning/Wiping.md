@@ -5,6 +5,6 @@ assignee: kato
 start: 2026-02-24
 ---
 
-# 拭き掃除
+# Wiping
 
-掃き掃除のあとに水拭き。/ Mop after sweeping.
+Mop after sweeping.
