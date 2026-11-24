@@ -2,7 +2,7 @@
 // Markdown; changes come back as a proposal card that writes nothing until Apply, which is one undoable step on the board.
 import { ItemView, MarkdownRenderer, setIcon, WorkspaceLeaf } from "obsidian";
 import type GanttPlugin from "./main";
-import { cosine, Edit, Fields, isHebrew, readEmbeddings, readReply, requestNote, runTool, systemPrompt, ToolCall } from "./ai";
+import { cosine, Edit, Fields, isHebrew, readEmbeddings, readReply, requestNote, runTool, safeLink, safeMarkdown, systemPrompt, ToolCall } from "./ai";
 import { aiCall, chatRequest } from "./ai-client";
 import { t as tr } from "./i18n";
 import { formatDate } from "./timeline";
@@ -162,7 +162,11 @@ export class AiView extends ItemView {
   private async bubble(who: "user" | "assistant", text: string): Promise<void> {
     const el = this.log.createDiv({ cls: `ogantt-ai-msg is-${who}`, attr: { dir: "auto" } });
     if (who === "user") el.setText(text);
-    else await MarkdownRenderer.render(this.app, text.replace(/<think>[\s\S]*?<\/think>/g, "").trim(), el, "", this);
+    else {
+      await MarkdownRenderer.render(this.app, safeMarkdown(text.replace(/<think>[\s\S]*?<\/think>/g, "").trim()), el, "", this);
+      // what can still be clicked is a web address written out in full; a tag, or an address with another scheme, becomes its text
+      for (const a of Array.from(el.querySelectorAll("a"))) if (!safeLink(a.getAttribute("href") ?? "")) a.replaceWith(a.textContent ?? "");
+    }
     this.log.scrollTop = this.log.scrollHeight;
   }
 
