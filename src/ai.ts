@@ -229,7 +229,7 @@ export const isHebrew = (text: string): boolean => /[\u0590-\u05FF]/.test(text);
 const guidance = (week: number): string[] => [
   "Summaries and reports:",
   "- Look the tasks up first (find_tasks, and find_tasks with attention true) and report only what came back.",
-  "- One line on how it is going; then what needs attention and why; then done, in progress (with when it ends) and what comes next.",
+  "- One line on how it is going (for a sprint: its name, its goal and the workday it is on); then what needs attention and why; then done, in progress (with when it ends) and what comes next.",
   "- Name each task's people. Say dates with the tasks' when words, not your own sums.",
   "- For a manager: short and plain, risks and asks first, at most about 12 lines.",
   "Moving dates:",
