@@ -121,7 +121,8 @@ export class ReportModal extends Modal {
     });
     form.createEl("button", { cls: "mod-cta ogantt-report-copy", text: s.reportCopy }).onclick = async () => {
       try {
-        await navigator.clipboard.writeText(this.build(health, headline.value.trim()));
+        // the window this modal is in: a board in its own window copies from there (the main window isn't the focused one then)
+        await this.contentEl.win.navigator.clipboard.writeText(this.build(health, headline.value.trim()));
         new Notice(s.reportCopied);
         this.close();
       } catch (e) {

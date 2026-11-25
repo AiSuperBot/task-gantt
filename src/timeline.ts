@@ -58,7 +58,11 @@ function glance(thisYear: boolean): Intl.DateTimeFormat {
   let f = glanceFormats.get(key);
   if (!f) {
     const o: Intl.DateTimeFormatOptions = thisYear ? { weekday: "short", day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" };
-    f = new Intl.DateTimeFormat(lang.startsWith("en") ? "en-GB" : lang, { ...o, timeZone: "UTC" });
+    try {
+      f = new Intl.DateTimeFormat(lang.startsWith("en") ? "en-GB" : lang, { ...o, timeZone: "UTC" });
+    } catch {
+      f = new Intl.DateTimeFormat(undefined, { ...o, timeZone: "UTC" }); // a language name Intl doesn't know
+    }
     glanceFormats.set(key, f);
   }
   return f;
