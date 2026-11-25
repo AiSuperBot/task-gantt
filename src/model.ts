@@ -555,14 +555,36 @@ export async function editListField(app: App, path: string, key: string, value: 
 // the value after adding or removing one entry of a multi-valued property (undefined: no change, null: now empty). People compare by
 // display name, so "Ben" and "[[Ben]]" are one person. Other entries stay as written, a list stays a list and a single value stays single
 export function listWith(raw: unknown, value: string, add: boolean): unknown {
-  const wasList = Array.isArray(raw) && !isBareLink(raw);
-  // an unquoted [[x]] is a nested array to YAML: write it back as "[[x]]"
-  const items = (raw == null || raw === "" ? [] : wasList ? (raw as unknown[]) : [raw]).map((x) => (isBareLink(x) ? fmText(x) : x));
-  const same = (x: unknown) => linkLabel(fmText(x)?.trim() ?? "") === linkLabel(value);
-  if (add === items.some(same)) return undefined;
-  const next = add ? [...items, value] : items.filter((x) => !same(x));
+  const { items, wasList } = entries(raw);
+  if (add === items.some((x) => sameEntry(x, value))) return undefined;
+  const next = add ? [...items, value] : items.filter((x) => !sameEntry(x, value));
   return next.length === 0 ? null : next.length > 1 || wasList ? next : next[0];
 }
+
+// the value after replacing all the entries with `values`, by the same rules: those that stay are kept as written (null: now empty)
+export function listOf(raw: unknown, values: string[]): unknown {
+  const { items, wasList } = entries(raw);
+  const next = values.map((v) => items.find((x) => sameEntry(x, v)) ?? v);
+  return next.length === 0 ? null : next.length > 1 || wasList ? next : next[0];
+}
+
+// write all of a multi-valued field at once (the people a proposal sets)
+export async function writeListField(app: App, path: string, key: string, values: string[]): Promise<void> {
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof TFile)) return;
+  await app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+    const next = listOf(fm[key], values);
+    if (next === null) delete fm[key];
+    else fm[key] = next;
+  });
+}
+
+// a multi-valued property's entries as written, and whether it was a list (an unquoted [[x]] is a nested array to YAML: it is "[[x]]")
+function entries(raw: unknown): { items: unknown[]; wasList: boolean } {
+  const wasList = Array.isArray(raw) && !isBareLink(raw);
+  return { wasList, items: (raw == null || raw === "" ? [] : wasList ? (raw as unknown[]) : [raw]).map((x) => (isBareLink(x) ? fmText(x) : x)) };
+}
+const sameEntry = (x: unknown, value: string): boolean => linkLabel(fmText(x)?.trim() ?? "") === linkLabel(value);
 
 // read the body (without frontmatter)
 export async function readBody(app: App, path: string): Promise<string> {

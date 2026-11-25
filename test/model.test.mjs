@@ -1,5 +1,5 @@
 // Tests for buildRows, milestone detection, and group span rollup
-import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName, applyStatus, cardDoneOn, cardLabel, seeSteps } from "./model.mjs";
+import { bodyOf, withBody, movePaths, buildRows, kanbanLanes, listOf, listWith, newStatus, cardProgress, kanbanStep, anchorStart, anchorEnd, subtreePaths, parseStored, combineDateTime, toInstant, inferStatusGroup, statusGroupOf, customFieldIssues, validCustomFields, readCustomValue, customValueText, parseCustomInput, setCardDone, withoutName, applyStatus, cardDoneOn, cardLabel, seeSteps } from "./model.mjs";
 
 let pass = 0;
 let fail = 0;
@@ -90,6 +90,9 @@ check("listWith: an unquoted [[x]] is kept, as text", JSON.stringify(listWith([[
 check("listWith: removing one keeps the other values as written", JSON.stringify(listWith(["Ana", 7, "Ben"], "Ben", false)) === '["Ana",7]');
 check("listWith: a list stays a list", JSON.stringify(listWith(["Ana", "Ben"], "Ben", false)) === '["Ana"]');
 check("listWith: removing the last person gives null (the key goes)", listWith("Ana", "Ana", false) === null);
+// replacing all of them at once (the people a proposal sets)
+check("listOf: those who stay are kept as written, new names go in as given", JSON.stringify(listOf(["[[People/Noa Levi|Noa]]", "Dan"], ["Noa", "Dan", "Eli"])) === '["[[People/Noa Levi|Noa]]","Dan","Eli"]');
+check("listOf: a list stays a list, a single value stays single, none gives null", JSON.stringify(listOf(["[[Noa]]"], ["Eli"])) === '["Eli"]' && listOf("Noa", ["Eli"]) === "Eli" && listOf("Noa", []) === null && JSON.stringify(listOf("Noa", ["Noa", "Eli"])) === '["Noa","Eli"]');
 check("listWith: removing someone who isn't there changes nothing", listWith("Ana", "Ben", false) === undefined);
 
 

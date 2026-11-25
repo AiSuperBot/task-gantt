@@ -15,6 +15,7 @@ import {
   combineDateTime,
   writeField,
   editListField,
+  writeListField,
   writeBody,
   renameTask,
   deleteTask,
@@ -1282,11 +1283,8 @@ export class GanttView extends ItemView {
         }
         // the status first: leaving Blocked clears an old reason, then a new reason is written
         if (a.status !== undefined) await writeStatus(this.app, t.path, s, a.status, dayToStr(this.today()));
-        if (a.assignees) {
-          // people already on the task stay as they were written (a link stays a link); new names go in as given
-          const people = a.assignees.map((n) => t.assignees.find((x) => linkLabel(x) === n) ?? n);
-          await writeField(this.app, t.path, s.keys.assignee, people.length > 1 ? people : people[0]);
-        }
+        // people already on the task stay as they were written (a link stays a link, a list a list); new names go in as given
+        if (a.assignees) await writeListField(this.app, t.path, s.keys.assignee, a.assignees);
         if (a.blocker !== undefined) await writeField(this.app, t.path, s.keys.blocker, a.blocker || undefined);
       }
       if (roots.length) await this.cascade(roots);

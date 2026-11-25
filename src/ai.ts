@@ -275,9 +275,13 @@ function hebrewStatuses(ask: string, b: AiBoard): string[] {
   return out;
 }
 
+// a question that opens with a question word ("Why the delay on Migration?") asks about a delay, not for one; "Can you delay it?" and
+// "אפשר לדחות?" are requests
+const QUESTION = /^\s*(?:(?:what|which|who|whose|why|is|are|was|were|how|when|where|did|does|do|has|have)\b|(?:מה|מי|אילו|איזה|איזו|האם|למה|מדוע|מתי|כמה|איך)(?![\u0590-\u05FF]))/i;
+
 export function requestFacts(ask: string, b: AiBoard): string[] {
   const out: string[] = [];
-  if (SHIFT.test(ask) && !HOW_FAR.test(ask)) out.push("- This request names no amount, day or date: ask how far to move it, and propose nothing yet.");
+  if (SHIFT.test(ask) && !HOW_FAR.test(ask) && !QUESTION.test(ask)) out.push("- This request names no amount, day or date: ask how far to move it, and propose nothing yet.");
   if (CHANGE.test(ask)) out.push(...hebrewStatuses(ask, b));
   if (isHebrew(ask)) out.push(`- Today is ${HE_DAYS[weekday(b.today)]}.`); // the model put Tue into Hebrew as Monday
   return out;
