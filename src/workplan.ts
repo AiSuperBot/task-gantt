@@ -44,7 +44,7 @@ const GAP = 0.025; // between boxes end to end (one ending the day before the ot
 const MIN_BOX = 0.16; // the narrowest box: one day of a half is 0.06 in
 const MIN_INSIDE = 0.4; // a box with less room than this for its name (a few letters) shows it beside it instead
 const DIAMOND = 0.2;
-const BESIDE = { w: 1.8, size: 9 }; // a name beside its box or milestone
+const BESIDE = { w: 2.6, size: 9 }; // a name beside its box or milestone
 const BAR_PT = 13; // the largest name in a box
 export const MIN_PT = 7;
 // room kept inside a box beside its name: the padding, a clipped side's arrow, the external-dependency icon (at the start)
@@ -81,23 +81,24 @@ export function planPeriods(today: number): PlanPeriod[] {
 // Arial's Hebrew letters א-ת, in hundredths of an em
 const HEBREW_EM = [56, 54, 40, 51, 60, 25, 38, 60, 59, 25, 51, 46, 46, 60, 60, 25, 35, 57, 53, 57, 55, 46, 48, 55, 51, 69, 64];
 
-// a character's width in Arial, in ems (anything but Hebrew rounded up)
+// a character's width in Arial, in ems (anything but Hebrew rounded up to its group's widest; the test holds each against the font)
 function charEm(c: string): number {
   const code = c.charCodeAt(0);
   if (code >= 0x5d0 && code <= 0x5ea) return HEBREW_EM[code - 0x5d0] / 100;
   if (code >= 0x591 && code <= 0x5c7) return 0; // niqqud sits on its letter
   if (c === " ") return 0.28;
-  if ("ilIjft.,:;'|!()[]׳״-/".includes(c)) return 0.34;
-  if (c === "…") return 1;
-  if ("mwMW@%".includes(c)) return 0.9;
-  if (/[A-Z✓]/.test(c)) return 0.8;
+  if ("ilIjft.,:;'|!()[]׳-/".includes(c)) return 0.34;
+  if ("…—@W".includes(c)) return 1;
+  if ("mwM%".includes(c)) return 0.9;
+  if (/[A-Z&✓]/.test(c)) return 0.8;
+  if (code >= 0x2190) return 1.4; // a symbol, a picture (the widest there is: an emoji) or a letter of a script written in squares
   return 0.58;
 }
 // a line's width in ems, as PowerPoint lays it out: about 0.3 em more than its letters (measured), and a little to spare
 export function textEm(text: string, bold = false): number {
   let em = 0.3;
   for (const c of text) em += charEm(c);
-  return em * (bold ? 1.08 : 1.02);
+  return em * (bold ? 1.15 : 1.02);
 }
 
 export interface Fit {

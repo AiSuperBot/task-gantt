@@ -129,20 +129,52 @@ check("legend: markers nobody uses are left out", plan(base).legend.every((e) =>
 check("legend: markers start a line of their own", p3.legend.find((e) => e.kind === "risk").y > p3.legend[0].y);
 
 // ── text fits ──
+// What a name's width is checked against is the font itself, not the plugin's own estimate: Arial's advance widths in thousandths of
+// an em, read from arial.ttf and arialbd.ttf ([regular, bold]; the printable ASCII characters from the space on, then א to ת)
+const ARIAL = {
+  ascii: [
+    [278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584],
+    [278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667, 611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556, 278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584],
+  ],
+  hebrew: [
+    [563, 542, 399, 508, 602, 247, 382, 599, 590, 247, 509, 461, 463, 599, 601, 247, 353, 574, 529, 566, 546, 461, 479, 550, 509, 694, 643],
+    [583, 576, 457, 550, 614, 273, 413, 616, 626, 273, 521, 491, 496, 611, 630, 273, 386, 613, 543, 594, 587, 500, 512, 573, 521, 715, 673],
+  ],
+  // the last two aren't in Arial: PowerPoint draws them from Segoe UI Symbol and Segoe UI Emoji
+  other: { "…": [1000, 1000], "—": [1000, 1000], "–": [556, 556], "׳": [236, 276], "״": [417, 504], "’": [222, 278], "→": [1000, 1000], "✓": [749, 749], "🚀": [1373, 1373] },
+};
+const arialEm = (text, bold = false) =>
+  [...text].reduce((sum, c) => {
+    const k = c.codePointAt(0);
+    const w = k >= 32 && k <= 126 ? ARIAL.ascii[+bold][k - 32] : k >= 0x5d0 && k <= 0x5ea ? ARIAL.hebrew[+bold][k - 0x5d0] : ARIAL.other[c]?.[+bold];
+    if (w === undefined) throw new Error(`no Arial width for ${c}`);
+    return sum + w / 1000;
+  }, 0);
+// as wide as PowerPoint draws a line at a size: its letters and about 0.3 em more (measured), in inches
+const drawn = (line, size, bold = false) => ((arialEm(line, bold) + 0.3) * size) / 72;
+const measured = [...Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)), ...Array.from({ length: 27 }, (_, i) => String.fromCharCode(0x5d0 + i)), ...Object.keys(ARIAL.other)];
+check("width: no character is taken to be narrower than Arial draws it, regular or bold", measured.every((c) => [false, true].every((b) => textEm(c, b) - textEm("", b) >= arialEm(c, b) - 1e-9)));
+check("width: a letter of a script written in squares takes at least a square", ["日", "한"].every((c) => textEm(c) - textEm("") >= 1));
 const long = fitText("שם ארוך מאוד של משימה שלא נכנס", 0.5, 0.3, 13);
-check("fit: too long even at the minimum: cut short with …", long.size === MIN_PT && long.text.endsWith("…") && (textEm(long.text) * MIN_PT) / 72 <= 0.5);
+check("fit: too long even at the minimum: cut short with …", long.size === MIN_PT && long.text.endsWith("…") && drawn(long.text, MIN_PT) <= 0.5);
 check("fit: room to spare: the largest size the height allows", fitText("קצר", 3, 0.3, 13).size === 13 && fitText("קצר", 3, 0.2, 13).size === 12);
 check("fit: two lines when that reads clearly bigger", fitText("פיתוח ממשק ניהול", 0.9, 0.6, 13, true).text.includes("\n"));
 const bars = [p1, p2, p3].flatMap((p) => p.pages.flatMap((pg) => pg.rows.flatMap((r) => r.bars)));
 check(
-  "every name fits its box: at least the minimum size, never wider than the room inside",
-  bars.every((x) => x.text === "" || (x.size >= MIN_PT && x.text.split("\n").every((line) => (textEm(line) * x.size) / 72 <= x.w - x.padL - x.padR + 1e-9)))
+  "every name fits its box: at least the minimum size, never drawn wider than the room inside",
+  bars.every((x) => x.text === "" || (x.size >= MIN_PT && x.text.split("\n").every((line) => drawn(line, x.size) <= x.w - x.padL - x.padR + 1e-9)))
 );
+check("a name beside its box has the room it is drawn in", bars.some((x) => x.beside) && bars.every((x) => !x.beside || drawn(x.beside.text, x.beside.size) <= x.beside.w + 1e-9));
+const rows3 = [p1, p2, p3].flatMap((p) => p.pages.flatMap((pg) => pg.rows));
+check("a person's name fits its column, in bold", rows3.length > 0 && rows3.every((r) => r.label.text.split("\n").every((line) => drawn(line, r.label.size, true) <= r.label.w + 1e-9)));
 const tiny = plan([task({ name: "Blip", start: "2027-03-10", end: "2027-03-10", assignees: ["Dana"] })], { start: "2027-01-01", end: "2027-06-30", label: "" });
 const blip = barOf(tiny, "Blip");
 check("a box too narrow for a few letters shows its name beside it", blip.text === "" && blip.beside?.text === "Blip" && blip.beside.x + blip.beside.w < blip.x);
 const short = barOf(plan([task({ name: "Session timeout fix", start: "2027-02-01", end: "2027-02-05", assignees: ["Dana"] })]), "Session timeout fix");
 check("a name too long for its box even small, over two lines, shows beside it whole, not cut short", short.text === "" && short.beside?.text === "Session timeout fix");
+const wordy = "Migrate customer database to new cluster";
+const wide = barOf(plan([task({ name: wordy, start: "2027-02-01", end: "2027-02-03", assignees: ["Dana"] })]), wordy);
+check("a long name beside its box is whole too (forty letters)", wide.beside?.text === wordy && wide.beside.size >= MIN_PT);
 check("fit: two lines when one line can't be read at all, even if two aren't clearly bigger (was cut short: DB Adap…)", fitText("DB Adapter", 0.608, 0.25, 13, true).text === "DB\nAdapter" && fitText("DB Adapter", 0.608, 0.25, 13, true).size >= MIN_PT);
 // a crowded half-year: seventeen boxes over the same days for one person, so the lanes come out at their lowest
 const HALF = { start: "2027-01-01", end: "2027-06-30", label: "" };
@@ -161,7 +193,8 @@ const crowd = Array.from({ length: 30 }, (_, i) => [
 const p4 = plan(crowd);
 const people = p4.pages.flatMap((pg) => pg.rows.map((r) => r.label.text));
 check("too many rows for one slide go on over more, each person once, in order", p4.pages.length > 1 && people.length === 30 && people.join() === [...people].sort().join());
-check("every page stays inside the slide", p4.pages.every((pg) => pg.bottom <= 7.5 - 0.3 + 1e-9 && pg.rows.every((r) => r.h >= 0.3 * 2)));
+// the rows end 0.24 in above the bottom margin: today's label and the page number sit there
+check("every page's rows stay above the footer", p4.pages.every((pg) => pg.bottom <= 7.5 - 0.3 - 0.24 + 1e-9 && pg.rows.every((r) => r.h >= 0.3 * 2)));
 const one = plan(base);
 check("a few rows fit one slide", one.pages.length === 1);
 
