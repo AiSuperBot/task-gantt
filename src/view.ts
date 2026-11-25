@@ -75,7 +75,7 @@ import { ATTENTION, EXCEPTIONS, applyFilters, tagSpelling, besideHeading, except
 import { BoardContext, Move, MutateResult, StatusChange } from "./board";
 import { CellColumn, ColumnDef, allColumns, columnList, columnWidth, disabledLast, manualComparator, moveColumn, paintProgress, progressPct, statusKind, statusMark, taskComparator, toggleColumn, visibleColumns } from "./columns";
 import { boardColumns, boardWhen, byPerson, isSprint, reportSections } from "./lanes";
-import type { AiBoard, Edit } from "./ai";
+import type { AiBoard, Edit, Fields } from "./ai";
 import { buildWorkPlan, planPeriods, PlanPeriod } from "./workplan";
 
 const ROW_H = 30; // shared row height
@@ -1238,10 +1238,29 @@ export class GanttView extends ItemView {
     };
   }
 
-  // apply a proposal the user approved: the tasks' own edits, then the cascade from the moved ones, all as one undoable step
-  // (the cascade is worked out again on the live board, so it matches the proposal unless a note changed meanwhile)
-  async applyProposal(edits: Edit[]): Promise<boolean> {
+  // What the assistant reads and writes is what the notes say now. A tab that isn't on screen skips its reloads (refresh), so its
+  // tasks and warnings may be old: they are brought up to date here, without drawing (the tab still redraws once it shows)
+  async fresh(): Promise<void> {
+    if (!this.stale) return;
+    this.tasks = collectTasks(this.app, this.plugin.settings, this.folder);
+    await this.readCardSteps();
+    this.ints = interruptions(this.tasks, this.plugin.settings.statuses, this.today());
+    this.conflicts = this.lateTasks();
+  }
+
+  // apply a proposal the user approved: the tasks' own edits, then the cascade from the moved ones, all as one undoable step. Nothing
+  // is written when this board has been closed, or when a task of the proposal is gone or no longer as the proposal found it (someone
+  // moved it meanwhile): the card's dates were worked out from what was there then, and a proposal is approved as a whole
+  async applyProposal(edits: Edit[]): Promise<"ok" | "closed" | "changed" | "failed"> {
+    if (!this.contentEl.isConnected) return "closed";
+    await this.fresh();
     const s = this.plugin.settings;
+    const now = (t: Task, k: keyof Fields): string => (k === "assignees" ? t.assignees.map(linkLabel).join("\n") : (k === "status" ? t.status : k === "blocker" ? t.blocker : t[k]) ?? "");
+    const then = (v: Fields[keyof Fields]): string => (Array.isArray(v) ? v.join("\n") : v ?? "");
+    for (const e of edits) {
+      const t = this.tasks.find((x) => x.path === e.path);
+      if (!t || (Object.keys(e.before) as (keyof Fields)[]).some((k) => now(t, k) !== then(e.before[k]))) return "changed";
+    }
     const own = edits.filter((e) => !e.cascaded);
     const roots = own.filter((e) => "start" in e.after || "end" in e.after).map((e) => e.path);
     const paths = [...new Set([...edits.map((e) => e.path), ...roots.flatMap((p) => this.cascadePaths(p))])];
@@ -1251,23 +1270,29 @@ export class GanttView extends ItemView {
         if (!t) continue;
         const a = e.after;
         if (roots.includes(t.path)) {
-          // a milestone keeps only its date; any other dated task has a start (one with no due date is a single day)
+          // a milestone with no start keeps only its date, as when it is dragged; any other dated task has a start (one with no due
+          // date is a single day)
+          const point = t.milestone && !t.start;
           const start = a.start ?? t.start;
           const end = a.end ?? t.end ?? start;
-          if (t.milestone) await writeDates(this.app, s, t.path, end!, end!, true);
+          if (point) await writeDates(this.app, s, t.path, end!, end!, true);
           else await writeDates(this.app, s, t.path, start!, end!, false);
-          if (!t.milestone) t.start = start;
+          if (!point) t.start = start;
           t.end = end; // mirrored in memory for the cascade
         }
         // the status first: leaving Blocked clears an old reason, then a new reason is written
         if (a.status !== undefined) await writeStatus(this.app, t.path, s, a.status, dayToStr(this.today()));
-        if (a.assignees) await writeField(this.app, t.path, s.keys.assignee, a.assignees.length > 1 ? a.assignees : a.assignees[0]);
+        if (a.assignees) {
+          // people already on the task stay as they were written (a link stays a link); new names go in as given
+          const people = a.assignees.map((n) => t.assignees.find((x) => linkLabel(x) === n) ?? n);
+          await writeField(this.app, t.path, s.keys.assignee, people.length > 1 ? people : people[0]);
+        }
         if (a.blocker !== undefined) await writeField(this.app, t.path, s.keys.blocker, a.blocker || undefined);
       }
       if (roots.length) await this.cascade(roots);
     });
     await this.refresh();
-    return ok;
+    return ok ? "ok" : "failed";
   }
 
   // the work plan (ת"ע) as a PowerPoint deck for a quarter or a half (this or the next), saved where attachments go. The deck uses the

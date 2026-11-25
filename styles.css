@@ -2644,6 +2644,11 @@ button.ogantt-sprint:hover {
   padding: 0;
   border-radius: 999px;
 }
+/* New chat, Send, and a proposal's buttons while it is being written: off until the answer is in */
+.ogantt-ai button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 
 /* ---- the status report dialog: compose on the left, the report exactly as it will read on the right ---- */
 .modal.ogantt-report-modal {

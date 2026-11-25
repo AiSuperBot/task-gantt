@@ -256,6 +256,10 @@ interface Strings {
   aiDiscard: string;
   aiApplied: (n: number) => string;
   aiDiscarded: string;
+  aiBoardClosed: string;
+  aiBoardChanged: string;
+  aiNotApplied: string;
+  aiNoAnswer: string;
   aiUndoLabel: string;
   aiError: (msg: string) => string;
   aiNoTools: string;
@@ -919,6 +923,10 @@ const STRINGS: Strings = {
   aiDiscard: "Discard",
   aiApplied: (n) => `Applied to ${n === 1 ? "1 task" : `${n} tasks`}. Ctrl+Z on the board undoes it.`,
   aiDiscarded: "Discarded.",
+  aiBoardClosed: "Not applied: that board has been closed. Open it and ask again.",
+  aiBoardChanged: "Not applied: a task in this proposal has changed since (or was renamed or removed). Ask again to get a proposal from how things stand now.",
+  aiNotApplied: "Not applied: the board could not write the change.",
+  aiNoAnswer: "The model sent an empty answer. Try asking again, or more narrowly.",
   aiUndoLabel: "Changes from the assistant",
   aiError: (msg) => `The AI server answered with an error: ${msg}`,
   aiNoTools: "This model can't call tools, so it can't look at the board. Pick one that can, such as gpt-oss or Qwen 3.",

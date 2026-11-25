@@ -1,7 +1,8 @@
 // The plan assistant's panel (right sidebar): a chat with the team's own AI server about the board used last. Answers come back as
 // Markdown; changes come back as a proposal card that writes nothing until Apply, which is one undoable step on the board.
-import { ItemView, MarkdownRenderer, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import type GanttPlugin from "./main";
+import type { GanttView } from "./view";
 import { cosine, Edit, Fields, isHebrew, readEmbeddings, readReply, requestNote, runTool, safeLink, safeMarkdown, systemPrompt, ToolCall } from "./ai";
 import { aiCall, chatRequest } from "./ai-client";
 import { t as tr } from "./i18n";
@@ -17,6 +18,7 @@ export class AiView extends ItemView {
   private busy = false;
   private log!: HTMLElement;
   private input!: HTMLTextAreaElement;
+  private waits: HTMLButtonElement[] = []; // New chat and Send: off while an answer is on its way (it would land in the new chat)
 
   constructor(leaf: WorkspaceLeaf, private plugin: GanttPlugin) {
     super(leaf);
@@ -49,9 +51,11 @@ export class AiView extends ItemView {
     const send = composer.createEl("button", { cls: "mod-cta", attr: { "aria-label": tr().aiSend } });
     setIcon(send, "arrow-up");
     send.onclick = () => this.ask();
-    // Enter sends, Shift+Enter breaks the line (and never while an IME is composing)
+    this.waits = [fresh, send];
+    // Enter sends, Shift+Enter breaks the line; never while an input method is composing (Enter confirms its conversion), and not on
+    // a phone, whose keyboard has no Shift+Enter: there Enter breaks the line and the button sends
     this.input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing && e.keyCode !== 229 && !Platform.isMobile) {
         e.preventDefault();
         this.ask();
       }
@@ -94,39 +98,56 @@ export class AiView extends ItemView {
   private async converse(text: string): Promise<void> {
     const board = this.plugin.lastBoard();
     const { url, model } = this.plugin.settings.ai;
-    if (!this.chat.length) this.log.empty();
+    this.log.querySelector(".ogantt-ai-empty")?.remove(); // the starting questions go; what was said so far stays
     this.bubble("user", text);
     if (!board || !url || !model) return this.note(board ? tr().aiSetup : tr().aiNoBoard);
     // what the plugin read in the request goes with it, and stays in the conversation (the next request then starts the same way)
     const note = requestNote(text, board.aiBoard());
+    const mark = this.chat.length; // a turn that fails is taken back, so the next question isn't sent along with it
     this.chat.push({ role: "user", content: note ? `${text}\n\n${note}` : text });
-    this.busy = true;
+    this.setBusy(true);
+    let proposed = false;
     const wait = this.log.createDiv({ cls: "ogantt-ai-thinking", text: tr().aiThinking });
     try {
       for (let round = 0; round < ROUNDS; round++) {
+        await board.fresh(); // a board whose tab is hidden hasn't followed the notes
         const b = { ...board.aiBoard(), hebrew: isHebrew(text), similar: this.plugin.settings.ai.embedModel ? this.similar : undefined };
         const system: Msg = { role: "system", content: systemPrompt(b, this.plugin.settings.ai.instructions) };
         const reply = await this.post([system, ...this.chat]);
         this.chat.push(reply);
         if (!reply.tool_calls?.length) {
           wait.remove();
-          return void (await this.bubble("assistant", reply.content ?? ""));
+          if (reply.content?.replace(/<think>[\s\S]*?<\/think>/g, "").trim()) return void (await this.bubble("assistant", reply.content));
+          if (proposed) return; // the card is the answer
+          this.chat.length = mark;
+          return this.note(tr().aiNoAnswer);
         }
         for (const [k, call] of reply.tool_calls.entries()) {
           call.id ??= `call_${round}_${k}`; // some servers leave ids out; the answer must name the call it answers
-          const out = await runTool(call.function.name, call.function.arguments, b);
+          // every call gets its answer, an error included: a call left unanswered makes a server refuse the rest of the chat
+          const out = await runTool(call.function.name, call.function.arguments, b).catch((e: unknown) => ({ content: `Error: ${e instanceof Error ? e.message : String(e)}`, proposal: undefined }));
           const answer: Msg = { role: "tool", tool_call_id: call.id, content: out.content };
           this.chat.push(answer);
-          if (out.proposal) this.proposal(out.proposal, answer);
+          if (out.proposal) {
+            proposed = true;
+            this.proposal(out.proposal, answer, board);
+            this.log.append(wait); // still working: the indicator stays last, below the card
+          }
         }
       }
       this.note(tr().aiTooLong);
     } catch (e) {
+      this.chat.length = mark;
       this.note(e instanceof Error ? e.message : String(e));
     } finally {
       wait.remove();
-      this.busy = false;
+      this.setBusy(false);
     }
+  }
+
+  private setBusy(on: boolean): void {
+    this.busy = on;
+    for (const b of this.waits) b.disabled = on;
   }
 
   // one chat call, as set in Settings (endpoint, headers, extra fields, time limit); errors come back in words
@@ -176,8 +197,8 @@ export class AiView extends ItemView {
   }
 
   // a proposal: each task's changes (before → after), the dependent tasks it moves, and Apply / Discard. The model is told the outcome
-  private proposal(edits: Edit[], answer: Msg): void {
-    const board = this.plugin.lastBoard();
+  // of what happened to it. It belongs to the board it was worked out on, whichever board is in front when Apply is pressed
+  private proposal(edits: Edit[], answer: Msg, board: GanttView): void {
     const s = this.plugin.settings;
     const card = this.log.createDiv({ cls: "ogantt-ai-proposal" });
     card.createDiv({ cls: "ogantt-ai-proposal-title", text: tr().aiProposal });
@@ -207,11 +228,17 @@ export class AiView extends ItemView {
       actions.createSpan({ cls: "ogantt-ai-outcome", text });
       answer.content += `\n${note}`;
     };
-    actions.createEl("button", { cls: "mod-cta", text: tr().aiApply }).onclick = async () => {
-      if (!board || !(await board.applyProposal(edits))) return;
-      settle(tr().aiApplied(edits.length), "The user applied these changes.");
+    const apply = actions.createEl("button", { cls: "mod-cta", text: tr().aiApply });
+    const discard = actions.createEl("button", { text: tr().aiDiscard });
+    apply.onclick = async () => {
+      apply.disabled = discard.disabled = true; // one press, one write
+      const how = await board.applyProposal(edits).catch(() => "failed" as const);
+      if (how === "ok") return settle(tr().aiApplied(edits.length), "The user applied these changes.");
+      // nothing was written, and this proposal can't be applied any more: say why, and let the model know too
+      const why = { closed: "the board was closed", changed: "a task changed in the meantime. Look the tasks up again before proposing", failed: "the write failed" }[how];
+      settle({ closed: tr().aiBoardClosed, changed: tr().aiBoardChanged, failed: tr().aiNotApplied }[how], `These changes were not applied: ${why}.`);
     };
-    actions.createEl("button", { text: tr().aiDiscard }).onclick = () => settle(tr().aiDiscarded, "The user discarded these changes.");
+    discard.onclick = () => settle(tr().aiDiscarded, "The user discarded these changes.");
     this.log.scrollTop = this.log.scrollHeight;
   }
 }
