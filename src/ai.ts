@@ -94,10 +94,14 @@ export function readReply(body: unknown): Reply | null {
   let content = Array.isArray(m.content) ? m.content.map((p: { text?: string }) => p?.text ?? "").join("") : typeof m.content === "string" ? m.content : null;
   let calls = m.tool_calls?.length ? m.tool_calls : m.function_call ? [{ type: "function", function: m.function_call }] : undefined;
   if (!calls && content?.includes("<tool_call>")) {
+    // the call goes back to the server with the next request: OpenAI-style servers take its arguments as a JSON string, Ollama's own
+    // API as an object
+    const asText = !!b?.choices;
     const found = [...content.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g)].flatMap((x) => {
       try {
         const c = JSON.parse(x[1]) as { name?: string; arguments?: unknown };
-        return c.name ? [{ type: "function", function: { name: c.name, arguments: c.arguments ?? {} } }] : [];
+        const args = typeof c.arguments === "string" ? c.arguments : c.arguments ?? {};
+        return c.name ? [{ type: "function", function: { name: c.name, arguments: asText && typeof args !== "string" ? JSON.stringify(args) : args } }] : [];
       } catch {
         return [];
       }
@@ -248,8 +252,9 @@ const guidance = (week: number): string[] => [
 // if, and can misread a word. Hebrew glues one-letter prefixes onto words, so its stems are matched inside them
 const HE = (s: string) => `(?:^|[^\\u0590-\\u05FF])[והבלמשכ]{0,2}(?:${s})`;
 // a plain delay or bring-forward, and whether it says how far (an amount, a day or a date): told "if it is not clear, ask", the model
-// guesses an amount; told that none was given, it asks
-const SHIFT = new RegExp(`delay|postpone|push .*back|slip|bring .*forward|pull .*in|${HE("תדח[הי]|לדחות|דחה|דחיי?ה|להקדים|תקדים|להזיז|תזיז|הזז")}`, "i");
+// guesses an amount; told that none was given, it asks. Only the words of a request (delay, postpone; תדחה, לדחות): a question about
+// what is delayed or was postponed (and the Hebrew noun, דחייה) asks for nothing to be moved
+const SHIFT = new RegExp(`\\bdelay\\b|\\bpostpone\\b|\\bpush\\b.*\\bback\\b|\\bslip\\b|\\bbring\\b.*\\bforward\\b|\\bpull\\b.*\\bin\\b|${HE("תדח[הי]|לדחות|דחה|להקדים|תקדים|להזיז|תזיז|הזז")}(?![\\u0590-\\u05FF])`, "i");
 const HOW_FAR = new RegExp(`\\d|day|week|month|sprint|tomorrow|tonight|next|until|till|end of|${HE("יום|יומ|ימי|שבוע|חודש|ספרינט|מחר|ראשון|שני|שלישי|רביעי|חמישי|שישי|שבת|הבא|סוף|עד")}`, "i");
 // a request that changes a status or its people; Hebrew status words are named only then ("what should finish today" changes none)
 const CHANGE = new RegExp(`assign|hand .*to|give .*to|owner|mark|status to|set .*status|as (done|blocked|in progress|to do)|unblock|cancel|${HE("שייך|לשייך|תשייך|אחראי|תעביר|להעביר|העבר|העביר|סמן|לסמן|תסמן|חסום|לחסום|תחסום|שחרר|בוצע|הושלם|בטל|לבטל")}`, "i");
@@ -336,7 +341,9 @@ export function systemPrompt(b: AiBoard, team = ""): string {
 export async function runTool(name: string, rawArgs: unknown, b: AiBoard): Promise<{ content: string; proposal?: Edit[] }> {
   let args: Record<string, unknown>;
   try {
-    args = (typeof rawArgs === "string" ? JSON.parse(rawArgs || "{}") : rawArgs ?? {}) as Record<string, unknown>;
+    const parsed: unknown = typeof rawArgs === "string" ? JSON.parse(rawArgs || "{}") : rawArgs;
+    // "null", a number or a list in place of the arguments object counts as no arguments (a server sent "null" for a call without any)
+    args = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
   } catch {
     return { content: "Error: the arguments are not valid JSON." };
   }
@@ -401,22 +408,36 @@ function row(b: AiBoard, t: Task): Record<string, unknown> {
 
 const MEANING = { rows: 5, min: 0.3 }; // a search by meaning answers with the closest few, none below this closeness
 
+// a filter a model left empty ("" or spaces) is no filter: small models fill optional arguments with blanks
+const given = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+// a date that exists, not just one that looks like a date (2026-11-31 is the model's "end of November")
+const realDate = (v: unknown): v is string => typeof v === "string" && ISO.test(v) && dayToStr(dayIndex(v)) === v;
+
 async function findTasks(b: AiBoard, a: Record<string, unknown>): Promise<string> {
-  const text = typeof a.text === "string" ? a.text.trim().toLowerCase() : "";
-  const from = typeof a.from === "string" && ISO.test(a.from) ? dayIndex(a.from) : null;
-  const to = typeof a.to === "string" && ISO.test(a.to) ? dayIndex(a.to) : null;
+  const words = (given(a.text) ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const text = words.join(" ");
+  const [assignee, status, project] = [given(a.assignee), given(a.status), given(a.project)];
+  const from = realDate(a.from) ? dayIndex(a.from) : null;
+  const to = realDate(a.to) ? dayIndex(a.to) : null;
   const rest = b.tasks.filter((t) => {
     if (isSprint(t)) return false;
-    if (typeof a.assignee === "string" && !t.assignees.some((x) => same(linkLabel(x), a.assignee as string))) return false;
-    if (typeof a.status === "string" && !same(statusLabel(b, t.status), a.status) && !same(t.status ?? "", a.status)) return false;
-    if (typeof a.project === "string" && !same(projectOf(t), a.project)) return false;
+    if (assignee && !t.assignees.some((x) => same(linkLabel(x), assignee))) return false;
+    if (status && !same(statusLabel(b, t.status), status) && !same(t.status ?? "", status)) return false;
+    if (project && !same(projectOf(t), project)) return false;
     const s = anchorStart(t);
     const e = anchorEnd(t);
     if (from != null && (!e || dayIndex(e) < from)) return false;
     if (to != null && (!s || dayIndex(s) > to)) return false;
     return !a.attention || b.attention(t).length > 0;
   });
-  const hits = text ? rest.filter((t) => t.name.toLowerCase().includes(text)) : rest;
+  // every word in the name, in any order ("adapter db" finds DB Adapter)
+  const hits = rest.filter((t) => words.every((w) => t.name.toLowerCase().includes(w)));
+  // no name has them all: the names with the most of them ("the DB adapter" still finds DB Adapter), marked as such
+  if (!hits.length && words.length > 1) {
+    const count = (t: Task) => words.filter((w) => w.length > 2 && t.name.toLowerCase().includes(w)).length;
+    const part = rest.filter((t) => count(t) > 0).sort((x, y) => count(y) - count(x)).slice(0, MEANING.rows);
+    if (part.length) return ["No task name has all these words; the names with the most of them:", ...part.map((t) => JSON.stringify(row(b, t)))].join("\n");
+  }
   // no name has those words: with embeddings, the closest tasks by meaning (other wording, or the other language), marked as such
   if (!hits.length && text && rest.length && b.similar) {
     const scores = await b.similar(text, rest.map((t) => t.name)).catch(() => null);
@@ -478,38 +499,53 @@ export function planChanges(b: AiBoard, raw: unknown): { edits: Edit[]; errors: 
       before[k] = from;
       after[k] = to;
     };
+    // what a model left blank ("" for a date, a status or a reason, an empty list of people) is not a change
+    const [cStart, cEnd] = [c.start === "" ? undefined : c.start, c.end === "" ? undefined : c.end];
+    const [cStatus, cBlocker] = [given(c.status), given(c.blocker)];
     // dates: a shift keeps the length in workdays; a new start alone keeps it too; otherwise the dates given
-    const bad = ["start", "end"].find((k) => c[k] != null && !(typeof c[k] === "string" && ISO.test(c[k] as string)));
-    if (bad) errors.push(`${t.name}: ${bad} must be YYYY-MM-DD.`);
+    const bad = ([["start", cStart], ["end", cEnd]] as const).find(([, v]) => v != null && !realDate(v))?.[0];
+    if (bad) errors.push(`${t.name}: ${bad} must be a real date, YYYY-MM-DD.`);
     const n = c.shift_workdays == null ? 0 : Number(c.shift_workdays);
     if (!Number.isInteger(n)) errors.push(`${t.name}: shift_workdays must be a whole number.`);
     let next: { start?: string; end?: string } | null = null;
     if (n && Number.isInteger(n)) next = shift(t, n, b.opts);
-    else if (!bad && (c.start != null || c.end != null)) {
-      const start = (c.start as string | undefined) ?? t.start;
-      const end = (c.end as string | undefined) ?? t.end;
-      next = { start, end: start && end && c.end == null ? keepDurationOnStartChange(t, { start, end }, b.opts.cal) : end };
-    }
-    if (next && (next.start !== t.start || next.end !== t.end)) {
-      set("start", t.start, next.start);
-      set("end", t.end, next.end);
-      moved.set(t.path, next);
-    }
-    if (c.status != null) {
-      const s = b.statuses.find((x) => same(x.label, String(c.status)) || same(x.id, String(c.status)));
-      if (!s) errors.push(`${t.name}: unknown status "${c.status}"; use one of ${b.statuses.map((x) => x.label).join(", ")}.`);
-      else if (s.id !== t.status) {
-        set("status", t.status, s.id);
-        // blocked work says what it waits for, as the board asks when a card is dropped on Blocked; a rule in the prompt alone is not kept
-        const waits = typeof c.blocker === "string" ? c.blocker.trim() : t.blocker;
-        if (s.group === "deferred" && !waits) errors.push(`${t.name}: to make it ${s.label}, give what it waits for (blocker). If the user did not say, ask them.`);
+    else if (!bad && (cStart != null || cEnd != null)) {
+      // a milestone has one date, its due date: either word moves it (a lookup shows it as both its start and its end)
+      if (t.milestone && !t.start) next = { start: undefined, end: (cEnd ?? cStart) as string };
+      else {
+        const start = (cStart as string | undefined) ?? t.start;
+        const end = (cEnd as string | undefined) ?? t.end;
+        next = { start, end: start && end && cEnd == null ? keepDurationOnStartChange(t, { start, end }, b.opts.cal) : end };
       }
     }
-    if (Array.isArray(c.assignees)) {
-      const people = (c.assignees as unknown[]).map((x) => String(x).trim()).filter(Boolean);
-      if (people.join("\n") !== t.assignees.map(linkLabel).join("\n")) set("assignees", t.assignees.map(linkLabel), people);
+    if (next?.start && next.end && next.end < next.start) errors.push(`${t.name}: its due date ${next.end} would be before its start ${next.start}.`);
+    else if (next && (next.start !== t.start || next.end !== t.end)) {
+      const d = dateFields(t, next);
+      Object.assign(before, d.before);
+      Object.assign(after, d.after);
+      moved.set(t.path, next);
     }
-    if (typeof c.blocker === "string" && c.blocker.trim() !== (t.blocker ?? "")) set("blocker", t.blocker, c.blocker.trim());
+    let status = b.statuses.find((x) => x.id === t.status);
+    if (cStatus) {
+      const s = b.statuses.find((x) => same(x.label, cStatus) || same(x.id, cStatus));
+      if (!s) errors.push(`${t.name}: unknown status "${cStatus}"; use one of ${b.statuses.map((x) => x.label).join(", ")}.`);
+      else if (s.id !== t.status) {
+        set("status", t.status, s.id);
+        status = s;
+        // blocked work says what it waits for, as the board asks when a card is dropped on Blocked; a rule in the prompt alone is not kept
+        if (s.group === "deferred" && !(cBlocker ?? t.blocker)) errors.push(`${t.name}: to make it ${s.label}, give what it waits for (blocker). If the user did not say, ask them.`);
+      }
+    }
+    if (Array.isArray(c.assignees) && c.assignees.length) {
+      const people = (c.assignees as unknown[]).map((x) => String(x).trim()).filter(Boolean);
+      if (people.length && people.join("\n") !== t.assignees.map(linkLabel).join("\n")) set("assignees", t.assignees.map(linkLabel), people);
+    }
+    if (cBlocker && cBlocker !== (t.blocker ?? "")) {
+      // only blocked work waits for something: the reason is cleared when a task leaves that status, so it belongs with it
+      const blocked = b.statuses.filter((x) => x.group === "deferred").map((x) => x.label).join(" or ");
+      if (status?.group === "deferred") set("blocker", t.blocker, cBlocker);
+      else errors.push(`${t.name} is not blocked: to say what it waits for, set its status to ${blocked || "a deferred status"} in the same change.`);
+    }
     if (Object.keys(after).length) edits.push({ path: t.path, name: t.name, cascaded: false, before, after });
   }
   if (!errors.length && !edits.length) errors.push("These changes leave every task as it is.");
@@ -521,11 +557,34 @@ export function planChanges(b: AiBoard, raw: unknown): { edits: Edit[]; errors: 
     if (!pushed) return { edits: [], errors: ["The dependencies of these tasks form a loop, so they can't be rescheduled."] };
     for (const [path, d] of pushed) {
       const t = b.tasks.find((x) => x.path === path);
-      if (!t || moved.has(path) || (t.start === d.start && t.end === d.end)) continue;
-      edits.push({ path, name: t.name, cascaded: true, before: { start: t.start, end: t.end }, after: { start: d.start, end: d.end } });
+      if (!t) continue;
+      const f = t.start === d.start && t.end === d.end ? null : dateFields(t, d);
+      // a task moved here that the task it depends on then pushes further ends up where that puts it, so its own change says so
+      // (applying runs the same cascade: the card would otherwise show dates the note doesn't get)
+      const own = moved.has(path) ? edits.find((e) => e.path === path) : undefined;
+      if (own) {
+        for (const k of ["start", "end"] as const) {
+          delete own.before[k];
+          delete own.after[k];
+        }
+        if (f) Object.assign(own.before, f.before), Object.assign(own.after, f.after);
+      } else if (f) edits.push({ path, name: t.name, cascaded: true, ...f });
     }
   }
-  return { edits, errors: [] };
+  // a task put back where it was by the task it depends on, with nothing else changed, is no change
+  return { edits: edits.filter((e) => Object.keys(e.after).length), errors: [] };
+}
+
+// a move as fields, without a date the task doesn't have (a milestone has no start, a one-day task no due date)
+function dateFields(from: { start?: string; end?: string }, to: { start?: string; end?: string }): { before: Fields; after: Fields } {
+  const before: Fields = {};
+  const after: Fields = {};
+  for (const k of ["start", "end"] as const) {
+    if (from[k] == null && to[k] == null) continue;
+    before[k] = from[k];
+    after[k] = to[k];
+  }
+  return { before, after };
 }
 
 // move a task by n workdays, keeping its length (a milestone moves its one date)

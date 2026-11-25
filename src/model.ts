@@ -512,12 +512,14 @@ export async function writeDates(
 // write back an arbitrary frontmatter value
 // set the status; entering the Completed group records the day, moving between completed statuses keeps it and leaving clears it. It is
 // the same write, so every computer reads the same day (a file's modified time is when sync delivered it). Leaving the Deferred group
-// clears the blocker reason too: once unblocked, it no longer says anything true
+// clears the blocker reason too: once unblocked, it no longer says anything true. A reason on a note that wasn't deferred (written by
+// hand or by another tool) is not this write's to remove
 export function applyStatus(fm: Record<string, unknown>, keys: { status: string; completed: string; blocker: string }, statuses: StatusDef[], id: string | undefined, today: string): void {
-  const was = statusGroupOf(statuses, fm[keys.status] == null ? undefined : String(fm[keys.status])) === "completed";
+  const before = statusGroupOf(statuses, fm[keys.status] == null ? undefined : String(fm[keys.status]));
+  const was = before === "completed";
   if (id) fm[keys.status] = id;
   else delete fm[keys.status];
-  if (statusGroupOf(statuses, id) !== "deferred") delete fm[keys.blocker];
+  if (before === "deferred" && statusGroupOf(statuses, id) !== "deferred") delete fm[keys.blocker];
   if (statusGroupOf(statuses, id) !== "completed") delete fm[keys.completed];
   else if (!was || fm[keys.completed] == null) fm[keys.completed] = today;
 }

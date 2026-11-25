@@ -81,6 +81,7 @@ check("applyStatus: clearing the status clears the date too", fmAfter({ status: 
 check("applyStatus: a completed status without a date gets one", fmAfter({ status: "done" }, "done", "2026-11-15") === '{"status":"done","completed":"2026-11-15"}');
 check("applyStatus: the blocker reason stays while the task stays in the Deferred group", fmAfter({ status: "blocked", blocker: "security review" }, "waiting", "2026-11-15") === '{"status":"waiting","blocker":"security review"}');
 check("applyStatus: leaving the Deferred group clears the blocker reason", fmAfter({ status: "blocked", blocker: "security review" }, "todo", "2026-11-15") === '{"status":"todo"}');
+check("applyStatus: a reason on a note that wasn't deferred is left alone by other status changes", fmAfter({ status: "todo", blocker: "[[Legal sign-off]]" }, "doing", "2026-11-15") === '{"status":"doing","blocker":"[[Legal sign-off]]"}' && fmAfter({ blocker: "x" }, "todo", "2026-11-15") === '{"blocker":"x","status":"todo"}');
 
 // adding or removing one entry of a multi-valued field
 check("listWith: adding to a single person makes a list", JSON.stringify(listWith("Ana", "Ben", true)) === '["Ana","Ben"]');
